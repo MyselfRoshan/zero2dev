@@ -1,0 +1,350 @@
+import { ApiError, api, consumeTokenFromHash, getToken, onAuthFailure, setToken } from "./api";
+import { EventConnection, type EventType, type StreamState } from "./events";
+import type {
+  CatalogEntry,
+  Job,
+  JobDoneEvent,
+  JobProgressEvent,
+  LogLine,
+  LogLineEvent,
+  Runtime,
+  Service,
+  ServiceStatusEvent,
+  Settings,
+  Site,
+  Status,
+} from "./types";
+
+export const MAX_LOG_LINES = 2000;
+
+export interface LogEntry extends LogLine {
+  seq: number;
+  serviceId: string;
+}
+export interface Toast {
+  id: number;
+  kind: "info" | "success" | "error";
+  text: string;
+}
+
+export const app = $state({
+  phase: "loading" as "notoken" | "loading" | "ready",
+  conn: "online" as "online" | "offline" | "unauthorized",
+  stream: "idle" as StreamState,
+  status: null as Status | null,
+  settings: null as Settings | null,
+  loaded: { services: false, runtimes: false, sites: false, catalog: false },
+  reconnects: 0,
+});
+
+// Reactive lists. Mutate through the loaders / upsert helpers.
+export const lists = $state({
+  services: [] as Service[],
+  runtimes: [] as Runtime[],
+  sites: [] as Site[],
+  catalog: [] as CatalogEntry[],
+});
+
+export const jobs = $state<Record<string, Job>>({});
+/** catalog id -> job id for installs started from this page */
+export const installJobs = $state<Record<string, string>>({});
+export const toasts = $state<Toast[]>([]);
+
+// ---------- toasts ----------
+let toastSeq = 0;
+export function toast(kind: Toast["kind"], text: string): void {
+  const id = ++toastSeq;
+  toasts.push({ id, kind, text });
+  setTimeout(() => dismissToast(id), kind === "error" ? 9000 : 5000);
+  if (toasts.length > 5) toasts.splice(0, toasts.length - 5);
+}
+export function dismissToast(id: number): void {
+  const i = toasts.findIndex((t) => t.id === id);
+  if (i >= 0) toasts.splice(i, 1);
+}
+
+export function errMessage(e: unknown): string {
+  return e instanceof ApiError ? e.message : e instanceof Error ? e.message : String(e);
+}
+
+/** Runs an API action; shows a toast on failure. Returns undefined when it failed. */
+export async function attempt<T>(fn: () => Promise<T>, okMessage?: string): Promise<T | undefined> {
+  try {
+    const r = await fn();
+    markOnline();
+    if (okMessage) toast("success", okMessage);
+    return r;
+  } catch (e) {
+    handleError(e);
+    toast("error", errMessage(e));
+    return undefined;
+  }
+}
+
+function markOnline() {
+  if (app.conn !== "unauthorized") app.conn = "online";
+}
+function handleError(e: unknown) {
+  if (e instanceof ApiError) {
+    if (e.isNetwork) app.conn = "offline";
+    else if (e.isAuth) app.conn = "unauthorized";
+  }
+}
+
+// ---------- loaders ----------
+async function load<T>(fn: () => Promise<T>, apply: (v: T) => void, key?: keyof typeof app.loaded): Promise<void> {
+  try {
+    apply(await fn());
+    if (key) app.loaded[key] = true;
+    markOnline();
+  } catch (e) {
+    handleError(e);
+    if (!(e instanceof ApiError && (e.isNetwork || e.isAuth))) toast("error", errMessage(e));
+  }
+}
+
+export const loadServices = () => load(api.listServices, (v) => (lists.services = v), "services");
+export const loadRuntimes = () => load(api.listRuntimes, (v) => (lists.runtimes = v), "runtimes");
+export const loadSites = () => load(api.listSites, (v) => (lists.sites = v), "sites");
+export const loadCatalog = () => load(api.catalog, (v) => (lists.catalog = v), "catalog");
+export const loadStatus = () => load(api.status, (v) => (app.status = v));
+export const loadSettings = () => load(api.getSettings, (v) => (app.settings = v));
+
+export function loadAll(): Promise<unknown> {
+  return Promise.all([loadStatus(), loadSettings(), loadServices(), loadRuntimes(), loadSites(), loadCatalog()]);
+}
+
+export function upsertService(s: Service): void {
+  const i = lists.services.findIndex((x) => x.id === s.id);
+  if (i >= 0) lists.services[i] = s;
+  else lists.services.push(s);
+  lists.services.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// ---------- logs ----------
+let logSeq = 0;
+class LogStore {
+  /** Replaced wholesale on every flush (cheap: arrays are never proxied). */
+  byService = $state.raw<Record<string, LogEntry[]>>({});
+}
+export const logs = new LogStore();
+let pendingLogs: LogEntry[] = [];
+let flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+function flushLogs() {
+  flushTimer = null;
+  if (!pendingLogs.length) return;
+  const next = { ...logs.byService };
+  for (const l of pendingLogs) {
+    const arr = (next[l.serviceId] ??= []);
+    next[l.serviceId] = arr.length >= MAX_LOG_LINES ? [...arr.slice(arr.length - MAX_LOG_LINES + 1), l] : [...arr, l];
+  }
+  pendingLogs = [];
+  logs.byService = next;
+}
+
+function pushLog(e: LogLineEvent) {
+  pendingLogs.push({ seq: ++logSeq, serviceId: e.serviceId, ts: e.ts, stream: e.stream, text: e.text });
+  flushTimer ??= setTimeout(flushLogs, 80);
+}
+
+const logKey = (l: { ts: string; stream: string; text: string }) => `${l.ts}|${l.stream}|${l.text}`;
+
+/** Loads the tail from the API and merges it with live lines already received. */
+export async function seedLogs(serviceId: string, tail = 500): Promise<void> {
+  const startedSeq = logSeq;
+  try {
+    const res = await api.serviceLogs(serviceId, tail);
+    flushLogs();
+    const seen = new Set(res.lines.map(logKey));
+    const live = (logs.byService[serviceId] ?? []).filter((l) => l.seq > startedSeq && !seen.has(logKey(l)));
+    const base: LogEntry[] = res.lines.map((l) => ({ ...l, serviceId, seq: ++logSeq }));
+    logs.byService = { ...logs.byService, [serviceId]: [...base, ...live].slice(-MAX_LOG_LINES) };
+    markOnline();
+  } catch (e) {
+    handleError(e);
+    if (!(e instanceof ApiError && (e.isNetwork || e.isAuth))) toast("error", errMessage(e));
+  }
+}
+
+export function clearLogs(serviceId?: string): void {
+  flushLogs();
+  if (serviceId) logs.byService = { ...logs.byService, [serviceId]: [] };
+  else logs.byService = {};
+}
+
+// ---------- jobs ----------
+const finishedJobs = new Set<string>();
+
+function mergeJob(id: string, patch: Partial<Job>) {
+  const base: Job = jobs[id] ?? {
+    id,
+    type: "install",
+    state: "running",
+    percent: 0,
+    step: "",
+    error: "",
+    runtimeId: "",
+  };
+  jobs[id] = { ...base, ...patch, id };
+}
+
+function onJobProgress(e: JobProgressEvent) {
+  if (finishedJobs.has(e.id)) return;
+  mergeJob(e.id, { percent: e.percent, step: e.step, state: "running" });
+}
+
+function onJobDone(e: JobDoneEvent) {
+  if (finishedJobs.has(e.id)) return;
+  finishedJobs.add(e.id);
+  mergeJob(e.id, {
+    state: e.state,
+    error: e.error,
+    runtimeId: e.runtimeId,
+    percent: e.state === "done" ? 100 : (jobs[e.id]?.percent ?? 0),
+  });
+  const entry = lists.catalog.find((c) => installJobs[c.id] === e.id);
+  const label = entry?.name ?? "Runtime";
+  if (e.state === "done") toast("success", `${label} installed.`);
+  else toast("error", `${label} install failed: ${e.error || "unknown error"}`);
+  void loadRuntimes();
+  void loadCatalog();
+}
+
+export async function installRuntime(c: CatalogEntry): Promise<void> {
+  const job = await attempt(() => api.installRuntime(c.id));
+  if (!job) return;
+  installJobs[c.id] = job.id;
+  if (!finishedJobs.has(job.id)) mergeJob(job.id, job);
+  pollJob(job.id);
+}
+
+/** Safety net for a missed job.done event (for example while the stream is reconnecting). */
+function pollJob(id: string) {
+  const tick = async () => {
+    if (finishedJobs.has(id)) return;
+    try {
+      const j = await api.getJob(id);
+      if (j.state === "running") {
+        mergeJob(id, j);
+        setTimeout(tick, 2000);
+      } else {
+        onJobDone({ id, state: j.state, error: j.error, runtimeId: j.runtimeId });
+      }
+    } catch {
+      setTimeout(tick, 3000);
+    }
+  };
+  setTimeout(tick, 2500);
+}
+
+// ---------- events ----------
+let conn: EventConnection | null = null;
+
+function onEvent(type: EventType, d: unknown) {
+  switch (type) {
+    case "service.status": {
+      const e = d as ServiceStatusEvent;
+      const s = lists.services.find((x) => x.id === e.id);
+      if (s) {
+        s.state = e.state;
+        s.pid = e.pid;
+        s.startedAt = e.startedAt;
+        s.lastError = e.lastError;
+        if (e.state === "failed" && e.lastError) toast("error", `${s.name} failed: ${e.lastError}`);
+      }
+      void loadStatus();
+      break;
+    }
+    case "log.line":
+      pushLog(d as LogLineEvent);
+      break;
+    case "job.progress":
+      onJobProgress(d as JobProgressEvent);
+      break;
+    case "job.done":
+      onJobDone(d as JobDoneEvent);
+      break;
+    case "services.changed":
+      void loadServices();
+      void loadStatus();
+      break;
+    case "runtimes.changed":
+      void loadRuntimes();
+      void loadCatalog();
+      void loadStatus();
+      break;
+    case "sites.changed":
+      void loadSites();
+      void loadStatus();
+      break;
+  }
+}
+
+function startEvents() {
+  conn?.stop();
+  conn = new EventConnection({
+    getTicket: async () => (await api.eventTicket()).ticket,
+    createSource: (url) => new EventSource(url) as never,
+    isAuthError: (e) => e instanceof ApiError && e.isAuth,
+    onEvent,
+    onState: (s) => {
+      app.stream = s;
+      if (s === "open" && app.conn === "offline") app.conn = "online";
+      if (s === "retrying" && app.conn === "online") app.conn = "offline";
+      if (s === "unauthorized") app.conn = "unauthorized";
+    },
+    onOpen: (reconnect) => {
+      if (reconnect) {
+        app.reconnects++;
+        void loadAll();
+      }
+    },
+  });
+  conn.start();
+}
+
+// ---------- boot / auth ----------
+let hashWatcher = false;
+export function startApp(): void {
+  onAuthFailure(() => {
+    app.conn = "unauthorized";
+  });
+  if (!hashWatcher) {
+    hashWatcher = true;
+    // Opening the daemon's link in a tab that is already open only changes the hash.
+    window.addEventListener("hashchange", () => {
+      if (location.hash.startsWith("#token=")) {
+        app.conn = "online";
+        startApp();
+      }
+    });
+  }
+  consumeTokenFromHash();
+  if (!getToken()) {
+    app.phase = "notoken";
+    return;
+  }
+  app.phase = "ready";
+  void loadAll();
+  startEvents();
+}
+
+export function submitToken(token: string): void {
+  setToken(token.trim() || null);
+  app.conn = "online";
+  startApp();
+}
+
+export function forgetToken(): void {
+  conn?.stop();
+  setToken(null);
+  app.phase = "notoken";
+}
+
+/** Retry button on the offline / unauthorized banner. */
+export async function retryConnection(): Promise<void> {
+  app.conn = "online";
+  await loadAll();
+  if (app.stream !== "open") startEvents();
+}
