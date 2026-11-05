@@ -1,8 +1,11 @@
 package api
 
 import (
+	"archive/zip"
 	"bufio"
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,6 +14,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -54,7 +58,7 @@ func newEnv(t *testing.T) *tenv {
 	home := t.TempDir()
 	ts := httptest.NewUnstartedServer(nil)
 	port := ts.Listener.Addr().(*net.TCPAddr).Port
-	cfg := &config.Config{Home: home, Port: port, Token: strings.Repeat("ab", 32), DevOrigin: devOrigin}
+	cfg := &config.Config{Home: home, Port: port, Token: strings.Repeat("ab", 32), DevOrigin: devOrigin, HomeSource: config.SourceExe, ExeDir: filepath.Join(home, "bin")}
 	st, err := store.Open(filepath.Join(home, "state.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -616,5 +620,118 @@ func TestEventStreamTicketFlow(t *testing.T) {
 		case <-deadline:
 			t.Fatalf("timed out, seen %v", seen)
 		}
+	}
+}
+
+func TestStatusPortableFields(t *testing.T) {
+	e := newEnv(t)
+	var st map[string]any
+	e.do("GET", "/api/status", nil, &st)
+	if st["homeSource"] != "exe" || st["portable"] != true || st["exeDir"] != filepath.Join(e.home, "bin") || st["homeDir"] != e.home || st["version"] != "test" {
+		t.Fatalf("%v", st)
+	}
+	e.srv.Cfg.HomeSource = config.SourceEnv
+	e.do("GET", "/api/status", nil, &st)
+	if st["homeSource"] != "env" || st["portable"] != false {
+		t.Fatalf("%v", st)
+	}
+}
+
+func TestSettingsTrustAndProxy(t *testing.T) {
+	e := newEnv(t)
+	var set model.Settings
+	e.do("GET", "/api/settings", nil, &set)
+	if set.TrustLocalCA || set.DownloadProxy != "" {
+		t.Fatalf("defaults: %+v", set)
+	}
+	cf := func() string { b, _ := os.ReadFile(filepath.Join(e.home, "config", "Caddyfile")); return string(b) }
+	e.do("PUT", "/api/settings", map[string]any{"trustLocalCA": true}, &set)
+	if !set.TrustLocalCA || set.ProxyHTTPPort != 8080 || strings.Contains(cf(), "skip_install_trust") || !strings.Contains(cf(), "admin off") {
+		t.Fatalf("%+v\n%s", set, cf())
+	}
+	e.do("PUT", "/api/settings", map[string]any{"trustLocalCA": false}, &set)
+	if !strings.Contains(cf(), "skip_install_trust") {
+		t.Fatal("skip_install_trust must return")
+	}
+	e.do("PUT", "/api/settings", map[string]any{"downloadProxy": " http://proxy.corp:3128 "}, &set)
+	if set.DownloadProxy != "http://proxy.corp:3128" || set.TrustLocalCA {
+		t.Fatalf("partial PUT must keep other fields: %+v", set)
+	}
+	for _, bad := range []string{"proxy.corp:3128", "ftp://x:1", "http://", "http://x:70000/p"} {
+		e.errCode("PUT", "/api/settings", map[string]any{"downloadProxy": bad}, 400)
+	}
+	e.do("PUT", "/api/settings", map[string]any{"downloadProxy": ""}, &set)
+	if set.DownloadProxy != "" {
+		t.Fatal("clearing the proxy")
+	}
+}
+
+func zipBytes(t *testing.T, files map[string]string) []byte {
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	for n, b := range files {
+		w, _ := zw.Create(n)
+		w.Write([]byte(b))
+	}
+	zw.Close()
+	return buf.Bytes()
+}
+
+func TestImportAndInstallerLogAPI(t *testing.T) {
+	e := newEnv(t)
+	z := zipBytes(t, map[string]string{"caddy": "BIN"})
+	h := sha256.Sum256(z)
+	sum := hex.EncodeToString(h[:])
+	entry := fmt.Sprintf(`[{"id":"caddy-t","kind":"caddy","version":"2.8.4","name":"Caddy 2.8.4","url":"https://example.invalid/dl/caddy_t.zip",
+	 "checksum":{"type":"shasums","url":"https://example.invalid/sums.txt"},"binaryRelPath":"caddy","stripComponents":0,"os":%q,"arch":%q,"homepage":"https://example.invalid/"}]`, runtime.GOOS, runtime.GOARCH)
+	os.WriteFile(filepath.Join(e.home, "catalog.json"), []byte(entry), 0o644)
+
+	var es []model.CatalogEntry
+	e.do("GET", "/api/catalog", nil, &es)
+	if len(es) != 1 || es[0].FileName != "caddy_t.zip" || es[0].Homepage != "https://example.invalid/" || !es[0].Supported {
+		t.Fatalf("catalog fields: %+v", es)
+	}
+	file := filepath.Join(t.TempDir(), "caddy_t.zip")
+	os.WriteFile(file, z, 0o644)
+
+	e.errCode("POST", "/api/runtimes/import", map[string]any{"catalogId": "caddy-t", "filePath": "rel.zip"}, 400)
+	e.errCode("POST", "/api/runtimes/import", map[string]any{"catalogId": "nope", "filePath": file}, 404)
+	e.errCode("POST", "/api/runtimes/import", map[string]any{"catalogId": "caddy-t", "filePath": file, "sha256": "zz"}, 400)
+	e.errCode("POST", "/api/runtimes/import", map[string]any{"catalogId": "caddy-t", "filePath": file, "bogus": 1}, 400)
+
+	var job model.Job
+	resp := e.do("POST", "/api/runtimes/import", map[string]any{"catalogId": "caddy-t", "filePath": file, "sha256": sum}, &job)
+	if resp.StatusCode != 202 || job.Type != "import" || !strings.HasPrefix(job.ID, "job_") {
+		t.Fatalf("%d %+v", resp.StatusCode, job)
+	}
+	waitFor(t, func() bool { e.do("GET", "/api/jobs/"+job.ID, nil, &job); return job.State != "running" })
+	if job.State != "done" || job.RuntimeID == "" {
+		t.Fatalf("%+v", job)
+	}
+	e.errCode("POST", "/api/runtimes/import", map[string]any{"catalogId": "caddy-t", "filePath": file, "sha256": sum}, 409)
+	// catalog shows it installed; a caddy service appeared
+	e.do("GET", "/api/catalog", nil, &es)
+	if !es[0].Installed {
+		t.Fatal("installed flag")
+	}
+	var svcs []model.Service
+	e.do("GET", "/api/services", nil, &svcs)
+	if len(svcs) != 1 || svcs[0].Kind != "caddy" {
+		t.Fatalf("%+v", svcs)
+	}
+
+	var lg struct{ Lines []string }
+	e.do("GET", "/api/installer/log?tail=200", nil, &lg)
+	joined := strings.Join(lg.Lines, "\n")
+	if lg.Lines == nil || !strings.Contains(joined, "import caddy-t") || !strings.Contains(joined, "expected="+sum) || !strings.Contains(joined, "done: runtime") {
+		t.Fatalf("installer log:\n%s", joined)
+	}
+	e.do("GET", "/api/installer/log?tail=1", nil, &lg)
+	if len(lg.Lines) != 1 {
+		t.Fatalf("tail=1: %v", lg.Lines)
+	}
+	e.errCode("GET", "/api/installer/log?tail=x", nil, 400)
+	if resp, _ := e.raw("GET", "/api/installer/log", nil); resp.StatusCode != 401 {
+		t.Fatal("installer log needs auth")
 	}
 }

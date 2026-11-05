@@ -3,3 +3,6 @@ web/node_modules/
 /bin/
 *.exe
 .zero2dev/
+/data/
+/bin/data/
+/internal/webui/dist

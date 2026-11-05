@@ -206,7 +206,13 @@ function onJobDone(e: JobDoneEvent) {
   const entry = lists.catalog.find((c) => installJobs[c.id] === e.id);
   const label = entry?.name ?? "Runtime";
   if (e.state === "done") toast("success", `${label} installed.`);
-  else toast("error", `${label} install failed: ${e.error || "unknown error"}`);
+  else {
+    const short = (e.error || "unknown error").slice(0, 160);
+    toast(
+      "error",
+      `${label} failed: ${short}${(e.error || "").length > 160 ? "… (full text on the Runtimes page)" : ""}`,
+    );
+  }
   void loadRuntimes();
   void loadCatalog();
 }
@@ -214,9 +220,20 @@ function onJobDone(e: JobDoneEvent) {
 export async function installRuntime(c: CatalogEntry): Promise<void> {
   const job = await attempt(() => api.installRuntime(c.id));
   if (!job) return;
-  installJobs[c.id] = job.id;
+  trackJob(c.id, job);
+}
+
+function trackJob(catalogId: string, job: Job) {
+  installJobs[catalogId] = job.id;
   if (!finishedJobs.has(job.id)) mergeJob(job.id, job);
   pollJob(job.id);
+}
+
+/** Imports a file the user downloaded. Throws ApiError so the dialog can show the message inline. */
+export async function importRuntime(c: CatalogEntry, filePath: string, sha256: string): Promise<void> {
+  const job = await api.importRuntime({ catalogId: c.id, filePath, sha256: sha256.trim() || undefined });
+  markOnline();
+  trackJob(c.id, job);
 }
 
 /** Safety net for a missed job.done event (for example while the stream is reconnecting). */

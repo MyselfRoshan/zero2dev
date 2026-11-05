@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"net/http"
 	"runtime"
+	"strconv"
 	"time"
 
 	"zero2dev/internal/apperr"
+	"zero2dev/internal/installer"
 	"zero2dev/internal/model"
 	"zero2dev/internal/sites"
 	"zero2dev/internal/store"
@@ -23,6 +25,7 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) error {
 	writeJSON(w, 200, map[string]any{
 		"version": s.Version, "uptimeSeconds": int64(time.Since(s.Started).Seconds()),
 		"os": runtime.GOOS, "arch": runtime.GOARCH, "homeDir": s.Cfg.Home,
+		"homeSource": s.Cfg.HomeSource, "portable": s.Cfg.Portable(), "exeDir": s.Cfg.ExeDir,
 		"counts": map[string]int{"services": len(d.Services), "running": running, "runtimes": len(d.Runtimes), "sites": len(d.Sites)},
 	})
 	return nil
@@ -48,6 +51,8 @@ type settingsInput struct {
 	ProxyHTTPPort      *int    `json:"proxyHttpPort"`
 	ProxyHTTPSPort     *int    `json:"proxyHttpsPort"`
 	OpenBrowserOnStart *bool   `json:"openBrowserOnStart"`
+	TrustLocalCA       *bool   `json:"trustLocalCA"`
+	DownloadProxy      *string `json:"downloadProxy"`
 }
 
 func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) error {
@@ -82,6 +87,16 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) error {
 		if st.ProxyHTTPPort == s.Cfg.Port || st.ProxyHTTPSPort == s.Cfg.Port {
 			return apperr.BadRequest("proxy ports must differ from the API port %d", s.Cfg.Port)
 		}
+		if in.TrustLocalCA != nil {
+			st.TrustLocalCA, changedProxy = *in.TrustLocalCA, true
+		}
+		if in.DownloadProxy != nil {
+			p, err := installer.ValidateProxy(*in.DownloadProxy)
+			if err != nil {
+				return apperr.BadRequest("%v", err)
+			}
+			st.DownloadProxy = p
+		}
 		if in.OpenBrowserOnStart != nil {
 			st.OpenBrowserOnStart = *in.OpenBrowserOnStart
 		}
@@ -106,6 +121,19 @@ func (s *Server) getJob(w http.ResponseWriter, r *http.Request) error {
 		return apperr.NotFound("job %s not found", r.PathValue("id"))
 	}
 	writeJSON(w, 200, j)
+	return nil
+}
+
+func (s *Server) installerLog(w http.ResponseWriter, r *http.Request) error {
+	n := 200
+	if q := r.URL.Query().Get("tail"); q != "" {
+		v, err := strconv.Atoi(q)
+		if err != nil || v < 0 {
+			return apperr.BadRequest("tail must be a non-negative integer")
+		}
+		n = min(v, 1000)
+	}
+	writeJSON(w, 200, map[string]any{"lines": s.Installer.LogTail(n)})
 	return nil
 }
 

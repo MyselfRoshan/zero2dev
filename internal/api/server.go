@@ -91,6 +91,8 @@ func (s *Server) routes() {
 	s.handle("POST /api/runtimes/register", s.registerRuntime)
 	s.handle("POST /api/runtimes/install", s.installRuntime)
 	s.handle("DELETE /api/runtimes/{id}", s.deleteRuntime)
+	s.handle("POST /api/runtimes/import", s.importRuntime)
+	s.handle("GET /api/installer/log", s.installerLog)
 	s.handle("GET /api/catalog", s.listCatalog)
 	s.handle("GET /api/sites", s.listSites)
 	s.handle("POST /api/sites", s.createSite)
