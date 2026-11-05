@@ -67,6 +67,8 @@ export interface CatalogEntry {
   name: string;
   url: string;
   checksum: Checksum;
+  homepage: string;
+  fileName: string;
   binaryRelPath: string;
   stripComponents: number;
   os: string;
@@ -112,7 +114,11 @@ export interface Settings {
   proxyHttpPort: number;
   proxyHttpsPort: number;
   openBrowserOnStart: boolean;
+  trustLocalCA: boolean;
+  downloadProxy: string;
 }
+
+export type HomeSource = "env" | "cwd" | "exe";
 
 export interface Status {
   version: string;
@@ -120,6 +126,9 @@ export interface Status {
   os: string;
   arch: string;
   homeDir: string;
+  homeSource: HomeSource;
+  portable: boolean;
+  exeDir: string;
   counts: { services: number; running: number; runtimes: number; sites: number };
 }
 

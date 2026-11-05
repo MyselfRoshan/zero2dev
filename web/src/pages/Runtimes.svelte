@@ -7,11 +7,15 @@
   import ConfirmDialog from "../ui/ConfirmDialog.svelte";
   import Icon from "../ui/Icon.svelte";
   import Modal from "../ui/Modal.svelte";
+  import InstallerLog from "../ui/InstallerLog.svelte";
+  import ImportDialog from "./ImportDialog.svelte";
+  import { isAntivirusError, isNetworkError, splitJobError } from "../lib/installer";
   import PageHead from "../ui/PageHead.svelte";
 
   const MAIN_KINDS: RuntimeKind[] = ["node", "go", "php", "java", "caddy"];
 
   let removing = $state<Runtime | null>(null);
+  let importing = $state<CatalogEntry | null>(null);
   let removeBusy = $state(false);
   let detected = $state<DetectedRuntime[] | null>(null);
   let detecting = $state(false);
@@ -159,15 +163,21 @@
   {:else}
     <div class="card t-wrap">
       <table class="t">
-        <thead><tr><th>Runtime</th><th>Platform</th><th class="w-install">Install</th></tr></thead>
+        <thead><tr><th>Runtime</th><th>Platform</th><th class="w-install">Get it</th></tr></thead>
         <tbody>
           {#each lists.catalog as c (c.id)}
             {@const job = jobFor(c)}
             {@const running = job?.state === "running"}
-            <tr data-catalog={c.id}>
+            <tr data-catalog={c.id} class:has-fail={job?.state === "failed"}>
               <td>
                 <div class="cell-title">{c.name}</div>
                 <div class="muted small"><span class="badge plain">{c.kind}</span> <span class="mono">{c.version}</span></div>
+                {#if c.fileName}
+                  <div class="small file">
+                    <span class="muted">File</span> <code>{c.fileName}</code>
+                    {#if c.homepage}<a href={c.homepage} target="_blank" rel="noreferrer" aria-label="Download page for {c.name}">Download page <Icon name="external" size={12} /></a>{/if}
+                  </div>
+                {/if}
               </td>
               <td class="mono small">{c.os}/{c.arch}</td>
               <td class="w-install">
@@ -182,11 +192,37 @@
                   <button class="btn sm" disabled aria-describedby="u-{c.id}">Install</button>
                   <div class="hint" id="u-{c.id}">{unsupportedNote(c)}</div>
                 {:else}
-                  <button class="btn sm primary" onclick={() => installRuntime(c)}><Icon name="download" size={14} /> {job?.state === "failed" ? "Retry install" : "Install"}</button>
-                  {#if job?.state === "failed"}<div class="err">{job.error || "Install failed."}</div>{/if}
+                  <div class="row wrap">
+                    <button class="btn sm primary" onclick={() => installRuntime(c)}><Icon name="download" size={14} /> {job?.state === "failed" ? "Retry install" : "Install"}</button>
+                    <button class="btn sm" onclick={() => (importing = c)} aria-label="Import file for {c.name}"><Icon name="plus" size={14} /> Import file</button>
+                  </div>
                 {/if}
               </td>
             </tr>
+            {#if job?.state === "failed"}
+              {@const parts = splitJobError(job.error)}
+              <tr class="fail-row" data-failed={c.id}>
+                <td colspan="3">
+                  <div class="notice bad fail" role="alert">
+                    <Icon name="alert" />
+                    <div class="stack-s">
+                      <b>{c.name} could not be installed{parts.step ? ` (step: ${parts.step})` : ""}.</b>
+                      <div class="errtext mono" data-testid="job-error">{job.error || "No error text was reported."}</div>
+                      {#if isNetworkError(job.error)}
+                        <p>
+                          This looks like a network problem. In <a href="#/settings">Settings</a> set a download proxy, or download
+                          <code>{c.fileName}</code> yourself{#if c.homepage}{" "}from the <a href={c.homepage} target="_blank" rel="noreferrer">download page</a>{/if} and use
+                          <button class="linklike" type="button" onclick={() => (importing = c)}>Import file</button>.
+                        </p>
+                      {:else if isAntivirusError(job.error)}
+                        <p>Antivirus software may be scanning the new files. Wait a moment and choose Retry install.</p>
+                      {/if}
+                      <InstallerLog />
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            {/if}
           {/each}
         </tbody>
       </table>
@@ -203,6 +239,10 @@
     </div>
   {/if}
 </section>
+
+{#if importing}
+  <ImportDialog entry={importing} onclose={() => (importing = null)} />
+{/if}
 
 {#if registering}
   <Modal title="Register a runtime by path" onclose={() => (registering = false)}>
@@ -253,6 +293,53 @@
   }
   .w-install {
     width: 300px;
+  }
+  .file {
+    margin-top: 4px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: baseline;
+  }
+  tr.has-fail td {
+    border-bottom: 0;
+  }
+  .fail-row td {
+    padding-top: 0;
+  }
+  .fail {
+    align-items: flex-start;
+  }
+  .fail > :global(svg) {
+    flex: none;
+    margin-top: 3px;
+  }
+  .stack-s {
+    display: grid;
+    gap: 8px;
+    min-width: 0;
+    flex: 1;
+  }
+  .errtext {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    padding: 8px 10px;
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--line-strong);
+    font-size: 12.5px;
+    user-select: all;
+  }
+  .linklike {
+    all: unset;
+    color: var(--accent);
+    text-decoration: underline;
+    cursor: pointer;
+  }
+  .linklike:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
   }
   .prog {
     display: grid;

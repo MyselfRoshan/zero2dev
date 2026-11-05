@@ -1,6 +1,7 @@
 <script lang="ts">
   import { api, getToken } from "../lib/api";
   import { app, attempt, forgetToken, toast } from "../lib/store.svelte";
+  import { caRootPath, portableNote } from "../lib/installer";
   import { hasErrors, parsePort, validateSettings, type SettingsField } from "../lib/validate";
   import Icon from "../ui/Icon.svelte";
 
@@ -8,6 +9,8 @@
   let httpPort = $state("");
   let httpsPort = $state("");
   let openBrowser = $state(true);
+  let proxy = $state("");
+  let trustCA = $state(false);
   let loadedFor = $state<object | null>(null);
   let errors = $state<Partial<Record<SettingsField, string>>>({});
   let saving = $state(false);
@@ -22,6 +25,8 @@
       httpPort = String(s.proxyHttpPort);
       httpsPort = String(s.proxyHttpsPort);
       openBrowser = s.openBrowserOnStart;
+      proxy = s.downloadProxy ?? "";
+      trustCA = s.trustLocalCA ?? false;
     }
   });
 
@@ -30,7 +35,9 @@
       (suffix !== app.settings.domainSuffix ||
         httpPort !== String(app.settings.proxyHttpPort) ||
         httpsPort !== String(app.settings.proxyHttpsPort) ||
-        openBrowser !== app.settings.openBrowserOnStart),
+        openBrowser !== app.settings.openBrowserOnStart ||
+        proxy.trim() !== (app.settings.downloadProxy ?? "") ||
+        trustCA !== (app.settings.trustLocalCA ?? false)),
   );
 
   async function save(e: SubmitEvent) {
@@ -38,16 +45,29 @@
     if (!app.settings) return;
     const hp = parsePort(httpPort);
     const sp = parsePort(httpsPort);
-    errors = validateSettings({ domainSuffix: suffix, proxyHttpPort: Number.isNaN(hp) ? -1 : hp, proxyHttpsPort: Number.isNaN(sp) ? -1 : sp });
+    errors = validateSettings({ domainSuffix: suffix, proxyHttpPort: Number.isNaN(hp) ? -1 : hp, proxyHttpsPort: Number.isNaN(sp) ? -1 : sp,
+      downloadProxy: proxy,
+    });
     if (hasErrors(errors)) return;
     saving = true;
     const res = await attempt(
-      () => api.putSettings({ ...app.settings!, domainSuffix: suffix.trim(), proxyHttpPort: hp, proxyHttpsPort: sp, openBrowserOnStart: openBrowser }),
+      () => api.putSettings({ ...app.settings!, domainSuffix: suffix.trim(), proxyHttpPort: hp, proxyHttpsPort: sp, openBrowserOnStart: openBrowser, downloadProxy: proxy.trim(), trustLocalCA: trustCA }),
       "Settings saved.",
     );
     saving = false;
     if (res) app.settings = res;
   }
+
+  async function copyText(text: string, what: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast("success", `${what} copied.`);
+    } catch {
+      toast("error", "Could not copy to the clipboard in this browser context.");
+    }
+  }
+  const dataDir = $derived(app.status?.homeDir ?? app.settings?.homeDir ?? "");
+  const rootCert = $derived(dataDir ? caRootPath(dataDir) : "<data folder>\\caddy\\data\\caddy\\pki\\authorities\\local\\root.crt");
 
   async function copyToken() {
     const t = getToken();
@@ -84,6 +104,27 @@
       </div>
       <span class="hint">Changing proxy ports rewrites the Caddyfile; a running Caddy service restarts.</span>
     </div>
+    <div class="panel-head sub"><h2>HTTPS certificate</h2></div>
+    <div class="card-pad stack">
+      <label class="check"><input type="checkbox" bind:checked={trustCA} aria-describedby="ca-warn" /> <span>Let Caddy trust its local certificate authority</span></label>
+      <div class="notice warn" id="ca-warn">
+        <Icon name="alert" />
+        <div class="stack-s">
+          <span><b>Turn this on only if you want Windows to trust local HTTPS sites.</b> Caddy then changes the Windows certificate store and Windows may show a security prompt.</span>
+          <span>While it is off, nothing outside the data folder is touched and HTTPS sites show a certificate warning in the browser until you trust <code class="path-inline">{rootCert}</code> yourself.</span>
+        </div>
+      </div>
+    </div>
+    <div class="panel-head sub"><h2>Downloads</h2></div>
+    <div class="card-pad stack">
+      <div class="field">
+        <label>
+          <span class="label">Download proxy (optional)</span>
+          <input type="text" class="mono" bind:value={proxy} aria-invalid={!!errors.downloadProxy} aria-describedby="proxy-help" placeholder="http://proxy.company.com:8080" spellcheck="false" autocomplete="off" />
+        </label>
+        {#if errors.downloadProxy}<span class="err">{errors.downloadProxy}</span>{:else}<span class="hint" id="proxy-help">Used when installing runtimes. Empty means the HTTP_PROXY and HTTPS_PROXY environment variables. Zero2Dev does not read the Windows proxy setting, so company networks often need this.</span>{/if}
+      </div>
+    </div>
     <div class="panel-head sub"><h2>Startup</h2></div>
     <div class="card-pad">
       <label class="check"><input type="checkbox" bind:checked={openBrowser} /> <span>Open this dashboard in the browser when Zero2Dev starts</span></label>
@@ -95,13 +136,30 @@
   </form>
 
   <section class="card">
+    <div class="panel-head">
+      <h2>Portable</h2>
+      {#if app.status?.portable}<span class="badge accent">portable</span>{/if}
+    </div>
+    <div class="card-pad stack">
+      <div class="field">
+        <span class="label" id="dd-l">Data folder</span>
+        <div class="row">
+          <code class="dir grow" aria-labelledby="dd-l" data-testid="data-folder">{dataDir || "-"}</code>
+          <button class="btn sm" type="button" onclick={() => copyText(dataDir, "Data folder path")} disabled={!dataDir}><Icon name="copy" size={14} /> Copy</button>
+        </div>
+      </div>
+      <p class="muted" data-testid="portable-note">{portableNote(app.status?.homeSource)}</p>
+      {#if app.status?.exeDir}<p class="hint">Program folder: <code>{app.status.exeDir}</code></p>{/if}
+    </div>
+  </section>
+
+  <section class="card">
     <div class="panel-head"><h2>This installation</h2></div>
     <dl class="card-pad">
-      <div><dt>Home folder</dt><dd class="mono">{app.settings?.homeDir ?? "-"}</dd></div>
       <div><dt>API port</dt><dd class="mono">{app.settings?.apiPort ?? "-"}</dd></div>
       <div><dt>Version</dt><dd class="mono">{app.status?.version ?? "-"}</dd></div>
     </dl>
-    <p class="hint card-pad tail">Home folder and API port are set with the <code>ZERO2DEV_HOME</code> and <code>ZERO2DEV_PORT</code> environment variables before the daemon starts.</p>
+    <p class="hint card-pad tail">The API port is set with the <code>ZERO2DEV_PORT</code> environment variable before the daemon starts.</p>
   </section>
 
   <section class="card">
@@ -155,6 +213,21 @@
   }
   dd {
     margin: 0;
+    overflow-wrap: anywhere;
+  }
+  .stack-s {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+  }
+  .path-inline {
+    overflow-wrap: anywhere;
+  }
+  .dir {
+    padding: 6px 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--sunken);
     overflow-wrap: anywhere;
   }
   .tail {

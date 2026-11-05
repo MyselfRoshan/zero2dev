@@ -575,3 +575,8 @@ dialog .dlg-foot {
   display: grid;
   gap: 4px;
 }
+
+.notice > svg {
+  flex: none;
+  margin-top: 3px;
+}

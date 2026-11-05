@@ -1,7 +1,8 @@
 .PHONY: web build build-windows test smoke vet fmt
 
 GOPKGS := ./cmd/... ./internal/...
-LDFLAGS := -s -w
+VERSION := $(shell cat VERSION | tr -d ' \r\n')
+LDFLAGS := -s -w -X main.version=$(VERSION)
 
 # Build the Svelte UI into internal/webui/dist (uses vp, falls back to npm).
 web:

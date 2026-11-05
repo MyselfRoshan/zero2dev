@@ -32,7 +32,7 @@ import (
 )
 
 // version is overridden with -ldflags "-X main.version=...".
-var version = "1.0.0"
+var version = "0.0.1"
 
 func main() {
 	showVersion := flag.Bool("version", false, "print version and exit")
@@ -52,15 +52,26 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	// Everything the daemon (and children that inherit its env) writes to
+	// temp goes below <home>/tmp, never the system temp folder.
+	cfg.ApplyTempEnv()
 	st, err := store.Open(filepath.Join(cfg.Home, "state.json"))
 	if err != nil {
 		return err
 	}
+	// Relocatable: re-point installed runtimes if the folder was moved.
+	if n, err := st.RebaseRuntimes(cfg.Home); err != nil {
+		return err
+	} else if n > 0 {
+		fmt.Printf("Data folder moved: re-pointed %d installed runtime(s)\n", n)
+	}
+	clearDir(cfg.TmpDir()) // leftovers of an interrupted install
 	hub := events.New()
 	sup := supervisor.New(cfg.Home, st, hub)
 	rt := runtimes.New(cfg.Home, st, hub)
 	site := sites.New(cfg.Home, st, hub, sup)
 	inst := installer.New(cfg.Home, st, rt, hub)
+	inst.Version = version
 	// A new caddy runtime gets a Caddy service automatically.
 	rt.OnChange = func() { _, _ = site.EnsureCaddy() }
 
@@ -90,7 +101,7 @@ func run() error {
 	go func() { errc <- httpSrv.Serve(ln) }()
 
 	url := fmt.Sprintf("http://127.0.0.1:%d/#token=%s", cfg.Port, cfg.Token)
-	fmt.Printf("Zero2Dev %s listening on 127.0.0.1:%d\nOpen: %s\n", version, cfg.Port, url)
+	fmt.Printf("Zero2Dev %s listening on 127.0.0.1:%d\n%s\nOpen: %s\n", version, cfg.Port, cfg.Describe(), url)
 	if !cfg.NoBrowser && st.Snapshot().Settings.OpenBrowserOnStart {
 		openBrowser(url)
 	}
@@ -132,4 +143,12 @@ func openBrowser(url string) {
 		return
 	}
 	go func() { _ = cmd.Wait() }()
+}
+
+// clearDir removes the contents of dir (not dir itself).
+func clearDir(dir string) {
+	ents, _ := os.ReadDir(dir)
+	for _, e := range ents {
+		_ = os.RemoveAll(filepath.Join(dir, e.Name()))
+	}
 }

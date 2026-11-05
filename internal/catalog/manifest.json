@@ -5,11 +5,15 @@
     "version": "22.11.0",
     "name": "Node.js 22.11.0",
     "url": "https://nodejs.org/dist/v22.11.0/node-v22.11.0-win-x64.zip",
-    "checksum": { "type": "shasums", "url": "https://nodejs.org/dist/v22.11.0/SHASUMS256.txt" },
+    "checksum": {
+      "type": "shasums",
+      "url": "https://nodejs.org/dist/v22.11.0/SHASUMS256.txt"
+    },
     "binaryRelPath": "node.exe",
     "stripComponents": 1,
     "os": "windows",
-    "arch": "amd64"
+    "arch": "amd64",
+    "homepage": "https://nodejs.org/dist/v22.11.0/"
   },
   {
     "id": "node-22.11.0-linux-amd64",
@@ -17,11 +21,15 @@
     "version": "22.11.0",
     "name": "Node.js 22.11.0",
     "url": "https://nodejs.org/dist/v22.11.0/node-v22.11.0-linux-x64.tar.gz",
-    "checksum": { "type": "shasums", "url": "https://nodejs.org/dist/v22.11.0/SHASUMS256.txt" },
+    "checksum": {
+      "type": "shasums",
+      "url": "https://nodejs.org/dist/v22.11.0/SHASUMS256.txt"
+    },
     "binaryRelPath": "bin/node",
     "stripComponents": 1,
     "os": "linux",
-    "arch": "amd64"
+    "arch": "amd64",
+    "homepage": "https://nodejs.org/dist/v22.11.0/"
   },
   {
     "id": "go-1.23.3-windows-amd64",
@@ -29,11 +37,15 @@
     "version": "1.23.3",
     "name": "Go 1.23.3",
     "url": "https://go.dev/dl/go1.23.3.windows-amd64.zip",
-    "checksum": { "type": "shasums", "url": "https://go.dev/dl/go1.23.3.windows-amd64.zip.sha256" },
+    "checksum": {
+      "type": "shasums",
+      "url": "https://go.dev/dl/go1.23.3.windows-amd64.zip.sha256"
+    },
     "binaryRelPath": "bin/go.exe",
     "stripComponents": 1,
     "os": "windows",
-    "arch": "amd64"
+    "arch": "amd64",
+    "homepage": "https://go.dev/dl/"
   },
   {
     "id": "go-1.23.3-linux-amd64",
@@ -41,11 +53,15 @@
     "version": "1.23.3",
     "name": "Go 1.23.3",
     "url": "https://go.dev/dl/go1.23.3.linux-amd64.tar.gz",
-    "checksum": { "type": "shasums", "url": "https://go.dev/dl/go1.23.3.linux-amd64.tar.gz.sha256" },
+    "checksum": {
+      "type": "shasums",
+      "url": "https://go.dev/dl/go1.23.3.linux-amd64.tar.gz.sha256"
+    },
     "binaryRelPath": "bin/go",
     "stripComponents": 1,
     "os": "linux",
-    "arch": "amd64"
+    "arch": "amd64",
+    "homepage": "https://go.dev/dl/"
   },
   {
     "id": "caddy-2.8.4-windows-amd64",
@@ -53,11 +69,15 @@
     "version": "2.8.4",
     "name": "Caddy 2.8.4",
     "url": "https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_windows_amd64.zip",
-    "checksum": { "type": "shasums", "url": "https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_checksums.txt" },
+    "checksum": {
+      "type": "shasums",
+      "url": "https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_checksums.txt"
+    },
     "binaryRelPath": "caddy.exe",
     "stripComponents": 0,
     "os": "windows",
-    "arch": "amd64"
+    "arch": "amd64",
+    "homepage": "https://github.com/caddyserver/caddy/releases/tag/v2.8.4"
   },
   {
     "id": "caddy-2.8.4-linux-amd64",
@@ -65,10 +85,14 @@
     "version": "2.8.4",
     "name": "Caddy 2.8.4",
     "url": "https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_linux_amd64.tar.gz",
-    "checksum": { "type": "shasums", "url": "https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_checksums.txt" },
+    "checksum": {
+      "type": "shasums",
+      "url": "https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_checksums.txt"
+    },
     "binaryRelPath": "caddy",
     "stripComponents": 0,
     "os": "linux",
-    "arch": "amd64"
+    "arch": "amd64",
+    "homepage": "https://github.com/caddyserver/caddy/releases/tag/v2.8.4"
   }
 ]

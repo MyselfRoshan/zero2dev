@@ -116,13 +116,49 @@ export function validateRegister(v: { kind: string; binary: string }): Errors<Re
   return e;
 }
 
-export type SettingsField = "domainSuffix" | "proxyHttpPort" | "proxyHttpsPort";
+export function isValidSha256(s: string): boolean {
+  // SHA-256 is 64 hex characters, SHA-512 (what Caddy publishes) is 128.
+  return /^([0-9a-fA-F]{64}|[0-9a-fA-F]{128})$/.test(s.trim());
+}
+
+/** Empty is valid (use the environment). Otherwise an http(s) URL with a host, optional user:pass@ and port. */
+export function validateProxyUrl(raw: string): string | undefined {
+  const v = raw.trim();
+  if (!v) return undefined;
+  let u: URL;
+  try {
+    u = new URL(v);
+  } catch {
+    return "Use a URL such as http://proxy.company.com:8080.";
+  }
+  if (u.protocol !== "http:" && u.protocol !== "https:") return "The proxy must start with http:// or https://.";
+  if (!u.hostname) return "The proxy URL needs a host name.";
+  if ((u.pathname && u.pathname !== "/") || u.search || u.hash)
+    return "Use only scheme, host and port, for example http://proxy:8080.";
+  return undefined;
+}
+
+export type ImportField = "filePath" | "sha256";
+export function validateImport(v: { filePath: string; sha256: string }): Errors<ImportField> {
+  const e: Errors<ImportField> = {};
+  if (!v.filePath.trim()) e.filePath = "Enter the path of the file you downloaded.";
+  else if (!isAbsolutePath(v.filePath.trim()))
+    e.filePath = "Use an absolute path, for example C:\\Users\\me\\Downloads\\file.zip.";
+  if (v.sha256.trim() && !isValidSha256(v.sha256))
+    e.sha256 = "A SHA-256 hash has 64 hexadecimal characters and a SHA-512 hash has 128 (0-9, a-f).";
+  return e;
+}
+
+export type SettingsField = "domainSuffix" | "proxyHttpPort" | "proxyHttpsPort" | "downloadProxy";
 export function validateSettings(v: {
   domainSuffix: string;
   proxyHttpPort: number;
   proxyHttpsPort: number;
+  downloadProxy?: string;
 }): Errors<SettingsField> {
   const e: Errors<SettingsField> = {};
+  const pe = validateProxyUrl(v.downloadProxy ?? "");
+  if (pe) e.downloadProxy = pe;
   const sf = parseSuffixes(v.domainSuffix);
   if (sf.length === 0) e.domainSuffix = "Enter a suffix such as localhost.";
   else if (sf.some((s) => !s.split(".").every((l) => LABEL.test(l))))

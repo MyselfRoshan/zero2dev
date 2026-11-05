@@ -54,6 +54,10 @@ func TestMain(m *testing.M) {
 		_ = c.Start()
 		fmt.Println("child", c.Process.Pid)
 		select {}
+	case "dumpenv": // writes its environment to $Z2D_DUMP, then idles
+		_ = os.WriteFile(os.Getenv("Z2D_DUMP"), []byte(strings.Join(os.Environ(), "\n")), 0o644)
+		fmt.Println("env dumped")
+		select {}
 	case "noport": // claims a port but never listens
 		select {}
 	}
