@@ -1,6 +1,7 @@
 package supervisor
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
@@ -114,7 +115,14 @@ func setup(t *testing.T, mode string, port int) (*Supervisor, *store.Store, *rec
 		})
 		return nil
 	})
-	t.Cleanup(func() { sup.StopAll(t.Context()) })
+	// t.Context() is already cancelled when cleanups run, which would make StopAll kill
+	// without waiting. Use a live context so the child has fully exited (and stopped writing
+	// its log) before t.TempDir() is removed.
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		sup.StopAll(ctx)
+	})
 	return sup, st, rec, id
 }
 
