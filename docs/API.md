@@ -256,3 +256,78 @@ Log lines are broadcast to every connected client (the UI filters by `serviceId`
 - **Logs**: the file format is `<ts>\t<stream>\t<text>` per line; on daemon start the last 2000 lines are reloaded from the file so the UI still shows history. Lines over 16 KB are truncated.
 - **CORS**: `OPTIONS` preflight from `ZERO2DEV_DEV_ORIGIN` is answered with `204` without a token (preflights carry no credentials); every other `OPTIONS` goes through the normal checks.
 - **Process trees**: on Windows `terminate` and `kill` both end the whole Job Object immediately (no graceful signal exists), then `taskkill /T /F /PID` runs as a fallback. On Linux/macOS, if the daemon itself is SIGKILLed, children are not reaped (no Pdeathsig); normal exits and Ctrl+C / SIGTERM stop everything.
+
+---
+
+# v0.0.1 amendments (BINDING, these override anything above that conflicts)
+
+Release 0.0.1 is about **isolation and portability**: Zero2Dev must be a portable program. Everything it stores lives in one folder next to the executable, nothing is written to `%USERPROFILE%`, `%APPDATA%`, the registry or the system trust store, and the folder can be moved or copied to another drive and keep working. The version string everywhere is `0.0.1` (single source: the `VERSION` file at the repo root, passed to Go with `-ldflags "-X main.version=<VERSION>"`, default in `main.go` is `0.0.1`).
+
+## Portable home folder
+
+- Home dir resolution, first match wins: (1) env `ZERO2DEV_HOME`; (2) if the running executable is inside a Go build/temp directory (path contains `go-build`, as with `go run`) then `<current working dir>/data`; (3) **`<directory of the executable>/data`** (default, via `os.Executable()` with symlinks resolved). The old `%USERPROFILE%\.zero2dev` default is removed.
+- The daemon prints the data folder at startup: `Data folder: <abs path> (portable, next to the program)` or `(from ZERO2DEV_HOME)` / `(current directory, dev mode)`.
+- Layout additions: `<home>/tmp/` (all of the daemon's own temp files; set `TMP`/`TEMP`/`TMPDIR` for the daemon process itself at startup to this folder and use it for downloads and extraction staging) and `<home>/caddy/data`, `<home>/caddy/config` (see Caddy isolation).
+- **Relocatable**: `state.json` must keep working after the whole folder is moved. On load, for every runtime with `source: "installed"` whose stored `binary` does not exist, rebase it: take the path segments after the first `runtimes` segment, and join them to `<current home>/runtimes/`. (Handle both `\` and `/` in the stored value, whichever OS wrote it.) Persist the rebased value. Runtimes with `source: "registered"` keep their absolute path (they point outside the folder on purpose). Service `cwd` and site `root` are user project folders and are never rewritten.
+- `GET /api/status` gains `homeSource` (`"env" | "cwd" | "exe"`) and `portable` (`true` only when `homeSource` is `"exe"`), plus `exeDir`.
+- No other location is written to by the daemon. Add a test proving this: run the daemon with `HOME`, `USERPROFILE`, `APPDATA`, `LOCALAPPDATA`, `XDG_*` and `TMPDIR` pointed at an empty temp dir and assert it stays empty (apart from nothing at all) after start/stop of a service and a runtime import.
+
+## Caddy isolation and safety
+
+- When the supervisor starts a service of `kind: "caddy"` (or whose resolved binary is named `caddy`/`caddy.exe`) it adds these environment variables, overriding any user value: `XDG_DATA_HOME=<home>/caddy/data`, `XDG_CONFIG_HOME=<home>/caddy/config`, `TMP`, `TEMP`, `TMPDIR` = `<home>/tmp`. (Caddy honours XDG_* on every OS, otherwise it writes to `%AppData%\Caddy`.)
+- The generated Caddyfile global block is, in this order: `admin off` (no local admin API on :2019, we restart Caddy to apply changes), `http_port`, `https_port`, `auto_https disable_redirects`, and `skip_install_trust` **unless** setting `trustLocalCA` is true. The Caddy root certificate then lives at `<home>/caddy/data/caddy/pki/authorities/local/root.crt`.
+- `skip_install_trust` exists because by default Caddy installs its local root CA into the operating system trust store (a system change and an OS prompt), which breaks isolation.
+
+## Settings additions
+
+`Settings` gains two fields (PUT accepts partial bodies as before):
+
+```json
+{ "trustLocalCA": false, "downloadProxy": "" }
+```
+
+- `trustLocalCA`: default `false`. Regenerates the Caddyfile on change.
+- `downloadProxy`: empty or an `http://host:port` / `https://host:port` URL (with optional `user:pass@`). Used by the installer's HTTP client. When empty, use the standard `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` environment (Go's `ProxyFromEnvironment`). Go does NOT read the Windows system proxy, which is a likely reason downloads fail on company networks. Invalid values return `400 bad_request`.
+
+## Catalog entry additions
+
+`CatalogEntry` gains `homepage` (string, a human download page, e.g. `https://github.com/caddyserver/caddy/releases/tag/v2.8.4`, `https://nodejs.org/dist/v22.11.0/`, `https://go.dev/dl/`) and `fileName` (computed: the archive file name from `url`). Add `homepage` to every manifest entry.
+
+## Installer hardening (why: Caddy could not be installed)
+
+The previous installer had one failure mode that is invisible to the user. Fix all of these:
+
+1. **Windows sharing violations**: antivirus (Defender) scans a freshly extracted `caddy.exe` and the final `os.Rename(tmp, final)` can fail with access denied. Retry the rename up to 20 times with growing delays (250 ms, capped at 2 s), then fall back to copying the tree and removing the staging folder. The rename function must be injectable so a test can simulate failures.
+2. HTTP client: User-Agent `Zero2Dev/<version>`; transport with dial timeout 15 s, TLS handshake 15 s, response-header timeout 30 s, proxy from `downloadProxy` setting or environment; **no overall client timeout** (the existing 30 minute context stays) but abort a download that receives no bytes for 60 s. Retry network errors (not HTTP 4xx, not checksum mismatch) up to 3 attempts with 1 s / 3 s backoff, resetting progress.
+3. **Errors name the step and the cause**: `job.error` looks like `Downloading: Get "https://...": dial tcp ...: i/o timeout` or `Registering: rename ...: Access is denied (antivirus may be scanning the file; try again)`. Include the HTTP status and final URL after redirects when a download fails.
+4. Every install and import attempt appends timestamped lines to `<home>/logs/installer.log` (start, each step, URL, final URL, bytes, hashes expected/got, errors). Rotate at 1 MB to `.1`. `GET /api/installer/log?tail=200` returns `{ "lines": ["2026-11-04T10:00:00Z ...", ...] }` (max 1000).
+
+## Import from a file the user downloaded themselves
+
+When a network blocks the download, the user can fetch the archive in a browser and import it.
+
+`POST /api/runtimes/import`, body `{ "catalogId": "caddy-2.8.4-windows-amd64", "filePath": "C:\\Users\\me\\Downloads\\caddy_2.8.4_windows_amd64.zip", "sha256": "" }` -> `202 Job`.
+
+- `filePath` must be absolute and an existing regular file (`400` otherwise); its base name should equal the entry's `fileName`, otherwise `400` naming the expected file.
+- Expected hash: `sha256` if given (64 hex chars, `400` if malformed); otherwise the published checksum, fetched with a 10 s timeout. If neither is available: `400 bad_request` with message `Cannot verify the file because the published checksum could not be fetched. Paste the SHA-256 for <fileName> from <checksum url> into the SHA-256 field.`
+- Same pipeline as install after the download step: verify (steps `Importing` 0-80%, `Verifying`, `Extracting`, `Registering`), same hardening, same `installer.log`. The user's file is copied into `<home>/tmp` for processing and never modified or deleted.
+- Same conflict rules as install (`409` if already installed or already running a job for that entry).
+
+## Behaviour of `GET /api/status`
+
+```json
+{ "version": "0.0.1", "uptimeSeconds": 12, "os": "windows", "arch": "amd64", "homeDir": "D:\\zero2dev\\bin\\data", "homeSource": "exe", "portable": true, "exeDir": "D:\\zero2dev\\bin", "counts": { "services": 0, "running": 0, "runtimes": 0, "sites": 0 } }
+```
+
+### Backend notes for v0.0.1
+
+- **Home**: `ZERO2DEV_HOME` -> `./data` when the executable path contains `go-build` (or `os.Executable` fails) -> `<exe dir>/data` (symlinks resolved). `<home>/downloads` is no longer created; downloads and extraction staging use `<home>/tmp`, which is emptied at daemon start. The daemon sets `TMP`/`TEMP`/`TMPDIR` to it for itself (children inherit them). `exeDir` is also reported when the home comes from the environment.
+- **Rebase** (`RebaseRuntimes`, run at startup): only `source: "installed"` runtimes whose stored binary does not exist are changed. The first `runtimes` path segment is used; if that result does not exist and the path contains a later `runtimes` segment that does resolve, that one wins. Paths without a `runtimes` segment are left alone.
+- **Caddy isolation** applies to `kind: "caddy"` services and to any service whose resolved binary is named `caddy`/`caddy.exe`. The values are appended after user env, so they win. `trustLocalCA` and `downloadProxy` are partial in PUT; `downloadProxy` is trimmed and validated (http/https URL with host, optional port 1-65535, no path/query).
+- **Installer**: retries cover network errors, stalls and HTTP 5xx (3 attempts, 1 s / 3 s); HTTP 4xx, checksum mismatch and unparseable checksum files are not retried. The checksum file is fetched with the same hardened client. Rename retry: 20 attempts, delay 250 ms * attempt capped at 2 s, then copy fallback. `job.error` starts with the step name (`Downloading`, `Importing`, `Verifying`, `Extracting`, `Registering`). Install jobs have `type: "install"`, import jobs `type: "import"` (initial step `Importing`).
+- **Import**: validation order is catalog entry (404), platform (400), `filePath` absolute/exists/regular (400), file name equals `fileName` (400), `sha256` format (400), conflicts (409), then the hash (given, else published checksum fetched with a 10 s timeout, else 400 with the documented message; when the entry has no checksum URL the message names the homepage instead). The comparison of the file name is exact (case-sensitive), so a browser-renamed `file (1).zip` is rejected with the expected name.
+- **`GET /api/installer/log`**: `tail` default 200, max 1000; lines are `<RFC3339> [<jobId>] <message>`; reads through into `installer.log.1` when needed.
+
+## Checksums: SHA-256 and SHA-512 (fix after first field test)
+
+The published checksum for Caddy releases is **SHA-512** (128 hex characters per line); Node and Go publish SHA-256 (64). `checksum.type: "shasums"` files and bare-hash files may now contain either, the digest algorithm is chosen from the length of the expected hash, and the archive is verified with that algorithm. The `sha256` field of `POST /api/runtimes/import` (name kept for compatibility) accepts a 64 or 128 character hex digest. Signed query strings on redirect URLs are removed from `installer.log` and from error messages.
