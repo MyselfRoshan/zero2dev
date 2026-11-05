@@ -18,7 +18,7 @@
       <li>Zero2Dev keeps the token on this device and removes it from the address bar.</li>
     </ol>
     <p class="muted small">
-      The token is also stored in the file <code>token</code> inside the Zero2Dev home folder (<code>%USERPROFILE%\.zero2dev</code>).
+      The token is also stored in the file <code>token</code> inside the <code>data</code> folder next to <code>zero2dev.exe</code> (<code>data\token</code>).
     </p>
     <form
       class="paste"

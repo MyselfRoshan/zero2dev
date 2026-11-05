@@ -11,3 +11,4 @@ First numbered release. Focus: isolation and portability.
 - Other Caddy install hardening: retry when antivirus locks the extracted file, download timeouts and retries, a download proxy setting, full error messages that name the failing step, `data/logs/installer.log`.
 - Import a runtime archive you downloaded yourself (verified against the published or a pasted SHA-256).
 - Services, runtimes, sites, live logs and the embedded Svelte dashboard from the earlier prototype.
+- Added `docs/USAGE.md`, a step-by-step guide with screenshots. The first-run page now says the token is in `data\token` next to the exe.

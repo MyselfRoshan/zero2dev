@@ -6,30 +6,6 @@ start and stop them with live logs, and map local domains such as `myapp.localho
 
 No Electron. No Docker. One Go binary with the Svelte UI embedded.
 
-## Portable by design
-
-Everything Zero2Dev stores lives in a `data` folder **next to the program**. Nothing is written to your user profile, `AppData`,
-the registry or the Windows certificate store.
-
-```
-zero2dev.exe
-data\
-  token              your access token
-  state.json         services, runtimes, sites, settings
-  runtimes\          Node, Go, Caddy and anything else installed from the catalog
-  caddy\             Caddy's own data and config (kept out of %AppData%)
-  config\Caddyfile   generated, do not edit
-  logs\              one log per service, plus installer.log
-  downloads\  tmp\   work areas, safe to delete when Zero2Dev is stopped
-```
-
-- Copy or move the whole folder (to another drive, a USB stick) and it keeps working. Stop Zero2Dev first.
-- To reset everything, stop Zero2Dev and delete `data\`.
-- Set `ZERO2DEV_HOME` to use a different data folder.
-
-What is *not* isolated: the services you run are your own programs. A Node app still writes to the normal Windows temp folder, and
-runtimes you registered by path stay where they are.
-
 ## Quick start (Windows)
 
 Build prerequisites: [Go 1.24+](https://go.dev/dl/) and [Node.js 22+](https://nodejs.org/).
