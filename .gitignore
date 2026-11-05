@@ -5,3 +5,4 @@ web/node_modules/
 .zero2dev/
 /data/
 /bin/data/
+/internal/webui/dist
