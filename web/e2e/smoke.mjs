@@ -315,6 +315,29 @@ await step("create a service (validation first, then success)", async () => {
   await page.locator('tr[data-service="Demo API"]').waitFor();
 });
 
+await step("changing from custom clears the program override", async () => {
+  await page.goto(BASE + "/#/services");
+  await page.getByRole("button", { name: "New service" }).click();
+  await page.getByLabel("Name", { exact: true }).fill("Changed type");
+  await page.getByLabel("Project folder", { exact: true }).fill("C:\\work\\changed");
+  await page.getByLabel("Type").selectOption("custom");
+  await page.getByLabel("Program").fill("custom.exe");
+  await page.getByLabel("Type").selectOption("node");
+  await page.getByRole("button", { name: "Add argument" }).click();
+  await page.getByLabel("Argument 1").fill("server.js");
+  await page.getByText("Advanced:").click();
+  assert.equal(await page.getByLabel("Program").inputValue(), "");
+  await page.getByText("Advanced:").click();
+  const request = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith("/api/services"));
+  await page.getByRole("button", { name: "Create service" }).click();
+  assert.equal((await request).postDataJSON().command, "");
+  const row = page.locator('tr[data-service="Changed type"]');
+  await row.waitFor();
+  await row.getByRole("button", { name: "Delete Changed type" }).click();
+  await page.getByRole("button", { name: "Delete service" }).click();
+  await row.waitFor({ state: "detached" });
+});
+
 await step("browse: native folder dialog fills the project folder", async () => {
   await page.goto(BASE + "/#/services");
   await page.getByRole("button", { name: "New service" }).click();

@@ -10,24 +10,24 @@ No Electron. No Docker. One Go binary with the Svelte UI embedded.
 
 ## Portable by design
 
-Everything Zero2Dev stores lives in a `data` folder **next to the program**. Nothing is written to your user profile, `AppData`,
+By default, Zero2Dev stores its data and installed runtimes **next to the program**. Nothing is written to your user profile, `AppData`,
 the registry or the Windows certificate store.
 
 ```
 zero2dev.exe
+bin\                 installed runtimes from the catalog
 data\
   token              your access token
   state.json         services, runtimes, sites, settings
-  runtimes\          Node, Go, Caddy and anything else installed from the catalog
   caddy\             Caddy's own data and config (kept out of %AppData%)
-  config\Caddyfile   generated, do not edit
+  config\            generated Caddyfile and nginx.conf, do not edit
   logs\              one log per service, plus installer.log
   downloads\  tmp\   work areas, safe to delete when Zero2Dev is stopped
 ```
 
 - Copy or move the whole folder (to another drive, a USB stick) and it keeps working. Stop Zero2Dev first.
-- To reset everything, stop Zero2Dev and delete `data\`.
-- Set `ZERO2DEV_HOME` to use a different data folder.
+- To reset everything, stop Zero2Dev and delete `data\` and `bin\` (or the configured data and runtime folders).
+- Set `ZERO2DEV_HOME` to use a different data folder. Runtimes then default to `bin` inside that folder. Set `ZERO2DEV_BIN` to choose the runtime folder explicitly.
 
 What is *not* isolated: the services you run are your own programs. A Node app still writes to the normal Windows temp folder, and
 runtimes you registered by path stay where they are.
@@ -85,7 +85,7 @@ Not yet: ports 80/443 and hosts-file domains, database templates, auto-update, c
 
 1. Open **Runtimes**, expand the failed job and **Show installer log** (it is also the file `data\logs\installer.log`). The error names the step that failed.
 2. On a company network, set a **Download proxy** in Settings (Go ignores the Windows system proxy).
-3. If downloads are blocked, open the entry's **Download page**, save the archive, then use **Import file**. Zero2Dev verifies it against the published checksum, or against the SHA-256 you paste in.
+3. If downloads are blocked, open the entry's **Download page**, save the archive, then use **Import file**. Zero2Dev verifies it against a published checksum, or against a SHA-256 you paste in. If neither is available, you can confirm an unverified import.
 4. Antivirus can briefly lock a freshly extracted `caddy.exe`; Zero2Dev now retries for several seconds before giving up.
 
 ## Sites and HTTPS
@@ -131,13 +131,13 @@ The UI uses pnpm (version pinned in `web/package.json`, lockfile `web/pnpm-lock.
 `pnpm check` lints and type-checks, `pnpm test` runs the UI tests, `make test` (or `go test ./cmd/... ./internal/...` after building the UI) runs the daemon tests,
 `scripts/smoke.sh` runs a real end-to-end check against the built binary, and `web/e2e/real-daemon.cjs` drives the real UI in Chromium.
 
-Environment variables: `ZERO2DEV_HOME`, `ZERO2DEV_PORT`, `ZERO2DEV_NO_BROWSER`, `ZERO2DEV_DEV_ORIGIN`.
+Environment variables: `ZERO2DEV_HOME`, `ZERO2DEV_BIN`, `ZERO2DEV_PORT`, `ZERO2DEV_NO_BROWSER`, `ZERO2DEV_DEV_ORIGIN`.
 
 ## Security notes
 
 The panel can start programs on your computer, so it is reachable only by you: loopback only, a secret token on every API call,
 and strict Host and Origin checks so a website you visit cannot drive it. Keep `data\token` private.
-The installer only downloads from URLs in the catalog and verifies every archive against a published checksum.
+The installer downloads from URLs in the catalog and verifies archives against published checksums when available. Downloads without a published checksum are not integrity-verified; installing them requires confirmation and trusts the download source.
 Unsigned programs that download and run executables can trigger antivirus heuristics.
 
 ## License

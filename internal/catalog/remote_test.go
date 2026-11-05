@@ -468,3 +468,30 @@ func TestGetRefusesTruncatedDocument(t *testing.T) {
 		t.Fatalf("%d %v", len(b), err)
 	}
 }
+
+func TestRefreshDoesNotRecopyFetchedKinds(t *testing.T) {
+	fail := false
+	s := publishers(t, &fail)
+	home := t.TempDir()
+	r := newRemote(home, s)
+	r.NodeURL = s.URL + "/missing"
+	old := cacheFile{Entries: []model.CatalogEntry{
+		{ID: "old-node", Kind: "node"},
+		{ID: "old-go", Kind: "go"},
+		{ID: "old-caddy", Kind: "caddy"},
+		{ID: "future", Kind: "future"},
+	}}
+	if err := saveCache(home, old); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := r.Refresh(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	counts := map[string]int{}
+	for _, e := range loadCache(home).Entries {
+		counts[e.ID]++
+	}
+	if counts["old-node"] != 1 || counts["old-go"] != 0 || counts["old-caddy"] != 0 || counts["future"] != 1 {
+		t.Fatalf("incorrect fallback entries: %v", counts)
+	}
+}

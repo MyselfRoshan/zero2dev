@@ -45,7 +45,7 @@ echo "== portable layout"
 for d in tmp caddy/data caddy/config logs config; do [ -d "$DATA/$d" ] && ok "data/$d" || bad "data/$d missing"; done
 [ -d "$(dirname "$DATA")/bin" ] && ok "bin/ (runtimes) next to data/" || bad "bin/ missing next to data/"
 check "status reports portable" "exe True" "$(curl -s "${A[@]}" $B/api/status | jget "d['homeSource']+' '+str(d['portable'])")"
-check "status version" 0.1.0 "$(curl -s "${A[@]}" $B/api/status | jget "d['version']")"
+check "status version" "$(tr -d ' \r\n' < VERSION)" "$(curl -s "${A[@]}" $B/api/status | jget "d['version']")"
 grep -q "(portable, next to the program)" "$TMP/daemon.log" && ok "startup message names the data folder" || bad "no data folder message"
 
 echo "== auth and hygiene"
