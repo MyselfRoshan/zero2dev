@@ -90,6 +90,8 @@ type CatalogEntry struct {
 	StripComponents int      `json:"stripComponents"`
 	OS              string   `json:"os"`
 	Arch            string   `json:"arch"`
+	Homepage        string   `json:"homepage"`
+	FileName        string   `json:"fileName"`
 	Installed       bool     `json:"installed"`
 	Supported       bool     `json:"supported"`
 }
@@ -144,6 +146,8 @@ type Settings struct {
 	ProxyHTTPPort      int    `json:"proxyHttpPort"`
 	ProxyHTTPSPort     int    `json:"proxyHttpsPort"`
 	OpenBrowserOnStart bool   `json:"openBrowserOnStart"`
+	TrustLocalCA       bool   `json:"trustLocalCA"`
+	DownloadProxy      string `json:"downloadProxy"`
 }
 
 // LogLine is one captured output line.

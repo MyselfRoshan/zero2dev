@@ -17,6 +17,14 @@
   const noServices = $derived(app.loaded.services && lists.services.length === 0);
 </script>
 
+{#if app.status?.portable}
+  <p class="chip-row">
+    <span class="chip" title="Everything lives in this folder next to the program">
+      <Icon name="check" size={13} /> Portable <span class="mono dir">{app.status.homeDir}</span>
+    </span>
+  </p>
+{/if}
+
 <div class="stats">
   {#each stats as s (s.label)}
     <a class="card stat" href={s.href}>
@@ -90,6 +98,28 @@
 </section>
 
 <style>
+  .chip-row {
+    margin: -6px 0 14px;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 100%;
+    padding: 3px 10px;
+    border-radius: 12px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 600;
+    font-size: 12.5px;
+  }
+  .chip .dir {
+    font-weight: 500;
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .stats {
     display: grid;
     grid-template-columns: repeat(5, 1fr);

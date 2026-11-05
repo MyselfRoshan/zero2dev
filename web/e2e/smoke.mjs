@@ -71,13 +71,13 @@ await step("install catalog runtime shows progress until done", async () => {
   await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Runtimes" }).click();
   await page.getByText("No runtimes yet").waitFor();
   const row = page.locator('tr[data-catalog="node-22.11.0"]');
-  await row.getByRole("button", { name: "Install" }).click();
+  await row.getByRole("button", { name: "Install", exact: true }).click();
   const bar = row.getByRole("progressbar");
   await bar.waitFor();
   await shot(page, "05a-runtimes-installing");
   const seen = new Set();
   for (let i = 0; i < 40; i++) {
-    const v = await bar.getAttribute("aria-valuenow").catch(() => null);
+    const v = await bar.getAttribute("aria-valuenow", { timeout: 300 }).catch(() => null);
     if (v) seen.add(Number(v));
     if (await row.getByText("Installed").isVisible()) break;
     await page.waitForTimeout(100);
@@ -94,7 +94,7 @@ await step("install catalog runtime shows progress until done", async () => {
   await page.locator("tr[data-runtime]").filter({ hasText: "22.11.0" }).waitFor();
   // unsupported entry is disabled with an explanation
   const arm = page.locator('tr[data-catalog="go-1.23.3-arm64"]');
-  assert.ok(await arm.getByRole("button", { name: "Install" }).isDisabled());
+  assert.ok(await arm.getByRole("button", { name: "Install", exact: true }).isDisabled());
   await arm.getByText(/not for this PC/).waitFor();
   // kinds without catalog entries get the hint
   await page.getByText(/no download in the catalog/).waitFor();
@@ -111,6 +111,87 @@ await step("detect and register one-click, register by path validation", async (
   await page.getByText(/Use an absolute path/).waitFor();
   await page.getByRole("button", { name: "Cancel" }).click();
   await shot(page, "04-runtimes");
+});
+
+await step("failed install shows full error, network hint and installer log", async () => {
+  await page.goto(BASE + "/#/runtimes");
+  const row = page.locator('tr[data-catalog="node-20.18.0"]');
+  await row.getByText("node-v20.18.0-win-x64.zip").waitFor();
+  assert.equal(
+    await row.getByRole("link", { name: /Download page/ }).getAttribute("href"),
+    "https://nodejs.org/dist/v20.18.0/",
+  );
+  await row.getByRole("button", { name: "Install", exact: true }).click();
+  const fail = page.locator('tr[data-failed="node-20.18.0"]');
+  await fail.waitFor({ timeout: 15000 });
+  const text = await fail.getByTestId("job-error").textContent();
+  assert.match(
+    text,
+    /^Downloading: Get "https:\/\/nodejs.org\/dist\/v20.18.0\/node-v20.18.0-win-x64.zip": dial tcp .* i\/o timeout/,
+  );
+  await fail.getByText(/looks like a network problem/).waitFor();
+  await fail.getByRole("link", { name: "Settings" }).waitFor();
+  await fail.getByRole("button", { name: "Show installer log" }).click();
+  const box = fail.getByLabel("Installer log");
+  await box.getByText(/install start node-20.18.0/).waitFor();
+  await box.getByText(/ERROR Downloading/).waitFor();
+  await fail.getByRole("button", { name: "Copy", exact: true }).click();
+  assert.match(await page.evaluate(() => navigator.clipboard.readText()), /ERROR Downloading/);
+  await page
+    .getByRole("alert")
+    .getByText(/node.js 20.18.0 failed/i)
+    .first()
+    .waitFor();
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await fail.scrollIntoViewIfNeeded();
+  await shot(page, "12-runtimes-failed-job");
+  await page.emulateMedia({ colorScheme: "dark" });
+  await shot(page, "12b-runtimes-failed-job-dark");
+  await page.emulateMedia({ colorScheme: "light" });
+});
+
+await step("import: validation, server errors, failure then success", async () => {
+  const row = page.locator('tr[data-catalog="node-20.18.0"]');
+  await row.getByRole("button", { name: /Import file/ }).click();
+  const dlg = page.getByRole("dialog");
+  await dlg.getByText("Zero2Dev works on a copy of this file").waitFor();
+  await dlg.getByRole("button", { name: "Import file" }).click();
+  await dlg.getByText("Enter the path of the file you downloaded.").waitFor();
+  await dlg.getByLabel("Path of the downloaded file").fill("Downloads\\x.zip");
+  await dlg.getByLabel("Checksum, SHA-256 or SHA-512 (optional)").fill("abc");
+  await dlg.getByText(/Use an absolute path/).waitFor();
+  await dlg.getByText(/64 hexadecimal characters and a SHA-512/).waitFor();
+  await shot(page, "13-import-dialog-validation");
+  // wrong file name is rejected by the daemon and shown inline
+  await dlg.getByLabel("Path of the downloaded file").fill("C:\\Users\\me\\Downloads\\wrong.zip");
+  await dlg.getByLabel("Checksum, SHA-256 or SHA-512 (optional)").fill("");
+  await dlg.getByRole("button", { name: "Import file" }).click();
+  await dlg
+    .getByRole("alert")
+    .getByText(/file name should be node-v20.18.0-win-x64.zip/)
+    .waitFor();
+  // locked file -> fails at Registering with antivirus hint
+  await dlg
+    .getByLabel("Path of the downloaded file")
+    .fill("C:\\Users\\me\\Downloads\\locked\\node-v20.18.0-win-x64.zip");
+  await dlg.getByLabel("Checksum, SHA-256 or SHA-512 (optional)").fill("0".repeat(64));
+  await dlg.getByRole("button", { name: "Import file" }).click();
+  const fail = page.locator('tr[data-failed="node-20.18.0"]');
+  await fail.getByText(/step: Registering/).waitFor({ timeout: 15000 });
+  assert.match(
+    await fail.getByTestId("job-error").textContent(),
+    /^Registering: rename .*Access is denied \(antivirus may be scanning/,
+  );
+  await fail.getByText(/Antivirus software may be scanning/).waitFor();
+  assert.equal(await fail.getByText(/looks like a network problem/).count(), 0);
+  // successful import of go: Importing step visible, then Installed
+  const go = page.locator('tr[data-catalog="go-1.23.3"]');
+  await go.getByRole("button", { name: /Import file/ }).click();
+  await dlg.getByLabel("Path of the downloaded file").fill("C:\\Users\\me\\Downloads\\go1.23.3.windows-amd64.zip");
+  await dlg.getByRole("button", { name: "Import file" }).click();
+  await go.getByText("Importing", { exact: true }).waitFor();
+  await go.getByText("Installed").waitFor({ timeout: 15000 });
+  await page.locator("tr[data-runtime]").filter({ hasText: "1.23.3" }).waitFor();
 });
 
 await step("create a service (validation first, then success)", async () => {
@@ -223,7 +304,7 @@ await step("sites: caddy notice, create site, domain validation", async () => {
   assert.equal(await row.getByRole("link").getAttribute("href"), "http://demo.localhost:8080");
   // install caddy -> notice changes
   await page.goto(BASE + "/#/runtimes");
-  await page.locator('tr[data-catalog="caddy-2.8.4"]').getByRole("button", { name: "Install" }).click();
+  await page.locator('tr[data-catalog="caddy-2.8.4"]').getByRole("button", { name: "Install", exact: true }).click();
   await page.locator('tr[data-catalog="caddy-2.8.4"]').getByText("Installed").waitFor({ timeout: 15000 });
   await page.goto(BASE + "/#/sites");
   await page.getByText(/Sites only work while the Caddy service is running/).waitFor();
@@ -239,14 +320,36 @@ await step("settings: change and persist", async () => {
   await page.getByRole("button", { name: "Save settings" }).click();
   await page.getByText(/must differ/).waitFor();
   await page.getByLabel("HTTPS proxy port").fill("8444");
+  // download proxy validation, then valid proxy + trust local CA
+  await page.getByLabel("Download proxy (optional)").fill("proxy.corp:8080");
+  await page.getByRole("button", { name: "Save settings" }).click();
+  await page.getByText(/must start with http/).waitFor();
+  await page.getByLabel("Download proxy (optional)").fill("http://proxy.corp:8080");
+  await page.getByLabel("Let Caddy trust its local certificate authority").check();
+  await page.getByText(/changes the Windows certificate store/).waitFor();
+  await page.getByText(/certificate warning in the browser until you trust/).waitFor();
   await page.getByRole("button", { name: "Save settings" }).click();
   await page.getByText("Settings saved.").waitFor();
   await page.reload();
   await page.waitForFunction(() => document.querySelector("input[inputmode=numeric]")?.value === "8081");
+  assert.equal(await page.getByLabel("Download proxy (optional)").inputValue(), "http://proxy.corp:8080");
+  assert.ok(await page.getByLabel("Let Caddy trust its local certificate authority").isChecked());
+  // portable block
+  assert.equal(await page.getByTestId("data-folder").textContent(), "D:\\zero2dev\\bin\\data");
+  await page.getByText(/Move the whole folder to move Zero2Dev/).waitFor();
+  await page.getByText("D:\\zero2dev\\bin\\data\\caddy\\data\\caddy\\pki\\authorities\\local\\root.crt").waitFor();
+  await page.getByRole("button", { name: "Copy", exact: true }).click();
+  await page.getByText("Data folder path copied.").waitFor();
+  assert.equal(await page.evaluate(() => navigator.clipboard.readText()), "D:\\zero2dev\\bin\\data");
   await page.getByRole("button", { name: "Copy access token" }).click();
   await page.getByText(/Access token copied/).waitFor();
   assert.equal(await page.evaluate(() => navigator.clipboard.readText()), "devtoken");
+  await page.evaluate(() => document.querySelector("#main")?.scrollTo(0, 0));
+  await page.waitForTimeout(6000); // let toasts expire
   await shot(page, "07-settings");
+  await page.emulateMedia({ colorScheme: "dark" });
+  await shot(page, "07b-settings-dark");
+  await page.emulateMedia({ colorScheme: "light" });
 });
 
 await step("combined logs page filters by service and text", async () => {
@@ -277,6 +380,8 @@ await step("reconnect: daemon outage shows banner, recovers with fresh ticket", 
 await step("dashboard with data + dark mode + narrow width", async () => {
   await page.goto(BASE + "/#/dashboard");
   await page.locator(".svc").first().waitFor();
+  await page.getByText("v0.0.1").waitFor();
+  await page.getByText("Portable", { exact: false }).first().waitFor();
   await shot(page, "01-dashboard");
   await page.emulateMedia({ colorScheme: "dark" });
   await shot(page, "09-dashboard-dark");

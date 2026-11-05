@@ -74,10 +74,7 @@ func makeTarGz(t *testing.T, files []tarFile) []byte {
 }
 
 func newEnv(t *testing.T, routes map[string][]byte) *env {
-	t.Helper()
-	home := t.TempDir()
-	st, _ := store.Open(filepath.Join(home, "state.json"))
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return newEnvHandler(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		b, ok := routes[r.URL.Path]
 		if !ok {
 			http.NotFound(w, r)
@@ -85,14 +82,23 @@ func newEnv(t *testing.T, routes map[string][]byte) *env {
 		}
 		w.Write(b)
 	}))
+}
+
+func newEnvHandler(t *testing.T, h http.Handler) *env {
+	t.Helper()
+	home := t.TempDir()
+	st, _ := store.Open(filepath.Join(home, "state.json"))
+	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
 	rts := runtimes.New(home, st, nopEm{})
 	in := New(home, st, rts, nopEm{})
+	in.Sleep = func(time.Duration) {} // no real backoff in tests
 	return &env{home: home, st: st, in: in, srv: srv, rts: rts}
 }
 
-func (e *env) install(t *testing.T, entry model.CatalogEntry) model.Job {
-	t.Helper()
+// entry normalises a test entry for this machine and the test server, and
+// makes it the only catalog entry.
+func (e *env) entry(entry model.CatalogEntry) model.CatalogEntry {
 	entry.OS, entry.Arch, entry.Kind = runtime.GOOS, runtime.GOARCH, "node"
 	entry.Name, entry.Version = "Fake", "1.0.0"
 	if entry.URL != "" {
@@ -102,19 +108,30 @@ func (e *env) install(t *testing.T, entry model.CatalogEntry) model.Job {
 		entry.Checksum.URL = e.srv.URL + entry.Checksum.URL
 	}
 	e.in.Catalog = func() ([]model.CatalogEntry, error) { return []model.CatalogEntry{entry}, nil }
+	return entry
+}
+
+func (e *env) wait(t *testing.T, id string) model.Job {
+	t.Helper()
+	for i := 0; i < 500; i++ {
+		cur, _ := e.in.Get(id)
+		if cur.State != "running" {
+			return cur
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("job did not finish")
+	return model.Job{}
+}
+
+func (e *env) install(t *testing.T, entry model.CatalogEntry) model.Job {
+	t.Helper()
+	entry = e.entry(entry)
 	j, err := e.in.Start(entry.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for i := 0; i < 300; i++ {
-		cur, _ := e.in.Get(j.ID)
-		if cur.State != "running" {
-			return cur
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	t.Fatal("job did not finish")
-	return model.Job{}
+	return e.wait(t, j.ID)
 }
 
 func TestInstallZipWithShasums(t *testing.T) {
@@ -148,8 +165,8 @@ func TestInstallZipWithShasums(t *testing.T) {
 		t.Fatal("install folder should be removed")
 	}
 	// no leftovers
-	if ents, _ := os.ReadDir(filepath.Join(e.home, "downloads")); len(ents) != 0 {
-		t.Fatalf("download not cleaned: %v", ents)
+	if ents, _ := os.ReadDir(filepath.Join(e.home, "tmp")); len(ents) != 0 {
+		t.Fatalf("tmp not cleaned: %v", ents)
 	}
 }
 
@@ -209,8 +226,8 @@ func TestWrongHashRefusesAndExtractsNothing(t *testing.T) {
 		if len(e.rts.List()) != 0 {
 			t.Fatal("no runtime may be registered")
 		}
-		if ents, _ := os.ReadDir(filepath.Join(e.home, "downloads")); len(ents) != 0 {
-			t.Fatalf("partial download left behind: %v", ents)
+		if ents, _ := os.ReadDir(filepath.Join(e.home, "tmp")); len(ents) != 0 {
+			t.Fatalf("tmp not cleaned: %v", ents)
 		}
 	}
 }

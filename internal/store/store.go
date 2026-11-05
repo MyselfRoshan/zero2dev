@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 
 	"zero2dev/internal/fsutil"
@@ -111,3 +113,66 @@ func (s *Store) Update(fn func(*Data) error) error {
 	s.data = c
 	return nil
 }
+
+// RebasePath maps a stored installed-runtime binary path onto home: the
+// segments after the first (falling back to the last) "runtimes" segment are
+// joined to <home>/runtimes. Both \ and / separators are understood, so a
+// path written on Windows can be rebased on Linux and vice versa. It returns
+// stored unchanged if there is no "runtimes" segment.
+func RebasePath(home, stored string) string {
+	parts := strings.Split(strings.ReplaceAll(stored, "\\", "/"), "/")
+	var idx []int
+	for i, p := range parts {
+		if p == "runtimes" && i < len(parts)-1 {
+			idx = append(idx, i)
+		}
+	}
+	if len(idx) == 0 {
+		return stored
+	}
+	build := func(i int) string {
+		return filepath.Join(append([]string{home, "runtimes"}, parts[i+1:]...)...)
+	}
+	first := build(idx[0])
+	if _, err := os.Stat(first); err != nil && len(idx) > 1 {
+		if last := build(idx[len(idx)-1]); last != first {
+			if _, err := os.Stat(last); err == nil {
+				return last
+			}
+		}
+	}
+	return first
+}
+
+// RebaseRuntimes makes the state relocatable: installed runtimes whose
+// binary no longer exists are re-pointed into <home>/runtimes and the result
+// is persisted. Registered runtimes keep their absolute paths. It returns the
+// number of runtimes changed.
+func (s *Store) RebaseRuntimes(home string) (int, error) {
+	n := 0
+	err := s.Update(func(d *Data) error {
+		for i := range d.Runtimes {
+			r := &d.Runtimes[i]
+			if r.Source != "installed" {
+				continue
+			}
+			if _, err := os.Stat(r.Binary); err == nil {
+				continue
+			}
+			if nb := RebasePath(home, r.Binary); nb != r.Binary {
+				r.Binary = nb
+				n++
+			}
+		}
+		if n == 0 {
+			return errNoChange
+		}
+		return nil
+	})
+	if err == errNoChange {
+		return 0, nil
+	}
+	return n, err
+}
+
+var errNoChange = errors.New("no change")

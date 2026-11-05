@@ -3,6 +3,7 @@ package catalog
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"zero2dev/internal/model"
@@ -17,6 +18,12 @@ func TestEmbeddedManifestValid(t *testing.T) {
 		t.Fatalf("want 6 entries, got %d", len(es))
 	}
 	for _, e := range es {
+		if e.Homepage == "" || !strings.HasPrefix(e.Homepage, "https://") {
+			t.Errorf("%s: homepage missing", e.ID)
+		}
+		if e.FileName == "" || strings.ContainsAny(e.FileName, "/?") {
+			t.Errorf("%s: fileName %q", e.ID, e.FileName)
+		}
 		if e.Checksum.Type != "shasums" || e.Checksum.URL == "" {
 			t.Errorf("%s: must use a published checksum", e.ID)
 		}
@@ -41,5 +48,11 @@ func TestAnnotate(t *testing.T) {
 	got := Annotate(es, "/h", []model.Runtime{{Binary: filepath.Join("/h", "runtimes", "a", "bin", "a")}})
 	if !got[0].Installed {
 		t.Fatal("should be installed")
+	}
+}
+
+func TestFileName(t *testing.T) {
+	if FileName("https://x.test/a/b/caddy_2.8.4_linux_amd64.tar.gz?x=1") != "caddy_2.8.4_linux_amd64.tar.gz" {
+		t.Fatal("FileName")
 	}
 }

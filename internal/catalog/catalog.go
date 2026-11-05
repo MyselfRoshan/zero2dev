@@ -49,6 +49,7 @@ func Parse(b []byte) ([]model.CatalogEntry, error) {
 		}
 		seen[es[i].ID] = true
 		es[i].Installed, es[i].Supported = false, false
+		es[i].FileName = FileName(es[i].URL)
 	}
 	return es, nil
 }
@@ -105,6 +106,19 @@ func validate(e *model.CatalogEntry) error {
 	return nil
 }
 
+// FileName is the archive file name from a download URL.
+func FileName(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return ""
+	}
+	b := path.Base(u.Path)
+	if b == "." || b == "/" || b == ".." {
+		return ""
+	}
+	return b
+}
+
 // Supported reports whether the entry matches this machine.
 func Supported(e model.CatalogEntry) bool { return e.OS == runtime.GOOS && e.Arch == runtime.GOARCH }
 
@@ -124,6 +138,7 @@ func Annotate(es []model.CatalogEntry, home string, rts []model.Runtime) []model
 	out := make([]model.CatalogEntry, len(es))
 	for i, e := range es {
 		e.Supported = Supported(e)
+		e.FileName = FileName(e.URL)
 		want := filepath.Join(home, "runtimes", e.ID, filepath.FromSlash(e.BinaryRelPath))
 		for _, r := range rts {
 			if r.Binary == want {

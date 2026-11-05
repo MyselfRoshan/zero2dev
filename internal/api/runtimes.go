@@ -48,6 +48,23 @@ func (s *Server) installRuntime(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
+func (s *Server) importRuntime(w http.ResponseWriter, r *http.Request) error {
+	var in struct {
+		CatalogID string `json:"catalogId"`
+		FilePath  string `json:"filePath"`
+		SHA256    string `json:"sha256"`
+	}
+	if err := decode(w, r, &in); err != nil {
+		return err
+	}
+	job, err := s.Installer.Import(in.CatalogID, in.FilePath, in.SHA256)
+	if err != nil {
+		return err
+	}
+	writeJSON(w, 202, job)
+	return nil
+}
+
 func (s *Server) deleteRuntime(w http.ResponseWriter, r *http.Request) error {
 	if err := s.Runtimes.Delete(r.PathValue("id")); err != nil {
 		return err

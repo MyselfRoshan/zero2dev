@@ -5,7 +5,10 @@ import {
   isAbsolutePath,
   parsePort,
   parseSuffixes,
+  isValidSha256,
   validateDomain,
+  validateImport,
+  validateProxyUrl,
   validateRegister,
   validateService,
   validateSettings,
@@ -152,5 +155,52 @@ describe("register and settings", () => {
     expect(validateSettings({ ...ok, domainSuffix: " " }).domainSuffix).toBeTruthy();
     expect(validateSettings({ ...ok, proxyHttpPort: 0 }).proxyHttpPort).toBeTruthy();
     expect(validateSettings({ ...ok, proxyHttpsPort: 8080 }).proxyHttpsPort).toMatch(/differ/);
+  });
+});
+
+describe("sha256", () => {
+  it("accepts 64 (SHA-256) or 128 (SHA-512) hex characters only", () => {
+    expect(isValidSha256("a".repeat(64))).toBe(true);
+    expect(isValidSha256("a".repeat(128))).toBe(true);
+    expect(isValidSha256("a".repeat(100))).toBe(false);
+    expect(isValidSha256(" " + "AB12".repeat(16) + " ")).toBe(true);
+    expect(isValidSha256("a".repeat(63))).toBe(false);
+    expect(isValidSha256("g".repeat(64))).toBe(false);
+    expect(isValidSha256("")).toBe(false);
+  });
+});
+
+describe("validateImport", () => {
+  const hash = "0".repeat(64);
+  it("requires an absolute path", () => {
+    expect(validateImport({ filePath: "", sha256: "" }).filePath).toBeTruthy();
+    expect(validateImport({ filePath: "Downloads\\x.zip", sha256: "" }).filePath).toMatch(/absolute/);
+    expect(validateImport({ filePath: "C:\\Users\\me\\Downloads\\x.zip", sha256: "" })).toEqual({});
+  });
+  it("sha256 is optional but must be valid when filled", () => {
+    expect(validateImport({ filePath: "/tmp/x.zip", sha256: hash })).toEqual({});
+    expect(validateImport({ filePath: "/tmp/x.zip", sha256: "abc" }).sha256).toMatch(/64/);
+  });
+});
+
+describe("validateProxyUrl", () => {
+  it("allows empty and http(s) URLs", () => {
+    expect(validateProxyUrl("")).toBeUndefined();
+    expect(validateProxyUrl("http://proxy.corp:8080")).toBeUndefined();
+    expect(validateProxyUrl("https://user:pa55@proxy.corp:3128")).toBeUndefined();
+    expect(validateProxyUrl("http://127.0.0.1:8888/")).toBeUndefined();
+  });
+  it("rejects other forms", () => {
+    expect(validateProxyUrl("proxy.corp:8080")).toBeTruthy();
+    expect(validateProxyUrl("socks5://proxy:1080")).toMatch(/http/);
+    expect(validateProxyUrl("ftp://x")).toBeTruthy();
+    expect(validateProxyUrl("http://")).toBeTruthy();
+    expect(validateProxyUrl("http://proxy:8080/path")).toBeTruthy();
+    expect(validateProxyUrl("not a url")).toBeTruthy();
+  });
+  it("is part of settings validation", () => {
+    const ok = { domainSuffix: "localhost", proxyHttpPort: 8080, proxyHttpsPort: 8443 };
+    expect(validateSettings({ ...ok, downloadProxy: "nope" }).downloadProxy).toBeTruthy();
+    expect(validateSettings({ ...ok, downloadProxy: "http://p:1" })).toEqual({});
   });
 });

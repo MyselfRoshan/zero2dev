@@ -87,7 +87,26 @@ func (s *Supervisor) resolve(svc model.Service, d store.Data) (*resolved, error)
 	if svc.Port > 0 {
 		env = append(env, "PORT="+port)
 	}
+	if isCaddy(svc, bin) {
+		// Caddy writes certificates and config below XDG_* (on every OS,
+		// else %AppData%\Caddy). Keep all of it inside the data folder.
+		// Appended last so it overrides any user-provided value.
+		data, cfg, tmp := filepath.Join(s.home, "caddy", "data"), filepath.Join(s.home, "caddy", "config"), filepath.Join(s.home, "tmp")
+		for _, d := range []string{data, cfg, tmp} {
+			_ = os.MkdirAll(d, 0o755)
+		}
+		env = append(env, "XDG_DATA_HOME="+data, "XDG_CONFIG_HOME="+cfg, "TMP="+tmp, "TEMP="+tmp, "TMPDIR="+tmp)
+	}
 	return &resolved{bin: bin, args: out, env: env}, nil
+}
+
+// isCaddy: kind caddy, or the resolved binary is named caddy / caddy.exe.
+func isCaddy(svc model.Service, bin string) bool {
+	if svc.Kind == "caddy" {
+		return true
+	}
+	b := strings.ToLower(filepath.Base(bin))
+	return b == "caddy" || b == "caddy.exe"
 }
 
 func findRuntimeBinary(svc model.Service, d store.Data) (bin, dir string, err error) {

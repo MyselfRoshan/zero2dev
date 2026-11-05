@@ -158,6 +158,9 @@ export const api = {
   detectRuntimes: () => request<DetectedRuntime[]>("GET", "/api/runtimes/detect"),
   registerRuntime: (b: { kind: RuntimeKind; binary: string; version?: string }) =>
     request<Runtime>("POST", "/api/runtimes/register", b),
+  importRuntime: (b: { catalogId: string; filePath: string; sha256?: string }) =>
+    request<Job>("POST", "/api/runtimes/import", b),
+  installerLog: (tail = 200) => request<{ lines: string[] }>("GET", `/api/installer/log?tail=${tail}`),
   installRuntime: (catalogId: string) => request<Job>("POST", "/api/runtimes/install", { catalogId }),
   deleteRuntime: (id: string) => request<void>("DELETE", `/api/runtimes/${enc(id)}`),
   catalog: () => request<CatalogEntry[]>("GET", "/api/catalog"),

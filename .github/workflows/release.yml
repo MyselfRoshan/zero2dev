@@ -1,0 +1,156 @@
+name: release
+
+# Builds the Windows executable, zips it with the docs, writes a SHA-256 checksum file,
+# and attaches everything to a GitHub release.
+#
+# Release:  bump VERSION and CHANGELOG.md, commit, then push a tag that matches VERSION:
+#             git tag v0.0.1 && git push origin v0.0.1
+# Dry run:  Actions tab -> release -> Run workflow (builds and uploads the files as a
+#           workflow artifact, no release is created).
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the release and upload assets
+      id-token: write # build provenance attestation
+      attestations: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version
+        id: v
+        shell: bash
+        run: |
+          VERSION="$(tr -d ' \r\n' < VERSION)"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if [[ "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" != "v${VERSION}" ]]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match VERSION (v${VERSION}). Fix VERSION or retag."
+            exit 1
+          fi
+          echo "Building Zero2Dev ${VERSION}"
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Check and test the UI
+        working-directory: web
+        run: |
+          npm ci
+          npm run check
+          npm test
+
+      - name: Build the UI (embedded into the executable)
+        working-directory: web
+        run: npm run build
+
+      - name: Vet and test the daemon
+        run: |
+          go vet ./cmd/... ./internal/...
+          GOOS=windows GOARCH=amd64 go vet ./cmd/... ./internal/...
+          go test -race -count=1 ./cmd/... ./internal/...
+
+      - name: Build the Windows executable
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+          CGO_ENABLED: "0"
+          GOOS: windows
+          GOARCH: amd64
+        run: |
+          mkdir -p dist/stage
+          go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o dist/stage/zero2dev.exe ./cmd/zero2dev
+
+      - name: Package and checksum
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+        working-directory: dist
+        shell: bash
+        run: |
+          NAME="zero2dev_${VERSION}_windows_amd64"
+          cp stage/zero2dev.exe "${NAME}.exe"
+          cp ../README.md ../LICENSE ../CHANGELOG.md stage/
+          (cd stage && zip -q -9 "../${NAME}.zip" zero2dev.exe README.md LICENSE CHANGELOG.md)
+          # `<sha256>  <file>` lines: the format `sha256sum -c` and Get-FileHash users expect,
+          # and the same format Zero2Dev's own installer reads.
+          sha256sum "${NAME}.zip" "${NAME}.exe" > "zero2dev_${VERSION}_checksums.txt"
+          sha256sum -c "zero2dev_${VERSION}_checksums.txt"
+          cat "zero2dev_${VERSION}_checksums.txt"
+          rm -rf stage
+
+      - name: Release notes from CHANGELOG.md
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+        shell: bash
+        run: |
+          awk -v v="$VERSION" '
+            $0 ~ "^## " v "$" { on = 1; next }
+            /^## / && on      { exit }
+            on                { print }
+          ' CHANGELOG.md > dist/notes.md
+          if [[ ! -s dist/notes.md ]]; then
+            echo "::warning::No '## ${VERSION}' section found in CHANGELOG.md; the release will have no notes."
+            echo "Zero2Dev ${VERSION}" > dist/notes.md
+          fi
+          {
+            echo
+            echo "### Verify the download"
+            echo
+            echo 'Windows PowerShell: `Get-FileHash .\zero2dev_'"${VERSION}"'_windows_amd64.zip -Algorithm SHA256`'
+            echo "and compare with \`zero2dev_${VERSION}_checksums.txt\`."
+            echo
+            echo "The executable is not code-signed yet, so Windows SmartScreen or antivirus may warn about it."
+            echo "Each file also carries a GitHub build attestation: \`gh attestation verify <file> --repo ${GITHUB_REPOSITORY}\`."
+          } >> dist/notes.md
+
+      - name: Attest build provenance
+        if: github.ref_type == 'tag'
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            dist/zero2dev_*_windows_amd64.zip
+            dist/zero2dev_*_windows_amd64.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zero2dev-${{ steps.v.outputs.version }}-windows-amd64
+          path: |
+            dist/zero2dev_*_windows_amd64.zip
+            dist/zero2dev_*_windows_amd64.exe
+            dist/zero2dev_*_checksums.txt
+          if-no-files-found: error
+
+      - name: Create the GitHub release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.v.outputs.version }}
+        shell: bash
+        run: |
+          PRERELEASE=""
+          [[ "$VERSION" == 0.* ]] && PRERELEASE="--prerelease"
+          gh release create "${GITHUB_REF_NAME}" \
+            --verify-tag $PRERELEASE \
+            --title "Zero2Dev ${VERSION}" \
+            --notes-file dist/notes.md \
+            dist/zero2dev_${VERSION}_windows_amd64.zip \
+            dist/zero2dev_${VERSION}_windows_amd64.exe \
+            dist/zero2dev_${VERSION}_checksums.txt

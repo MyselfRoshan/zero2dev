@@ -23,13 +23,21 @@ const state = {
   sites: [],
   settings: {
     apiPort: PORT,
-    homeDir: "C:\\Users\\dev\\.zero2dev",
+    homeDir: "D:\\zero2dev\\bin\\data",
     domainSuffix: "localhost",
     proxyHttpPort: 8080,
     proxyHttpsPort: 8443,
     openBrowserOnStart: true,
+    trustLocalCA: false,
+    downloadProxy: "",
   },
 };
+const EXE_DIR = "D:\\zero2dev\\bin";
+const installerLog = [];
+function ilog(msg) {
+  installerLog.push(`${now()} ${msg}`);
+  if (installerLog.length > 1000) installerLog.shift();
+}
 const logs = new Map(); // serviceId -> lines[]
 const procs = new Map(); // serviceId -> { timer, n }
 const jobs = new Map();
@@ -273,19 +281,47 @@ function stopProc(svc) {
   }, 600);
 }
 
-function runInstall(entry) {
+const fileNameOf = (c) => c.url.split("/").pop();
+const homepageOf = (c) =>
+  c.kind === "node"
+    ? `https://nodejs.org/dist/v${c.version}/`
+    : c.kind === "caddy"
+      ? `https://github.com/caddyserver/caddy/releases/tag/v${c.version}`
+      : "https://go.dev/dl/";
+
+// Scenarios for testing failed jobs:
+//  - installing node-20.18.0 fails while downloading (blocked network)
+//  - importing a file whose path contains "locked" fails at Registering (antivirus)
+function runInstall(entry, opts = {}) {
+  const isImport = !!opts.filePath;
+  let failAt = null;
+  if (!isImport && entry.id === "node-20.18.0")
+    failAt = {
+      step: "Downloading",
+      pct: 28,
+      error: `Downloading: Get "${entry.url}": dial tcp 104.20.22.46:443: i/o timeout (after 3 attempts)`,
+    };
+  if (isImport && /locked/i.test(opts.filePath))
+    failAt = {
+      step: "Registering",
+      pct: 96,
+      error: `Registering: rename D:\\zero2dev\\bin\\data\\tmp\\stage-1\\${entry.binaryRelPath} D:\\zero2dev\\bin\\data\\runtimes\\${entry.id}\\${entry.binaryRelPath}: Access is denied (antivirus may be scanning the file; try again)`,
+    };
+  ilog(
+    `${isImport ? "import" : "install"} start ${entry.id}${isImport ? ` file=${opts.filePath}` : ` url=${entry.url}`}`,
+  );
   const job = {
     id: id("job"),
-    type: "install",
+    type: isImport ? "import" : "install",
     state: "running",
     percent: 0,
-    step: "Downloading",
+    step: isImport ? "Importing" : "Downloading",
     error: "",
     runtimeId: "",
   };
   jobs.set(job.id, job);
   const steps = [
-    ["Downloading", 0, 70],
+    [isImport ? "Importing" : "Downloading", 0, 70],
     ["Verifying", 70, 78],
     ["Extracting", 78, 94],
     ["Registering", 94, 99],
@@ -294,10 +330,18 @@ function runInstall(entry) {
   let pct = 0;
   const t = setInterval(() => {
     const [name, , hi] = steps[si];
-    pct = Math.min(hi, pct + (name === "Downloading" ? 7 : 5));
+    pct = Math.min(hi, pct + (name === "Downloading" || name === "Importing" ? 7 : 5));
     job.step = name;
     job.percent = pct;
     emit("job.progress", { id: job.id, percent: pct, step: name });
+    ilog(`${name} ${pct}%`);
+    if (failAt && pct >= failAt.pct) {
+      clearInterval(t);
+      ilog(`ERROR ${failAt.error}`);
+      Object.assign(job, { state: "failed", error: failAt.error });
+      emit("job.done", { id: job.id, state: "failed", error: failAt.error, runtimeId: "" });
+      return;
+    }
     if (pct >= hi) si++;
     if (si >= steps.length) {
       clearInterval(t);
@@ -306,11 +350,12 @@ function runInstall(entry) {
         kind: entry.kind,
         version: entry.version,
         name: entry.name,
-        binary: `C:\\Users\\dev\\.zero2dev\\runtimes\\${entry.id}\\${entry.binaryRelPath.replace("/", "\\")}`,
+        binary: `D:\\zero2dev\\bin\\data\\runtimes\\${entry.id}\\${entry.binaryRelPath.replace("/", "\\")}`,
         source: "installed",
         installedAt: now(),
       };
       state.runtimes.push(rt);
+      ilog(`done ${entry.id} -> ${rt.binary}`);
       Object.assign(job, { state: "done", percent: 100, runtimeId: rt.id, step: "Registering" });
       emit("job.done", { id: job.id, state: "done", error: "", runtimeId: rt.id });
       emit("runtimes.changed");
@@ -321,7 +366,7 @@ function runInstall(entry) {
             kind: "caddy",
             command: "",
             args: [],
-            cwd: "C:\\Users\\dev\\.zero2dev",
+            cwd: "D:\\zero2dev\\bin\\data",
             env: {},
             port: 0,
             healthPath: "",
@@ -369,11 +414,14 @@ async function api(req, res, url) {
   }
   if (m === "GET" && p === "/api/status") {
     return send(res, 200, {
-      version: "0.0.0-mock",
+      version: "0.0.1",
       uptimeSeconds: Math.floor((Date.now() - started) / 1000),
       os: THIS_PC.os,
       arch: THIS_PC.arch,
       homeDir: state.settings.homeDir,
+      homeSource: process.env.MOCK_HOME_SOURCE || "exe",
+      portable: (process.env.MOCK_HOME_SOURCE || "exe") === "exe",
+      exeDir: EXE_DIR,
       counts: {
         services: state.services.length,
         running: state.services.filter((s) => s.state === "running").length,
@@ -488,6 +536,34 @@ async function api(req, res, url) {
     emit("runtimes.changed");
     return send(res, 201, rt);
   }
+  if (m === "GET" && p === "/api/installer/log") {
+    const tail = Math.min(1000, Number(url.searchParams.get("tail") || 200));
+    return send(res, 200, { lines: installerLog.slice(-tail) });
+  }
+  if (m === "POST" && p === "/api/runtimes/import") {
+    const entry = CATALOG.find((c) => c.id === body?.catalogId);
+    if (!entry) return fail(res, 404, "not_found", `catalog entry ${body?.catalogId} not found`);
+    const fp = body.filePath || "";
+    if (!isAbs(fp)) return fail(res, 400, "bad_request", "filePath must be an absolute path");
+    if (fp.includes("nonexistent")) return fail(res, 400, "bad_request", `${fp} does not exist`);
+    const base = fp.split(/[\\/]/).pop();
+    if (base !== fileNameOf(entry))
+      return fail(res, 400, "bad_request", `the file name should be ${fileNameOf(entry)}, got ${base}`);
+    if (body.sha256 && !/^([0-9a-fA-F]{64}|[0-9a-fA-F]{128})$/.test(body.sha256))
+      return fail(res, 400, "bad_request", "checksum must be a SHA-256 (64) or SHA-512 (128) hexadecimal digest");
+    if (entry.os !== THIS_PC.os || entry.arch !== THIS_PC.arch)
+      return fail(res, 409, "conflict", "this catalog entry is not supported on this machine");
+    if (state.runtimes.some((r) => r.name === entry.name && r.source === "installed"))
+      return fail(res, 409, "conflict", `${entry.name} is already installed`);
+    if (!body.sha256 && /nochecksum/i.test(fp))
+      return fail(
+        res,
+        400,
+        "bad_request",
+        `Cannot verify the file because the published checksum could not be fetched. Paste the SHA-256 or SHA-512 for ${fileNameOf(entry)} from ${entry.checksum.url} into the checksum field.`,
+      );
+    return send(res, 202, runInstall(entry, { filePath: fp }));
+  }
   if (m === "POST" && p === "/api/runtimes/install") {
     const entry = CATALOG.find((c) => c.id === body?.catalogId);
     if (!entry) return fail(res, 404, "not_found", `catalog entry ${body?.catalogId} not found`);
@@ -512,6 +588,8 @@ async function api(req, res, url) {
       200,
       CATALOG.map((c) => ({
         ...c,
+        homepage: homepageOf(c),
+        fileName: fileNameOf(c),
         installed: state.runtimes.some((r) => r.name === c.name && r.source === "installed"),
         supported: c.os === THIS_PC.os && c.arch === THIS_PC.arch,
       })),
@@ -594,12 +672,16 @@ async function api(req, res, url) {
       const ok = (n) => Number.isInteger(n) && n > 0 && n < 65536;
       if (!ok(body.proxyHttpPort) || !ok(body.proxyHttpsPort))
         return fail(res, 400, "bad_request", "proxy ports must be 1-65535");
+      if (body.downloadProxy && !/^https?:\/\/[^/\s]+$/.test(body.downloadProxy))
+        return fail(res, 400, "bad_request", "downloadProxy must look like http://host:port");
       if (!body.domainSuffix) return fail(res, 400, "bad_request", "domainSuffix is required");
       Object.assign(state.settings, {
         domainSuffix: body.domainSuffix,
         proxyHttpPort: body.proxyHttpPort,
         proxyHttpsPort: body.proxyHttpsPort,
         openBrowserOnStart: !!body.openBrowserOnStart,
+        trustLocalCA: !!body.trustLocalCA,
+        downloadProxy: body.downloadProxy || "",
       });
       return send(res, 200, state.settings);
     }
