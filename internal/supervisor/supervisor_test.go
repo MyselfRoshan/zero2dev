@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -317,7 +318,7 @@ func TestMissingBinaryAndNodeNeedsArgs(t *testing.T) {
 func TestPlaceholdersAndEnv(t *testing.T) {
 	s, st, _, id := setup(t, "idle", 4567)
 	st.Update(func(d *store.Data) error {
-		d.Services[0].Args = []string{"a-{port}"}
+		d.Services[0].Args = []string{"a-{port}", "{home}/config/nginx.conf"}
 		d.Services[0].Env["X"] = "p{port}"
 		return nil
 	})
@@ -327,6 +328,10 @@ func TestPlaceholdersAndEnv(t *testing.T) {
 	}
 	if r.args[0] != "a-4567" {
 		t.Fatalf("args %v", r.args)
+	}
+	// {home} is the data folder in slash form (also on Windows).
+	if want := filepath.ToSlash(s.home) + "/config/nginx.conf"; r.args[1] != want || strings.Contains(r.args[1], `\`) {
+		t.Fatalf("{home}: got %q want %q", r.args[1], want)
 	}
 	joined := strings.Join(r.env, "\n")
 	if !strings.Contains(joined, "\nX=p4567") || !strings.Contains(joined, "\nPORT=4567") {

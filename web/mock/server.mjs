@@ -30,6 +30,7 @@ const state = {
     openBrowserOnStart: true,
     trustLocalCA: false,
     downloadProxy: "",
+    siteServer: "caddy",
   },
 };
 const EXE_DIR = "D:\\zero2dev\\bin";
@@ -44,77 +45,139 @@ const jobs = new Map();
 const tickets = new Map();
 const clients = new Set();
 
-const CATALOG = [
-  {
-    id: "node-22.11.0",
-    kind: "node",
-    version: "22.11.0",
-    name: "Node.js 22.11.0",
-    url: "https://nodejs.org/dist/v22.11.0/node-v22.11.0-win-x64.zip",
-    checksum: { type: "shasums", url: "https://nodejs.org/dist/v22.11.0/SHASUMS256.txt" },
-    binaryRelPath: "node.exe",
-    stripComponents: 1,
-    os: "windows",
-    arch: "amd64",
-  },
-  {
-    id: "node-20.18.0",
-    kind: "node",
-    version: "20.18.0",
-    name: "Node.js 20.18.0",
-    url: "https://nodejs.org/dist/v20.18.0/node-v20.18.0-win-x64.zip",
-    checksum: { type: "shasums", url: "https://nodejs.org/dist/v20.18.0/SHASUMS256.txt" },
-    binaryRelPath: "node.exe",
-    stripComponents: 1,
-    os: "windows",
-    arch: "amd64",
-  },
-  {
-    id: "go-1.23.3",
-    kind: "go",
-    version: "1.23.3",
-    name: "Go 1.23.3",
-    url: "https://go.dev/dl/go1.23.3.windows-amd64.zip",
-    checksum: { type: "sha256", value: "00" },
-    binaryRelPath: "bin/go.exe",
-    stripComponents: 1,
-    os: "windows",
-    arch: "amd64",
-  },
-  {
-    id: "caddy-2.8.4",
-    kind: "caddy",
-    version: "2.8.4",
-    name: "Caddy 2.8.4",
-    url: "https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_windows_amd64.zip",
-    checksum: {
-      type: "shasums",
-      url: "https://github.com/caddyserver/caddy/releases/download/v2.8.4/caddy_2.8.4_checksums.txt",
-    },
-    binaryRelPath: "caddy.exe",
-    stripComponents: 0,
-    os: "windows",
-    arch: "amd64",
-  },
-  {
-    id: "go-1.23.3-arm64",
-    kind: "go",
-    version: "1.23.3",
-    name: "Go 1.23.3 (ARM64)",
-    url: "https://go.dev/dl/go1.23.3.windows-arm64.zip",
-    checksum: { type: "sha256", value: "00" },
-    binaryRelPath: "bin/go.exe",
-    stripComponents: 1,
-    os: "windows",
-    arch: "arm64",
-  },
+const THIS_PC = {
+  os: process.env.MOCK_OS ? process.env.MOCK_OS.split("/")[0] : "windows",
+  arch: process.env.MOCK_OS ? process.env.MOCK_OS.split("/")[1] : "amd64",
+};
+
+// ---- every kind has a version list: builtin entries plus entries "discovered" by a refresh ----
+const KINDS = ["node", "go", "caddy", "php", "java", "nginx"];
+function ext(kind, version, line, channel, source, o = {}) {
+  const os = o.os || "windows";
+  const arch = o.arch || "amd64";
+  const urls = {
+    node: `https://nodejs.org/dist/v${version}/node-v${version}-win-x64.zip`,
+    go: `https://go.dev/dl/go${version}.windows-${arch === "arm64" ? "arm64" : "amd64"}.zip`,
+    caddy: `https://github.com/caddyserver/caddy/releases/download/v${version}/caddy_${version}_windows_amd64.zip`,
+    php: `https://windows.php.net/downloads/releases/php-${version}-Win32-vs16-x64.zip`,
+    java: `https://github.com/adoptium/temurin${line}-binaries/releases/download/jdk-${version}%2B9/OpenJDK${line}U-jdk_x64_windows_hotspot_${version}_9.zip`,
+    nginx: `https://nginx.org/download/nginx-${version}.zip`,
+  };
+  const label = { node: "Node.js", go: "Go", caddy: "Caddy", php: "PHP", java: "Java (Temurin)", nginx: "nginx" }[kind];
+  const unverified = kind === "nginx" || (kind === "php" && version.startsWith("7."));
+  return {
+    id: `${kind}-${version}${os === "windows" ? "" : "-" + os}${arch === "amd64" ? "" : "-" + arch}`,
+    kind,
+    version,
+    name: `${label} ${version}${arch === "arm64" ? " (ARM64)" : ""}`,
+    url: urls[kind],
+    checksum: unverified
+      ? { type: "none" }
+      : kind === "node"
+        ? { type: "shasums", url: `https://nodejs.org/dist/v${version}/SHASUMS256.txt` }
+        : { type: "sha256", value: "ab".repeat(32) },
+    binaryRelPath: {
+      node: "node.exe",
+      go: "bin/go.exe",
+      caddy: "caddy.exe",
+      php: "php.exe",
+      java: "bin/java.exe",
+      nginx: "nginx.exe",
+    }[kind],
+    stripComponents: kind === "node" || kind === "go" || kind === "nginx" ? 1 : 0,
+    os,
+    arch,
+    line,
+    channel,
+    source,
+    unverified,
+  };
+}
+const BUILTIN = [
+  ext("node", "22.11.0", "22", "lts", "builtin"),
+  ext("node", "20.18.0", "20", "lts", "builtin"),
+  ext("go", "1.23.3", "1.23", "stable", "builtin"),
+  ext("go", "1.23.3", "1.23", "stable", "builtin", { arch: "arm64" }),
+  ext("caddy", "2.8.4", "2.8", "stable", "builtin"),
+  ext("php", "8.3.12", "8.3", "stable", "builtin"),
+  ext("php", "8.2.24", "8.2", "stable", "builtin"),
+  ext("php", "7.4.33", "7.4", "stable", "builtin"),
+  ext("php", "7.1.33", "7.1", "stable", "builtin"),
+  ext("php", "8.3.12", "8.3", "stable", "builtin", { os: "linux", arch: "arm64" }),
+  ext("java", "21.0.4", "21", "lts", "builtin"),
+  ext("java", "17.0.12", "17", "lts", "builtin"),
+  ext("nginx", "1.26.2", "1.26", "stable", "builtin"),
 ];
-const THIS_PC = { os: "windows", arch: "amd64" };
+const REMOTE = [
+  ext("node", "22.12.0", "22", "lts", "remote"),
+  ext("go", "1.23.4", "1.23", "stable", "remote"),
+  ext("caddy", "2.9.1", "2.9", "stable", "remote"),
+  ext("php", "8.4.1", "8.4", "stable", "remote"),
+  ext("php", "8.3.13", "8.3", "stable", "remote"),
+  ext("java", "21.0.5", "21", "lts", "remote"),
+  ext("java", "17.0.13", "17", "lts", "remote"),
+  ext("nginx", "1.27.2", "1.27", "mainline", "remote"),
+];
+const discovered = new Set();
+const SOURCES = {
+  node: "nodejs.org",
+  go: "go.dev",
+  caddy: "api.github.com",
+  php: "windows.php.net",
+  java: "api.adoptium.net",
+  nginx: "nginx.org",
+};
+let sourceStatus = [];
+let checkedAt = null;
+let refreshCount = 0;
+const cmpV = (a, b) => {
+  const x = a.split(".").map(Number);
+  const y = b.split(".").map(Number);
+  for (let i = 0; i < Math.max(x.length, y.length); i++) {
+    const d = (x[i] || 0) - (y[i] || 0);
+    if (d) return d;
+  }
+  return 0;
+};
+function fullCatalog() {
+  const all = [...BUILTIN, ...REMOTE.filter((c) => discovered.has(c.id))];
+  return all
+    .map((c) => ({
+      ...c,
+      latest: !all.some(
+        (o) =>
+          o.kind === c.kind &&
+          o.os === c.os &&
+          o.arch === c.arch &&
+          o.line === c.line &&
+          cmpV(o.version, c.version) > 0,
+      ),
+    }))
+    .sort(
+      (a, b) =>
+        KINDS.indexOf(a.kind) - KINDS.indexOf(b.kind) ||
+        (a.os === "windows" ? 0 : 1) - (b.os === "windows" ? 0 : 1) ||
+        cmpV(b.version, a.version),
+    );
+}
+const findEntry = (id) => fullCatalog().find((c) => c.id === id);
+function statusRows(failing = "") {
+  return KINDS.map((kind) => ({
+    kind,
+    name: SOURCES[kind],
+    ok: kind !== failing,
+    count: fullCatalog().filter((c) => c.kind === kind).length,
+    error: kind === failing ? `could not reach ${SOURCES[kind]}` : "",
+    checkedAt: checkedAt || "",
+  }));
+}
+sourceStatus = statusRows();
 
 const DETECT = [
   { kind: "node", version: "20.11.1", binary: "C:\\Program Files\\nodejs\\node.exe" },
   { kind: "go", version: "1.22.5", binary: "C:\\Program Files\\Go\\bin\\go.exe" },
   { kind: "php", version: "8.3.12", binary: "C:\\tools\\php\\php.exe" },
+  { kind: "nginx", version: "1.25.3", binary: "C:\\tools\\nginx\\nginx.exe" },
   { kind: "java", version: "21.0.4", binary: "C:\\Program Files\\Java\\jdk-21\\bin\\java.exe" },
 ];
 
@@ -135,6 +198,7 @@ if (!EMPTY) {
     binary: DETECT[0].binary,
     source: "registered",
     installedAt: now(),
+    default: true,
   });
   state.services.push(
     newService({
@@ -283,11 +347,23 @@ function stopProc(svc) {
 
 const fileNameOf = (c) => c.url.split("/").pop();
 const homepageOf = (c) =>
-  c.kind === "node"
-    ? `https://nodejs.org/dist/v${c.version}/`
-    : c.kind === "caddy"
-      ? `https://github.com/caddyserver/caddy/releases/tag/v${c.version}`
-      : "https://go.dev/dl/";
+  c.kind === "php"
+    ? "https://windows.php.net/download/"
+    : c.kind === "java"
+      ? "https://adoptium.net/temurin/releases/"
+      : c.kind === "nginx"
+        ? "https://nginx.org/en/download.html"
+        : c.kind === "node"
+          ? `https://nodejs.org/dist/v${c.version}/`
+          : c.kind === "caddy"
+            ? `https://github.com/caddyserver/caddy/releases/tag/v${c.version}`
+            : "https://go.dev/dl/";
+
+// The first runtime of a kind becomes its default.
+function addRuntime(rt) {
+  rt.default = !state.runtimes.some((r) => r.kind === rt.kind && r.default);
+  state.runtimes.push(rt);
+}
 
 // Scenarios for testing failed jobs:
 //  - installing node-20.18.0 fails while downloading (blocked network)
@@ -353,8 +429,9 @@ function runInstall(entry, opts = {}) {
         binary: `D:\\zero2dev\\bin\\data\\runtimes\\${entry.id}\\${entry.binaryRelPath.replace("/", "\\")}`,
         source: "installed",
         installedAt: now(),
+        catalogId: entry.id,
       };
-      state.runtimes.push(rt);
+      addRuntime(rt);
       ilog(`done ${entry.id} -> ${rt.binary}`);
       Object.assign(job, { state: "done", percent: 100, runtimeId: rt.id, step: "Registering" });
       emit("job.done", { id: job.id, state: "done", error: "", runtimeId: rt.id });
@@ -376,9 +453,32 @@ function runInstall(entry, opts = {}) {
         );
         emit("services.changed");
       }
+      ensureSitesNginx();
     }
   }, 250);
   return job;
+}
+
+// Mirrors the daemon: with siteServer "nginx" and an nginx runtime, a managed "Nginx (sites)" service exists.
+function ensureSitesNginx() {
+  if (state.settings.siteServer !== "nginx") return;
+  if (!state.runtimes.some((r) => r.kind === "nginx")) return;
+  if (state.services.some((s) => s.kind === "nginx" && s.args.includes("{home}/config/nginx.conf"))) return;
+  state.services.push(
+    newService({
+      name: "Nginx (sites)",
+      kind: "nginx",
+      command: "",
+      args: ["-p", "{home}/nginx/", "-c", "{home}/config/nginx.conf"],
+      cwd: "D:\\zero2dev\\bin\\data",
+      env: {},
+      port: 0,
+      healthPath: "",
+      runtimeId: "",
+      autostart: false,
+    }),
+  );
+  emit("services.changed");
 }
 
 // ---------- router ----------
@@ -414,7 +514,7 @@ async function api(req, res, url) {
   }
   if (m === "GET" && p === "/api/status") {
     return send(res, 200, {
-      version: "0.0.1",
+      version: "0.0.2",
       uptimeSeconds: Math.floor((Date.now() - started) / 1000),
       os: THIS_PC.os,
       arch: THIS_PC.arch,
@@ -422,6 +522,7 @@ async function api(req, res, url) {
       homeSource: process.env.MOCK_HOME_SOURCE || "exe",
       portable: (process.env.MOCK_HOME_SOURCE || "exe") === "exe",
       exeDir: EXE_DIR,
+      folderPicker: process.env.MOCK_NO_PICKER !== "1",
       counts: {
         services: state.services.length,
         running: state.services.filter((s) => s.state === "running").length,
@@ -522,7 +623,7 @@ async function api(req, res, url) {
     if (!isAbs(body.binary)) return fail(res, 400, "bad_request", "binary must be an absolute path");
     if (body.binary.includes("nonexistent")) return fail(res, 400, "bad_request", `${body.binary} does not exist`);
     const version = body.version || "1.0.0";
-    const kind = ["node", "php", "go", "java", "caddy", "other"].includes(body.kind) ? body.kind : "other";
+    const kind = ["node", "php", "go", "java", "caddy", "nginx", "other"].includes(body.kind) ? body.kind : "other";
     const rt = {
       id: id("rt"),
       kind,
@@ -532,7 +633,7 @@ async function api(req, res, url) {
       source: "registered",
       installedAt: now(),
     };
-    state.runtimes.push(rt);
+    addRuntime(rt);
     emit("runtimes.changed");
     return send(res, 201, rt);
   }
@@ -540,8 +641,39 @@ async function api(req, res, url) {
     const tail = Math.min(1000, Number(url.searchParams.get("tail") || 200));
     return send(res, 200, { lines: installerLog.slice(-tail) });
   }
+  // Shared checks for install and import (docs/API.md amendment).
+  const R = (fn, ...a) => (fn(res, ...a), true);
+  const checks = (entry, body, allowed) => {
+    const unknown = Object.keys(body).filter((k) => !allowed.includes(k));
+    if (unknown.length) return R(fail, 400, "bad_request", `unknown field ${unknown[0]}`);
+    if (entry.unverified && !body.acceptUnverified && !body.sha256)
+      return R(
+        fail,
+        400,
+        "unverified",
+        `${entry.name}: the publisher gives no checksum for this download. Set acceptUnverified to install it anyway.`,
+      );
+    if (state.runtimes.some((r) => r.catalogId === entry.id))
+      return R(fail, 409, "conflict", `${entry.name} is already installed`);
+    return false;
+  };
+  if (m === "GET" && p === "/api/catalog/status") return send(res, 200, { checkedAt, sources: sourceStatus });
+  if (m === "POST" && p === "/api/catalog/refresh") {
+    await sleep(800);
+    refreshCount++;
+    const failing = refreshCount === 1 ? "java" : "";
+    const added = [];
+    for (const e of REMOTE)
+      if (e.kind !== failing && !discovered.has(e.id)) {
+        discovered.add(e.id);
+        added.push(e.id);
+      }
+    checkedAt = now();
+    sourceStatus = statusRows(failing);
+    return send(res, 200, { checkedAt, sources: sourceStatus, added });
+  }
   if (m === "POST" && p === "/api/runtimes/import") {
-    const entry = CATALOG.find((c) => c.id === body?.catalogId);
+    const entry = findEntry(body?.catalogId);
     if (!entry) return fail(res, 404, "not_found", `catalog entry ${body?.catalogId} not found`);
     const fp = body.filePath || "";
     if (!isAbs(fp)) return fail(res, 400, "bad_request", "filePath must be an absolute path");
@@ -553,8 +685,6 @@ async function api(req, res, url) {
       return fail(res, 400, "bad_request", "checksum must be a SHA-256 (64) or SHA-512 (128) hexadecimal digest");
     if (entry.os !== THIS_PC.os || entry.arch !== THIS_PC.arch)
       return fail(res, 409, "conflict", "this catalog entry is not supported on this machine");
-    if (state.runtimes.some((r) => r.name === entry.name && r.source === "installed"))
-      return fail(res, 409, "conflict", `${entry.name} is already installed`);
     if (!body.sha256 && /nochecksum/i.test(fp))
       return fail(
         res,
@@ -562,15 +692,15 @@ async function api(req, res, url) {
         "bad_request",
         `Cannot verify the file because the published checksum could not be fetched. Paste the SHA-256 or SHA-512 for ${fileNameOf(entry)} from ${entry.checksum.url} into the checksum field.`,
       );
+    if (checks(entry, body, ["catalogId", "filePath", "sha256", "acceptUnverified"])) return;
     return send(res, 202, runInstall(entry, { filePath: fp }));
   }
   if (m === "POST" && p === "/api/runtimes/install") {
-    const entry = CATALOG.find((c) => c.id === body?.catalogId);
+    const entry = findEntry(body?.catalogId);
     if (!entry) return fail(res, 404, "not_found", `catalog entry ${body?.catalogId} not found`);
     if (entry.os !== THIS_PC.os || entry.arch !== THIS_PC.arch)
       return fail(res, 409, "conflict", "this catalog entry is not supported on this machine");
-    if (state.runtimes.some((r) => r.name === entry.name && r.source === "installed"))
-      return fail(res, 409, "conflict", `${entry.name} is already installed`);
+    if (checks(entry, body, ["catalogId", "acceptUnverified"])) return;
     return send(res, 202, runInstall(entry));
   }
   if ((m2 = p.match(/^\/api\/runtimes\/([^/]+)$/)) && m === "DELETE") {
@@ -579,18 +709,29 @@ async function api(req, res, url) {
     const user = state.services.find((s) => s.runtimeId === rt.id);
     if (user) return fail(res, 409, "conflict", `runtime is used by service ${user.name}`);
     state.runtimes = state.runtimes.filter((r) => r !== rt);
+    if (rt.default) {
+      const next = state.runtimes.find((r) => r.kind === rt.kind);
+      if (next) next.default = true;
+    }
     emit("runtimes.changed");
     return send(res, 204);
+  }
+  if ((m2 = p.match(/^\/api\/runtimes\/([^/]+)\/default$/)) && m === "POST") {
+    const rt = state.runtimes.find((r) => r.id === m2[1]);
+    if (!rt) return fail(res, 404, "not_found", `runtime ${m2[1]} not found`);
+    for (const r of state.runtimes) if (r.kind === rt.kind) r.default = r === rt;
+    emit("runtimes.changed");
+    return send(res, 200, rt);
   }
   if (m === "GET" && p === "/api/catalog") {
     return send(
       res,
       200,
-      CATALOG.map((c) => ({
+      fullCatalog().map((c) => ({
         ...c,
         homepage: homepageOf(c),
         fileName: fileNameOf(c),
-        installed: state.runtimes.some((r) => r.name === c.name && r.source === "installed"),
+        installed: state.runtimes.some((r) => r.catalogId === c.id),
         supported: c.os === THIS_PC.os && c.arch === THIS_PC.arch,
       })),
     );
@@ -638,6 +779,13 @@ async function api(req, res, url) {
       return send(res, 201, siteView(s));
     }
   }
+  if (m === "POST" && (m2 = p.match(/^\/api\/sites\/([^/]+)\/(enable|disable)$/))) {
+    const s = state.sites.find((x) => x.id === m2[1]);
+    if (!s) return fail(res, 404, "not_found", `site ${m2[1]} not found`);
+    s.enabled = m2[2] === "enable";
+    emit("sites.changed");
+    return send(res, 200, siteView(s));
+  }
   if ((m2 = p.match(/^\/api\/sites\/([^/]+)$/))) {
     const s = state.sites.find((x) => x.id === m2[1]);
     if (!s) return fail(res, 404, "not_found", `site ${m2[1]} not found`);
@@ -665,6 +813,14 @@ async function api(req, res, url) {
     }
   }
 
+  // The real daemon shows the Windows "Select Folder" dialog; the mock answers after a short pause
+  // with the start folder (or a fixed one), or "cancelled" when the title asks for it.
+  if (m === "POST" && p === "/api/dialog/folder") {
+    if (!body) return fail(res, 400, "bad_request", "invalid body");
+    await new Promise((r) => setTimeout(r, 400));
+    if (/cancel/i.test(body.start || "")) return send(res, 200, { path: "", cancelled: true });
+    return send(res, 200, { path: body.start || "C:\\work\\picked", cancelled: false });
+  }
   if (p === "/api/settings") {
     if (m === "GET") return send(res, 200, state.settings);
     if (m === "PUT") {
@@ -675,6 +831,8 @@ async function api(req, res, url) {
       if (body.downloadProxy && !/^https?:\/\/[^/\s]+$/.test(body.downloadProxy))
         return fail(res, 400, "bad_request", "downloadProxy must look like http://host:port");
       if (!body.domainSuffix) return fail(res, 400, "bad_request", "domainSuffix is required");
+      if (body.siteServer !== undefined && body.siteServer !== "caddy" && body.siteServer !== "nginx")
+        return fail(res, 400, "bad_request", "siteServer must be caddy or nginx");
       Object.assign(state.settings, {
         domainSuffix: body.domainSuffix,
         proxyHttpPort: body.proxyHttpPort,
@@ -682,7 +840,9 @@ async function api(req, res, url) {
         openBrowserOnStart: !!body.openBrowserOnStart,
         trustLocalCA: !!body.trustLocalCA,
         downloadProxy: body.downloadProxy || "",
+        siteServer: body.siteServer ?? state.settings.siteServer,
       });
+      ensureSitesNginx();
       return send(res, 200, state.settings);
     }
   }
@@ -701,7 +861,7 @@ const MIME = {
 function serveStatic(req, res, url) {
   if (!fs.existsSync(path.join(DIST, "index.html"))) {
     res.writeHead(404, { "Content-Type": "text/plain" });
-    return res.end("mock daemon: no UI build found; run `npm run build` or use `npm run dev`.");
+    return res.end("mock daemon: no UI build found; run `pnpm build` or use `pnpm dev`.");
   }
   let file = path.join(DIST, decodeURIComponent(url.pathname));
   if (!file.startsWith(DIST) || !fs.existsSync(file) || fs.statSync(file).isDirectory())

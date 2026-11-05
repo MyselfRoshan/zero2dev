@@ -94,5 +94,41 @@
     "os": "linux",
     "arch": "amd64",
     "homepage": "https://github.com/caddyserver/caddy/releases/tag/v2.8.4"
+  },
+  {
+    "id": "nginx-1.26.2-windows-amd64",
+    "kind": "nginx",
+    "version": "1.26.2",
+    "name": "nginx 1.26.2 (stable)",
+    "url": "https://nginx.org/download/nginx-1.26.2.zip",
+    "checksum": {
+      "type": "none"
+    },
+    "unverified": true,
+    "binaryRelPath": "nginx.exe",
+    "stripComponents": 1,
+    "os": "windows",
+    "arch": "amd64",
+    "homepage": "https://nginx.org/en/download.html",
+    "line": "1.26",
+    "channel": "stable"
+  },
+  {
+    "id": "nginx-1.27.3-windows-amd64",
+    "kind": "nginx",
+    "version": "1.27.3",
+    "name": "nginx 1.27.3 (mainline)",
+    "url": "https://nginx.org/download/nginx-1.27.3.zip",
+    "checksum": {
+      "type": "none"
+    },
+    "unverified": true,
+    "binaryRelPath": "nginx.exe",
+    "stripComponents": 1,
+    "os": "windows",
+    "arch": "amd64",
+    "homepage": "https://nginx.org/en/download.html",
+    "line": "1.27",
+    "channel": "mainline"
   }
 ]

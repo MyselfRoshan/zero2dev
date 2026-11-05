@@ -2,11 +2,14 @@
   import { onMount } from "svelte";
   import { api } from "../lib/api";
   import { deleteService, isActive, serviceUrl } from "../lib/actions";
+  import { serviceRuntimeLabel } from "../lib/catalog";
+  import { commandLine, serviceKindLabel } from "../lib/ux";
   import { fmtDateTime } from "../lib/format";
   import { navigate } from "../lib/router.svelte";
   import { app, attempt, clearLogs, lists, logs, seedLogs, upsertService } from "../lib/store.svelte";
   import ConfirmDialog from "../ui/ConfirmDialog.svelte";
   import Icon from "../ui/Icon.svelte";
+  import KindIcon from "../ui/KindIcon.svelte";
   import LogViewer from "../ui/LogViewer.svelte";
   import ServiceControls from "../ui/ServiceControls.svelte";
   import StateBadge from "../ui/StateBadge.svelte";
@@ -68,7 +71,8 @@
     <div class="row wrap">
       <h2 class="nm">{service.name}</h2>
       <StateBadge state={service.state} />
-      <span class="badge plain">{service.kind}</span>
+      <span class="badge plain kind-badge"><KindIcon kind={service.kind} size={12} /> {serviceKindLabel(service.kind)}</span>
+      {#if serviceRuntimeLabel(service.runtimeId, lists.runtimes)}<span class="badge plain" data-testid="svc-runtime">{serviceRuntimeLabel(service.runtimeId, lists.runtimes)}</span>{/if}
       <span class="spacer"></span>
       <ServiceControls {service} showRestart />
       <button class="btn sm" disabled={isActive(service)} onclick={() => (editing = true)} title={isActive(service) ? "Stop the service to edit it" : ""}><Icon name="edit" size={14} /> Edit</button>
@@ -78,10 +82,10 @@
       <div class="notice bad" role="alert"><Icon name="alert" /><span>{service.lastError}</span></div>
     {/if}
     <dl>
-      <div><dt>Port</dt><dd class="mono">{#if url}<a href={url} target="_blank" rel="noreferrer">{url} <Icon name="external" size={12} /></a>{:else}none{/if}</dd></div>
+      <div><dt>Address</dt><dd class="mono">{#if url}<a href={url} target="_blank" rel="noreferrer">{url} <Icon name="external" size={12} /></a>{:else}no port{/if}</dd></div>
       <div><dt>Process</dt><dd class="mono">{service.pid ? `pid ${service.pid}` : "not running"}</dd></div>
       <div><dt>Started</dt><dd>{fmtDateTime(service.startedAt) || "-"}</dd></div>
-      <div class="wide"><dt>Command</dt><dd class="mono">{service.command || "(runtime binary)"} {service.args.join(" ")}</dd></div>
+      <div class="wide"><dt>Runs</dt><dd class="mono" data-testid="command-line">{commandLine(service, lists.runtimes)}</dd></div>
       <div class="wide"><dt>Folder</dt><dd class="mono">{service.cwd}</dd></div>
     </dl>
   </div>

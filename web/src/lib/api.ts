@@ -1,7 +1,11 @@
 import type {
   CatalogEntry,
+  CatalogRefresh,
+  CatalogStatus,
+  InstallOptions,
   DetectedRuntime,
   ErrorCode,
+  FolderPick,
   Job,
   LogLine,
   Runtime,
@@ -19,8 +23,11 @@ export const TOKEN_KEY = "zero2dev.token";
 export class ApiError extends Error {
   readonly status: number;
   readonly code: ErrorCode;
-  constructor(status: number, code: ErrorCode, message: string) {
+  /** Optional `error.details` from the daemon (strings only). */
+  readonly details: Record<string, string>;
+  constructor(status: number, code: ErrorCode, message: string, details: Record<string, string> = {}) {
     super(message);
+    this.details = details;
     this.name = "ApiError";
     this.status = status;
     this.code = code;
@@ -129,9 +136,10 @@ export async function request<T>(method: string, path: string, body?: unknown): 
     }
   }
   if (!res.ok) {
-    const e = (data as { error?: { code?: string; message?: string } } | undefined)?.error;
+    const e = (data as { error?: { code?: string; message?: string; details?: Record<string, string> } } | undefined)
+      ?.error;
     const code = (e?.code as ErrorCode | undefined) ?? errorCodeForStatus(res.status);
-    const err = new ApiError(res.status, code, e?.message || `Request failed (${res.status})`);
+    const err = new ApiError(res.status, code, e?.message || `Request failed (${res.status})`, e?.details);
     if (err.isAuth && authFailureHandler) authFailureHandler();
     throw err;
   }
@@ -139,6 +147,22 @@ export async function request<T>(method: string, path: string, body?: unknown): 
 }
 
 const enc = encodeURIComponent;
+
+/** Only fields listed in the contract are sent: the daemon rejects unknown fields. */
+export function installBody(catalogId: string, opts: InstallOptions = {}): Record<string, unknown> {
+  const b: Record<string, unknown> = { catalogId };
+  if (opts.acceptUnverified) b.acceptUnverified = true;
+  return b;
+}
+
+export function importBody(
+  b: { catalogId: string; filePath: string; sha256?: string } & InstallOptions,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = { catalogId: b.catalogId, filePath: b.filePath };
+  if (b.sha256 && b.sha256.trim()) out.sha256 = b.sha256.trim();
+  if (b.acceptUnverified) out.acceptUnverified = true;
+  return out;
+}
 
 export const api = {
   status: () => request<Status>("GET", "/api/status"),
@@ -158,10 +182,14 @@ export const api = {
   detectRuntimes: () => request<DetectedRuntime[]>("GET", "/api/runtimes/detect"),
   registerRuntime: (b: { kind: RuntimeKind; binary: string; version?: string }) =>
     request<Runtime>("POST", "/api/runtimes/register", b),
-  importRuntime: (b: { catalogId: string; filePath: string; sha256?: string }) =>
-    request<Job>("POST", "/api/runtimes/import", b),
+  importRuntime: (b: { catalogId: string; filePath: string; sha256?: string } & InstallOptions) =>
+    request<Job>("POST", "/api/runtimes/import", importBody(b)),
   installerLog: (tail = 200) => request<{ lines: string[] }>("GET", `/api/installer/log?tail=${tail}`),
-  installRuntime: (catalogId: string) => request<Job>("POST", "/api/runtimes/install", { catalogId }),
+  installRuntime: (catalogId: string, opts?: InstallOptions) =>
+    request<Job>("POST", "/api/runtimes/install", installBody(catalogId, opts)),
+  catalogStatus: () => request<CatalogStatus>("GET", "/api/catalog/status"),
+  refreshCatalog: () => request<CatalogRefresh>("POST", "/api/catalog/refresh"),
+  setDefaultRuntime: (id: string) => request<Runtime>("POST", `/api/runtimes/${enc(id)}/default`),
   deleteRuntime: (id: string) => request<void>("DELETE", `/api/runtimes/${enc(id)}`),
   catalog: () => request<CatalogEntry[]>("GET", "/api/catalog"),
   getJob: (id: string) => request<Job>("GET", `/api/jobs/${enc(id)}`),
@@ -170,9 +198,14 @@ export const api = {
   createSite: (b: SiteInput) => request<Site>("POST", "/api/sites", b),
   updateSite: (id: string, b: SiteInput) => request<Site>("PUT", `/api/sites/${enc(id)}`, b),
   deleteSite: (id: string) => request<void>("DELETE", `/api/sites/${enc(id)}`),
+  enableSite: (id: string) => request<Site>("POST", `/api/sites/${enc(id)}/enable`),
+  disableSite: (id: string) => request<Site>("POST", `/api/sites/${enc(id)}/disable`),
 
   getSettings: () => request<Settings>("GET", "/api/settings"),
   putSettings: (b: Settings) => request<Settings>("PUT", "/api/settings", b),
 
   eventTicket: () => request<{ ticket: string }>("POST", "/api/events/ticket"),
+
+  /** Opens the native folder dialog on the daemon's PC; resolves when the user closes it. */
+  pickFolder: (title: string, start: string) => request<FolderPick>("POST", "/api/dialog/folder", { title, start }),
 };

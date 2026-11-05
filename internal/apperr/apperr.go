@@ -14,6 +14,7 @@ type Error struct {
 	Status  int
 	Code    string
 	Message string
+	Details map[string]string
 }
 
 func (e *Error) Error() string { return e.Message }
@@ -39,4 +40,16 @@ func From(err error) *Error {
 		return e
 	}
 	return Internal("%v", err)
+}
+
+// New builds an error with a custom code (for example unverified).
+func New(status int, code, f string, a ...any) *Error { return mk(status, code, f, a...) }
+
+// With attaches machine-readable details (rendered as error.details).
+func (e *Error) With(k, v string) *Error {
+	if e.Details == nil {
+		e.Details = map[string]string{}
+	}
+	e.Details[k] = v
+	return e
 }

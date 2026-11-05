@@ -6,7 +6,11 @@
   import type { Site } from "../lib/types";
   import ConfirmDialog from "../ui/ConfirmDialog.svelte";
   import Icon from "../ui/Icon.svelte";
+  import KindIcon from "../ui/KindIcon.svelte";
+  import { isSiteServerService, serverLabel, siteServer } from "../lib/sites";
+  import { siteTargetOf } from "../lib/ux";
   import PageHead from "../ui/PageHead.svelte";
+  import ServiceControls from "../ui/ServiceControls.svelte";
   import SiteForm from "./SiteForm.svelte";
 
   let editing = $state<Site | "new" | null>(null);
@@ -15,17 +19,31 @@
     if (consumeNewFlag()) editing = "new";
   });
 
-  const hasCaddyRuntime = $derived(lists.runtimes.some((r) => r.kind === "caddy"));
-  const caddyService = $derived(lists.services.find((s) => s.kind === "caddy"));
-  const caddyRunning = $derived(caddyService?.state === "running");
+  // Caddy or nginx serves the sites (Settings > Sites and proxy).
+  const server = $derived(siteServer(app.settings));
+  const serverName = $derived(serverLabel(server));
+  const hasServerRuntime = $derived(lists.runtimes.some((r) => r.kind === server));
+  const serverService = $derived(lists.services.find((s) => isSiteServerService(s, server)));
+  const serverRunning = $derived(serverService?.state === "running");
 
-  function target(s: Site): string {
-    if (s.type === "static") return s.root;
-    if (s.serviceId) {
+  function target(s: Site): { kind: string; text: string } {
+    const t = siteTargetOf(s);
+    if (t === "folder") return { kind: "Folder", text: s.root };
+    if (t === "service") {
       const svc = lists.services.find((x) => x.id === s.serviceId);
-      return svc ? `${svc.name}${svc.port ? ` :${svc.port}` : ""}` : s.serviceId;
+      return { kind: "Service", text: svc ? `${svc.name}${svc.port ? ` (:${svc.port})` : ""}` : "deleted service" };
     }
-    return s.upstreamPort ? `127.0.0.1:${s.upstreamPort}` : "";
+    return { kind: "Port", text: String(s.upstreamPort) };
+  }
+
+  // Switching a site on or off works like starting or stopping a service: one click, no form.
+  let toggling = $state<string | null>(null);
+  async function toggle(s: Site) {
+    toggling = s.id;
+    const on = !s.enabled;
+    const r = await attempt(() => (on ? api.enableSite(s.id) : api.disableSite(s.id)), `${s.name} ${on ? "enabled" : "disabled"}.`);
+    toggling = null;
+    if (r) await loadSites();
   }
 
   async function confirmDelete() {
@@ -43,29 +61,31 @@
   }
 </script>
 
-<PageHead sub="Local domains that point at a folder or a running service.">
+<PageHead sub="Friendly addresses like shop.localhost for your services, ports or folders.">
   <button class="btn primary" onclick={() => (editing = "new")}><Icon name="plus" /> New site</button>
 </PageHead>
 
-{#if app.loaded.runtimes && !hasCaddyRuntime}
-  <div class="notice warn caddy" role="note">
+{#if app.loaded.runtimes && !hasServerRuntime}
+  <div class="notice warn server" role="note" data-server={server}>
     <Icon name="alert" />
-    <span>
-      Sites are served by <b>Caddy</b>, and no Caddy runtime is installed. <a href="#/runtimes">Install or register Caddy on the Runtimes page</a>, then Zero2Dev creates a Caddy service for you.
-    </span>
+    <span class="grow">Sites need <b>{serverName}</b> to run, and it is not installed yet.</span>
+    <a class="btn sm" href="#/runtimes">Install {serverName}</a>
+    <a class="btn sm ghost" href="#/settings">Use {server === "nginx" ? "Caddy" : "nginx"} instead</a>
   </div>
-{:else if hasCaddyRuntime && !caddyRunning}
-  <div class="notice warn caddy" role="note">
+{:else if hasServerRuntime && !serverRunning}
+  <div class="notice warn server" role="note" data-server={server}>
     <Icon name="alert" />
-    <span>
-      Sites only work while the <b>Caddy</b> service is running.
-      {#if caddyService}<a href="#/services/{caddyService.id}">Open the Caddy service</a> and start it.{:else}Zero2Dev will create the Caddy service shortly; check the <a href="#/services">Services page</a>.{/if}
-    </span>
+    {#if serverService}
+      <span class="grow"><b>{serverService.name}</b> is not running, so your sites cannot be opened.</span>
+      <ServiceControls service={serverService} />
+    {:else}
+      <span class="grow">Setting up the {serverName} service...</span>
+    {/if}
   </div>
 {:else}
-  <div class="notice caddy" role="note">
-    <Icon name="check" />
-    <span>Caddy is running. Sites use HTTP on port {app.settings?.proxyHttpPort ?? 8080} and HTTPS on {app.settings?.proxyHttpsPort ?? 8443}.</span>
+  <div class="notice server" role="note" data-server={server}>
+    <KindIcon kind={server} size={16} />
+    <span>{serverName} is running. Sites use HTTP on port {app.settings?.proxyHttpPort ?? 8080} and HTTPS on {app.settings?.proxyHttpsPort ?? 8443}. <a href="#/settings">Change the site server</a></span>
   </div>
 {/if}
 
@@ -78,16 +98,21 @@
 {:else}
   <div class="card t-wrap">
     <table class="t">
-      <thead><tr><th>Site</th><th>Address</th><th>Type</th><th>Target</th><th>Status</th><th><span class="sr-only">Actions</span></th></tr></thead>
+      <thead><tr><th>Site</th><th>Address</th><th>Points to</th><th>Status</th><th><span class="sr-only">Actions</span></th></tr></thead>
       <tbody>
         {#each lists.sites as s (s.id)}
+          {@const tg = target(s)}
           <tr data-site={s.domain}>
             <td class="cell-title">{s.name}</td>
-            <td class="mono"><a href={s.url} target="_blank" rel="noreferrer">{s.url} <Icon name="external" size={12} /></a></td>
-            <td>{s.type}{s.https ? " + https" : ""}</td>
-            <td class="path">{target(s)}</td>
+            <td class="mono">{#if s.enabled}<a href={s.url} target="_blank" rel="noreferrer">{s.url} <Icon name="external" size={12} /></a>{:else}<span class="muted">{s.url}</span>{/if}</td>
+            <td><span class="muted small">{tg.kind}</span> <span class={tg.kind === "Service" ? "" : "path"}>{tg.text}</span></td>
             <td>{#if s.enabled}<span class="badge running"><span class="dot"></span>enabled</span>{:else}<span class="badge stopped"><span class="dot"></span>disabled</span>{/if}</td>
             <td class="actions">
+              {#if s.enabled}
+                <button class="btn sm" disabled={toggling === s.id} onclick={() => toggle(s)} aria-label="Disable {s.name}"><Icon name="stop" size={14} /> Disable</button>
+              {:else}
+                <button class="btn sm" disabled={toggling === s.id} onclick={() => toggle(s)} aria-label="Enable {s.name}"><Icon name="play" size={14} /> Enable</button>
+              {/if}
               <button class="btn sm ghost icon" onclick={() => (editing = s)} aria-label="Edit {s.name}" title="Edit"><Icon name="edit" size={14} /></button>
               <button class="btn sm ghost icon danger" onclick={() => (deleting = s)} aria-label="Delete {s.name}" title="Delete"><Icon name="trash" size={14} /></button>
             </td>
@@ -106,12 +131,12 @@
 {/if}
 
 <style>
-  .caddy {
+  .server {
     margin-bottom: 14px;
-    align-items: flex-start;
+    align-items: center;
+    flex-wrap: wrap;
   }
-  .caddy :global(svg) {
+  .server :global(svg) {
     flex: none;
-    margin-top: 3px;
   }
 </style>

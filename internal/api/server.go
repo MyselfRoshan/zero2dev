@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"zero2dev/internal/apperr"
+	"zero2dev/internal/catalog"
 	"zero2dev/internal/config"
 	"zero2dev/internal/events"
 	"zero2dev/internal/installer"
@@ -35,9 +36,13 @@ type Deps struct {
 	Installer *installer.Installer
 	Sites     *sites.Manager
 	Catalog   func() ([]model.CatalogEntry, error)
+	Remote    *catalog.Remote // nil disables version discovery
 	UI        fs.FS
 	Version   string
 	Started   time.Time
+	// PickFolder shows the native folder dialog (winpick.Folder); nil means
+	// not available. Replaced in tests.
+	PickFolder func(title, start string) (path string, ok bool, err error)
 }
 
 // Server is the http.Handler for the whole daemon.
@@ -91,18 +96,24 @@ func (s *Server) routes() {
 	s.handle("POST /api/runtimes/register", s.registerRuntime)
 	s.handle("POST /api/runtimes/install", s.installRuntime)
 	s.handle("DELETE /api/runtimes/{id}", s.deleteRuntime)
+	s.handle("POST /api/runtimes/{id}/default", s.setDefaultRuntime)
 	s.handle("POST /api/runtimes/import", s.importRuntime)
 	s.handle("GET /api/installer/log", s.installerLog)
 	s.handle("GET /api/catalog", s.listCatalog)
+	s.handle("GET /api/catalog/status", s.catalogStatus)
+	s.handle("POST /api/catalog/refresh", s.refreshCatalog)
 	s.handle("GET /api/sites", s.listSites)
 	s.handle("POST /api/sites", s.createSite)
 	s.handle("PUT /api/sites/{id}", s.updateSite)
 	s.handle("DELETE /api/sites/{id}", s.deleteSite)
+	s.handle("POST /api/sites/{id}/enable", s.enableSite)
+	s.handle("POST /api/sites/{id}/disable", s.disableSite)
 	s.handle("GET /api/jobs/{id}", s.getJob)
 	s.handle("GET /api/settings", s.getSettings)
 	s.handle("PUT /api/settings", s.putSettings)
 	s.handle("POST /api/events/ticket", s.eventTicket)
 	s.handle("GET /api/events", s.eventStream)
+	s.handle("POST /api/dialog/folder", s.pickFolder)
 	s.handle("/api/", func(http.ResponseWriter, *http.Request) error {
 		return apperr.NotFound("no such endpoint")
 	})
@@ -181,7 +192,11 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 func writeErr(w http.ResponseWriter, err error) {
 	e := apperr.From(err)
-	writeJSON(w, e.Status, map[string]any{"error": map[string]string{"code": e.Code, "message": e.Message}})
+	body := map[string]any{"code": e.Code, "message": e.Message}
+	if len(e.Details) > 0 {
+		body["details"] = e.Details
+	}
+	writeJSON(w, e.Status, map[string]any{"error": body})
 }
 
 // decode reads a JSON body strictly: 1 MB cap, unknown fields rejected,

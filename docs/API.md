@@ -248,9 +248,10 @@ Log lines are broadcast to every connected client (the UI filters by `serviceId`
 ## Backend notes (implementation choices and clarifications)
 
 - **Manifest location**: the embedded default lives at `internal/catalog/manifest.json` (go:embed cannot reach outside its package), not `catalog/manifest.json`. Format: a JSON array of CatalogEntry without `installed`/`supported`. Ids carry the platform, e.g. `node-22.11.0-windows-amd64`, because one version has one entry per OS. The default manifest has Node 22.11.0, Go 1.23.3 and Caddy 2.8.4 for windows/amd64 and linux/amd64 only (PHP and Java are detect/register only in v1). Entries are validated on load (https only, except loopback http for tests; `binaryRelPath` relative without `..`; sha256 value is 64 hex chars).
-- **Install progress**: Downloading maps bytes to 0-80 %, Verifying 82, Extracting 85, Registering 95, done 100. The expected hash is fetched before downloading. A runtime is installed to `<home>/runtimes/<catalogId>/`. A second install of an already installed id or of an id with a running job is `409`; an entry for another OS/arch is `400`.
+- **Install progress**: Downloading maps bytes to 0-80 %, Verifying 82, Extracting 85, Registering 95, done 100. The expected hash is fetched before downloading. A runtime is installed to `<binDir>/<catalogId>/` (`binDir` is `<exe dir>/bin` in portable mode, `ZERO2DEV_BIN` if set, else `<home>/bin`; since 0.0.2, before that `<home>/runtimes`). A second install of an already installed id or of an id with a running job is `409`; an entry for another OS/arch is `400`.
 - **Detect**: version commands differ per tool (`go version`, `caddy version`, `java -version`, `nginx -v`, `--version` otherwise). nginx is reported with `kind: "other"` plus an extra `name: "nginx"` field. Unparseable versions are reported as `"unknown"`.
 - **Settings PUT**: every field is optional (missing = unchanged); `apiPort`/`homeDir` are accepted and ignored. Proxy ports must be 1-65535, differ from each other and from the API port.
+- **Site on/off** (0.0.2): `POST /api/sites/{id}/enable` and `POST /api/sites/{id}/disable` (no body) -> `200 SiteView`, `404` for an unknown id. Only `enabled` changes; the site is not validated again, so a site whose folder or service went away can still be switched off. Both configs are regenerated and the running site server restarts, as for any site change.
 - **Sites**: `enabled` defaults to `true` when omitted. Allowed domain suffixes are the configured `domainSuffix`, `localhost` and `test`. A proxy site whose service was deleted or has port 0 is left out of the Caddyfile (the site record stays). Service create/update/delete regenerates the Caddyfile because upstream ports may change. A static root containing spaces is written quoted; roots containing quotes, braces or control characters are rejected.
 - **Services**: `startedAt` is non-null only while the process is active. `POST .../restart` stops (waiting up to grace + 3 s) and starts before answering. `PUT` is refused with `409` in `starting|running|stopping` (allowed in `failed`/`stopped`). Unknown `/api/...` paths return `404 not_found`; non-GET to static paths return 405 with code `bad_request`.
 - **Logs**: the file format is `<ts>\t<stream>\t<text>` per line; on daemon start the last 2000 lines are reloaded from the file so the UI still shows history. Lines over 16 KB are truncated.
@@ -287,6 +288,12 @@ Release 0.0.1 is about **isolation and portability**: Zero2Dev must be a portabl
 ```
 
 - `trustLocalCA`: default `false`. Regenerates the Caddyfile on change.
+- `siteServer` (since 0.0.2): `"caddy"` (default; empty in older state files reads as caddy) or `"nginx"`; anything else is `400`. Both `<home>/config/Caddyfile` and `<home>/config/nginx.conf` are always regenerated; only the running service of the active server is restarted. On change the daemon stops running services of the old server and, if one was running, starts the new server's service (in the background, after the response).
+  - With `nginx`, a managed service `Nginx (sites)` (kind `nginx`, args `-p {home}/nginx/ -c {home}/config/nginx.conf`, recognised by the `{home}/config/nginx.conf` arg) is created when an nginx runtime exists, like the Caddy service.
+  - nginx listens on `127.0.0.1` only; a default server answers `404` for unknown hosts. Proxy sites forward `Host`, `X-Real-IP`, `X-Forwarded-For`, `X-Forwarded-Proto` and WebSocket upgrades.
+  - HTTPS sites use one certificate for all HTTPS domains, signed by a local CA that Zero2Dev creates in `<home>/nginx/certs/` (`ca.crt` is kept; `sites.crt` is reissued when the names change or within 30 days of expiry). Nothing is installed into the OS trust store; `trustLocalCA` does not apply.
+- Service args: `{home}` is replaced with the data folder in slash form, like `{port}`.
+- Static site roots containing `$` (or, on Linux/macOS, a backslash) are rejected because nginx would interpret them.
 - `downloadProxy`: empty or an `http://host:port` / `https://host:port` URL (with optional `user:pass@`). Used by the installer's HTTP client. When empty, use the standard `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` environment (Go's `ProxyFromEnvironment`). Go does NOT read the Windows system proxy, which is a likely reason downloads fail on company networks. Invalid values return `400 bad_request`.
 
 ## Catalog entry additions
@@ -316,7 +323,7 @@ When a network blocks the download, the user can fetch the archive in a browser 
 ## Behaviour of `GET /api/status`
 
 ```json
-{ "version": "0.0.1", "uptimeSeconds": 12, "os": "windows", "arch": "amd64", "homeDir": "D:\\zero2dev\\bin\\data", "homeSource": "exe", "portable": true, "exeDir": "D:\\zero2dev\\bin", "counts": { "services": 0, "running": 0, "runtimes": 0, "sites": 0 } }
+{ "version": "0.0.2", "uptimeSeconds": 12, "os": "windows", "arch": "amd64", "homeDir": "D:\\zero2dev\\data", "binDir": "D:\\zero2dev\\bin", "homeSource": "exe", "portable": true, "exeDir": "D:\\zero2dev", "folderPicker": true, "counts": { "services": 0, "running": 0, "runtimes": 0, "sites": 0 } }
 ```
 
 ### Backend notes for v0.0.1
@@ -331,3 +338,71 @@ When a network blocks the download, the user can fetch the archive in a browser 
 ## Checksums: SHA-256 and SHA-512 (fix after first field test)
 
 The published checksum for Caddy releases is **SHA-512** (128 hex characters per line); Node and Go publish SHA-256 (64). `checksum.type: "shasums"` files and bare-hash files may now contain either, the digest algorithm is chosen from the length of the expected hash, and the archive is verified with that algorithm. The `sha256` field of `POST /api/runtimes/import` (name kept for compatibility) accepts a 64 or 128 character hex digest. Signed query strings on redirect URLs are removed from `installer.log` and from error messages.
+
+---
+
+## Amendment: more runtimes, many versions side by side, version discovery (branch `feature/standalone-runtimes`)
+
+Binding for daemon and UI. Everything not listed here is unchanged. This **replaces** the earlier "one version at a time" rule:
+any number of versions of a runtime can be installed at once (PHP 7.1 for one project, PHP 8 for another).
+
+### Kinds
+`RuntimeKinds` gains `"nginx"` (kind `"other"` stays valid for old state). `ServiceKinds` gains `"nginx"`.
+Version lists can be fetched for six kinds: `node`, `go`, `caddy`, `php`, `java`, `nginx`.
+
+### Which version a service uses
+- `Service.runtimeId` set: exactly that runtime.
+- `runtimeId` empty ("Default"): the **default runtime of the service's kind**, else the first one of that kind, else PATH (as before).
+- Every kind has at most one default. The first runtime of a kind (installed or registered) becomes the default automatically; removing the default promotes the first remaining one.
+
+### Types
+`CatalogEntry` gains: `line` (version line: node `"22"`, go `"1.23"`, caddy `"2.8"`, php `"8.4"`, java `"21"`, nginx `"1.26"`), `channel` (`"lts"|"stable"|"mainline"|""`),
+`source` (`"builtin"|"remote"`), `latest` (bool: newest version of this kind/os/arch/line), `unverified` (bool: no published checksum; nginx and old PHP builds).
+`Runtime` gains `catalogId` (omitted when empty) and `default` (bool).
+`Checksum.type` gains `"none"` (only valid for entries with `unverified:true`).
+Errors may carry `"details"` (object of strings): `{"error":{"code","message","details":{...}}}`.
+
+### `GET /api/catalog`
+Unchanged shape (array): embedded manifest merged with the cached remote versions (never touches the network). Sorted by kind, then os (windows first), then newest version first.
+
+### `GET /api/catalog/status` -> 200
+`{"checkedAt": "<RFC3339>"|null, "sources":[{"kind":"php","name":"windows.php.net","ok":true,"count":4,"error":"","checkedAt":"<RFC3339>"}]}`
+`sources` is empty until the first refresh, then has one row per kind: `node`, `go`, `caddy`, `php`, `java`, `nginx`.
+
+### `POST /api/catalog/refresh` (no body) -> 200
+Asks the publishers for their version lists (node: nodejs.org, go: go.dev, caddy: GitHub releases, php: windows.php.net incl. its archive for older lines, java: Adoptium, nginx: nginx.org), using the Download proxy setting, 40 s total.
+A failing source does not fail the call and keeps its previously cached entries. Response: the status object plus `"added":["<catalog id>", ...]`. Cached in `data/cache/remote-catalog.json`.
+
+### `POST /api/runtimes/install` body `{catalogId, acceptUnverified?: bool}` -> 202 Job
+Installs that version next to any others. `409 conflict` if that exact version is already installed.
+`400 unverified` (code `unverified`) if the entry has `unverified:true` and `acceptUnverified` is not true.
+
+### `POST /api/runtimes/import` body `{catalogId, filePath, sha256?, acceptUnverified?}`
+Same rules. For `unverified` entries a pasted `sha256` counts as verification.
+
+### `POST /api/runtimes/{id}/default` (no body) -> 200 Runtime
+Makes that runtime the default of its kind (the previous default loses the flag). Emits `runtimes.changed`.
+
+### `DELETE /api/runtimes/{id}`
+Unchanged, but when the default is deleted another runtime of that kind becomes the default. Still `409` while a service uses it (message names the service).
+
+### Removed from the earlier draft
+`replace`, `single`, `replacedRuntimeId`, error codes `single_install` and `in_use`: none of them exist.
+
+## Amendment: native folder dialog (0.0.2)
+
+The browser's own directory picker never reveals an absolute path, which services (`cwd`) and sites (`root`) need. The daemon runs on the same PC, so it shows the operating system's dialog itself.
+
+### `POST /api/dialog/folder` body `{ "title"?: string, "start"?: string }` (or no body) -> 200
+
+```json
+{ "path": "C:\\work\\my-app", "cancelled": false }
+{ "path": "", "cancelled": true }
+```
+
+- Opens the modern Windows "Select Folder" dialog (IFileOpenDialog with `FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST`, through raw COM calls in `internal/winpick`, no cgo or third-party module) and answers when the user closes it. The request stays open meanwhile (the HTTP server has no write timeout).
+- `title`: dialog title, default `Select a folder`, at most 100 characters on one line (`400` otherwise). `start`: where the dialog opens: that folder if it exists, else its nearest existing parent; ignored when empty or relative.
+- The dialog is owned by an invisible always-on-top window centred on the primary screen, so it opens in front of the browser instead of behind it.
+- One dialog at a time: a second request while one is open is `409 conflict`.
+- Other operating systems: `501` with code `not_supported`. `GET /api/status` reports `folderPicker: true` only when the dialog is available; the UI shows its **Browse...** buttons only then, and typing a path always works.
+- `internal/winpick` has a test that opens real dialogs and presses their buttons; it needs a desktop session and only runs with `Z2D_DIALOG_TEST=1`.

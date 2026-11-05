@@ -1,5 +1,5 @@
 // Real-daemon end-to-end test: drives the built UI in Chromium against the real binary.
-// Run from web/: `npm i -D playwright` once, build the daemon (make build), then `node e2e/real-daemon.cjs`.
+// Run from web/: `pnpm add -D playwright` once, build the daemon (make build), then `node e2e/real-daemon.cjs`.
 // Regression guard: a fast stop must leave the UI on 'stopped' (stale 202 bodies must not overwrite SSE state).
 const { chromium } = require("playwright");
 const { spawn } = require("child_process");
@@ -106,7 +106,7 @@ const SH = fs.mkdtempSync(path.join(os.tmpdir(), "z2d-shots-")) + path.sep;
   });
   await step("settings+runtimes", async () => {
     await p.goto(`http://127.0.0.1:${port}/#/runtimes`);
-    await p.waitForSelector("text=/Catalog/i");
+    await p.waitForSelector("text=/Check for new versions/i");
     await p.screenshot({ path: SH + "07-runtimes.png" });
     await p.goto(`http://127.0.0.1:${port}/#/settings`);
     await p.waitForSelector("text=/Settings/i");

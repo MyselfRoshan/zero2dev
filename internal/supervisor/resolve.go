@@ -15,7 +15,7 @@ import (
 )
 
 // Default program names looked up on PATH per kind.
-var progName = map[string]string{"node": "node", "php": "php", "go": "go", "java": "java", "caddy": "caddy"}
+var progName = map[string]string{"node": "node", "php": "php", "go": "go", "java": "java", "caddy": "caddy", "nginx": "nginx"}
 
 // resolved is everything needed to spawn a service.
 type resolved struct {
@@ -62,14 +62,20 @@ func (s *Supervisor) resolve(svc model.Service, d store.Data) (*resolved, error)
 			args = []string{"run", "."}
 		case "caddy":
 			args = []string{"run", "--config", filepath.Join(s.home, "config", "Caddyfile"), "--adapter", "caddyfile"}
+		case "nginx":
+			// nginx needs its prefix (conf/, logs/, html/): default to the folder of the binary.
+			args = []string{"-p", filepath.ToSlash(filepath.Dir(bin)) + "/"}
 		case "node", "java":
 			return nil, apperr.BadRequest("args required for %s services", svc.Kind)
 		}
 	}
 	port := strconv.Itoa(svc.Port)
+	// {home} is the data folder in slash form (nginx and most tools accept
+	// forward slashes on Windows; backslashes would be escapes in nginx).
+	home := filepath.ToSlash(s.home)
 	out := make([]string, len(args))
 	for i, a := range args {
-		out[i] = strings.ReplaceAll(a, "{port}", port)
+		out[i] = strings.ReplaceAll(strings.ReplaceAll(a, "{port}", port), "{home}", home)
 	}
 
 	env := os.Environ()
@@ -118,10 +124,21 @@ func findRuntimeBinary(svc model.Service, d store.Data) (bin, dir string, err er
 		}
 		return "", "", apperr.Conflict("runtime %s not found", svc.RuntimeID)
 	}
-	for _, r := range d.Runtimes {
-		if r.Kind == svc.Kind {
+	first := -1
+	for i, r := range d.Runtimes {
+		if r.Kind != svc.Kind {
+			continue
+		}
+		if r.Default { // the default of the kind wins
 			return r.Binary, filepath.Dir(r.Binary), nil
 		}
+		if first < 0 {
+			first = i
+		}
+	}
+	if first >= 0 {
+		r := d.Runtimes[first]
+		return r.Binary, filepath.Dir(r.Binary), nil
 	}
 	if name := progName[svc.Kind]; name != "" {
 		if p, e := exec.LookPath(name); e == nil {

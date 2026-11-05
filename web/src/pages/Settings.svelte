@@ -4,6 +4,9 @@
   import { caRootPath, portableNote } from "../lib/installer";
   import { hasErrors, parsePort, validateSettings, type SettingsField } from "../lib/validate";
   import Icon from "../ui/Icon.svelte";
+  import KindIcon from "../ui/KindIcon.svelte";
+  import { nginxCaPath, serverLabel, siteServer } from "../lib/sites";
+  import type { SiteServer } from "../lib/types";
 
   let suffix = $state("");
   let httpPort = $state("");
@@ -11,6 +14,7 @@
   let openBrowser = $state(true);
   let proxy = $state("");
   let trustCA = $state(false);
+  let server = $state<SiteServer>("caddy");
   let loadedFor = $state<object | null>(null);
   let errors = $state<Partial<Record<SettingsField, string>>>({});
   let saving = $state(false);
@@ -27,6 +31,7 @@
       openBrowser = s.openBrowserOnStart;
       proxy = s.downloadProxy ?? "";
       trustCA = s.trustLocalCA ?? false;
+      server = siteServer(s);
     }
   });
 
@@ -37,7 +42,8 @@
         httpsPort !== String(app.settings.proxyHttpsPort) ||
         openBrowser !== app.settings.openBrowserOnStart ||
         proxy.trim() !== (app.settings.downloadProxy ?? "") ||
-        trustCA !== (app.settings.trustLocalCA ?? false)),
+        trustCA !== (app.settings.trustLocalCA ?? false) ||
+        server !== siteServer(app.settings)),
   );
 
   async function save(e: SubmitEvent) {
@@ -51,7 +57,7 @@
     if (hasErrors(errors)) return;
     saving = true;
     const res = await attempt(
-      () => api.putSettings({ ...app.settings!, domainSuffix: suffix.trim(), proxyHttpPort: hp, proxyHttpsPort: sp, openBrowserOnStart: openBrowser, downloadProxy: proxy.trim(), trustLocalCA: trustCA }),
+      () => api.putSettings({ ...app.settings!, domainSuffix: suffix.trim(), proxyHttpPort: hp, proxyHttpsPort: sp, openBrowserOnStart: openBrowser, downloadProxy: proxy.trim(), trustLocalCA: trustCA, siteServer: server }),
       "Settings saved.",
     );
     saving = false;
@@ -68,6 +74,8 @@
   }
   const dataDir = $derived(app.status?.homeDir ?? app.settings?.homeDir ?? "");
   const rootCert = $derived(dataDir ? caRootPath(dataDir) : "<data folder>\\caddy\\data\\caddy\\pki\\authorities\\local\\root.crt");
+  const nginxCert = $derived(dataDir ? nginxCaPath(dataDir) : "<data folder>\\nginx\\certs\\ca.crt");
+  const switching = $derived(!!app.settings && server !== siteServer(app.settings));
 
   async function copyToken() {
     const t = getToken();
@@ -85,6 +93,23 @@
   <form class="card" onsubmit={save} novalidate>
     <div class="panel-head"><h2>Sites and proxy</h2></div>
     <div class="card-pad stack">
+      <fieldset class="field server-pick">
+        <legend class="label">Site server</legend>
+        <div class="row wrap">
+          {#each ["caddy", "nginx"] as const as k (k)}
+            <label class="opt" class:on={server === k}>
+              <input type="radio" name="site-server" value={k} bind:group={server} />
+              <KindIcon kind={k} size={18} />
+              <span><b>{serverLabel(k)}</b><span class="muted small">{k === "caddy" ? "Default. Built-in local HTTPS." : "Uses an installed nginx runtime."}</span></span>
+            </label>
+          {/each}
+        </div>
+        {#if switching}
+          <span class="hint" data-testid="server-switch-hint">On save, a running {serverLabel(siteServer(app.settings))} service is stopped and {serverLabel(server)} is started in its place. Both use the same ports, so only one can run.</span>
+        {:else}
+          <span class="hint">The program that serves your sites. Zero2Dev writes its config and creates its service when the runtime is installed.</span>
+        {/if}
+      </fieldset>
       <div class="field"><label>
         <span class="label">Domain suffix</span>
         <input type="text" class="mono" bind:value={suffix} aria-invalid={!!errors.domainSuffix} spellcheck="false" /></label>
@@ -102,18 +127,28 @@
           {#if errors.proxyHttpsPort}<span class="err">{errors.proxyHttpsPort}</span>{/if}
         </div>
       </div>
-      <span class="hint">Changing proxy ports rewrites the Caddyfile; a running Caddy service restarts.</span>
+      <span class="hint">Changing proxy ports rewrites the {server === "nginx" ? "nginx config" : "Caddyfile"}; a running {serverLabel(server)} service restarts.</span>
     </div>
     <div class="panel-head sub"><h2>HTTPS certificate</h2></div>
     <div class="card-pad stack">
-      <label class="check"><input type="checkbox" bind:checked={trustCA} aria-describedby="ca-warn" /> <span>Let Caddy trust its local certificate authority</span></label>
-      <div class="notice warn" id="ca-warn">
-        <Icon name="alert" />
-        <div class="stack-s">
-          <span><b>Turn this on only if you want Windows to trust local HTTPS sites.</b> Caddy then changes the Windows certificate store and Windows may show a security prompt.</span>
-          <span>While it is off, nothing outside the data folder is touched and HTTPS sites show a certificate warning in the browser until you trust <code class="path-inline">{rootCert}</code> yourself.</span>
+      {#if server === "nginx"}
+        <div class="notice" data-testid="nginx-ca">
+          <Icon name="key" />
+          <div class="stack-s">
+            <span>For nginx, Zero2Dev creates its own local certificate authority and one certificate that covers every HTTPS site. It is reissued when you add or remove HTTPS sites.</span>
+            <span>Nothing is added to the Windows certificate store. To open HTTPS sites without a browser warning, trust <code class="path-inline">{nginxCert}</code> yourself.</span>
+          </div>
         </div>
-      </div>
+      {:else}
+        <label class="check"><input type="checkbox" bind:checked={trustCA} aria-describedby="ca-warn" /> <span>Let Caddy trust its local certificate authority</span></label>
+        <div class="notice warn" id="ca-warn">
+          <Icon name="alert" />
+          <div class="stack-s">
+            <span><b>Turn this on only if you want Windows to trust local HTTPS sites.</b> Caddy then changes the Windows certificate store and Windows may show a security prompt.</span>
+            <span>While it is off, nothing outside the data folder is touched and HTTPS sites show a certificate warning in the browser until you trust <code class="path-inline">{rootCert}</code> yourself.</span>
+          </div>
+        </div>
+      {/if}
     </div>
     <div class="panel-head sub"><h2>Downloads</h2></div>
     <div class="card-pad stack">
@@ -232,5 +267,29 @@
   }
   .tail {
     padding-top: 0;
+  }
+  .server-pick {
+    border: 0;
+    margin: 0;
+    padding: 0;
+    min-width: 0;
+  }
+  .opt {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    cursor: pointer;
+    flex: 1 1 220px;
+  }
+  .opt.on {
+    border-color: var(--accent);
+    background: var(--surface-2);
+  }
+  .opt > span:last-child {
+    display: grid;
+    gap: 2px;
   }
 </style>

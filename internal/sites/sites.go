@@ -1,7 +1,9 @@
-// Package sites manages local domains and generates the Caddyfile.
+// Package sites manages local domains and generates the Caddyfile and
+// nginx.conf. Setting siteServer picks which of the two serves them.
 package sites
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -18,19 +20,22 @@ import (
 // Emitter receives events (events.Hub).
 type Emitter interface{ Publish(typ string, data any) }
 
-// Restarter lets the manager restart the Caddy service (supervisor).
+// Restarter lets the manager restart, stop and start the site server
+// services (supervisor).
 type Restarter interface {
 	State(id string) string
 	Restart(id string) error
+	StopWait(id string) error
+	Start(id string) error
 }
 
-// Manager owns sites and the generated Caddyfile.
+// Manager owns sites and the generated server configs.
 type Manager struct {
 	home string
 	st   *store.Store
 	em   Emitter
 	sup  Restarter
-	mu   sync.Mutex // serialises Caddyfile writes
+	mu   sync.Mutex // serialises config writes
 }
 
 // New creates a Manager.
@@ -40,6 +45,9 @@ func New(home string, st *store.Store, em Emitter, sup Restarter) *Manager {
 
 // CaddyfilePath is <home>/config/Caddyfile.
 func (m *Manager) CaddyfilePath() string { return filepath.Join(m.home, "config", "Caddyfile") }
+
+// NginxConfPath is <home>/config/nginx.conf.
+func (m *Manager) NginxConfPath() string { return filepath.Join(m.home, "config", "nginx.conf") }
 
 var domainRE = regexp.MustCompile(`^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$`)
 
@@ -107,6 +115,29 @@ func (m *Manager) Update(id string, in model.SiteInput) (model.SiteView, error) 
 	return model.SiteView{Site: site, URL: URL(site, m.st.Snapshot().Settings)}, nil
 }
 
+// SetEnabled switches a site on or off, like starting or stopping a service.
+// Only the flag changes: the rest is not validated again, so a site whose
+// folder or service went away can still be switched off. An enabled site
+// whose service has no port is left out of the generated configs anyway.
+func (m *Manager) SetEnabled(id string, on bool) (model.SiteView, error) {
+	var site model.Site
+	err := m.st.Update(func(d *store.Data) error {
+		for i := range d.Sites {
+			if d.Sites[i].ID == id {
+				d.Sites[i].Enabled = on
+				site = d.Sites[i]
+				return nil
+			}
+		}
+		return apperr.NotFound("site %s not found", id)
+	})
+	if err != nil {
+		return model.SiteView{}, err
+	}
+	m.afterChange()
+	return model.SiteView{Site: site, URL: URL(site, m.st.Snapshot().Settings)}, nil
+}
+
 // Delete removes a site.
 func (m *Manager) Delete(id string) error {
 	err := m.st.Update(func(d *store.Data) error {
@@ -130,23 +161,141 @@ func (m *Manager) afterChange() {
 	_ = m.Regenerate()
 }
 
-// Regenerate rewrites the Caddyfile and, if a caddy service is running,
-// restarts it in the background (v1: restart instead of reload).
+// Regenerate rewrites the Caddyfile and nginx.conf (both are always kept
+// current so switching servers needs no extra step) and restarts the
+// running service of the active site server in the background (restart
+// instead of reload).
 func (m *Manager) Regenerate() error {
 	m.mu.Lock()
 	d := m.st.Snapshot()
-	err := fsutil.WriteFileAtomic(m.CaddyfilePath(), []byte(Caddyfile(d)), 0o644)
+	err := m.write(d)
 	m.mu.Unlock()
 	if err != nil {
 		return err
 	}
 	for _, s := range d.Services {
-		if s.Kind == "caddy" && m.sup.State(s.ID) == model.StateRunning {
+		if isServerFor(s, Server(d.Settings)) && m.sup.State(s.ID) == model.StateRunning {
 			id := s.ID
 			go func() { _ = m.sup.Restart(id) }()
 		}
 	}
 	return nil
+}
+
+func (m *Manager) write(d store.Data) error {
+	if err := fsutil.WriteFileAtomic(m.CaddyfilePath(), []byte(Caddyfile(d)), 0o644); err != nil {
+		return err
+	}
+	// nginx needs its prefix folders: logs/ (also for the error log it opens
+	// before reading the config) and temp/ (Windows builds keep their temp
+	// paths there).
+	for _, sub := range []string{"logs", "temp"} {
+		if err := os.MkdirAll(filepath.Join(m.home, "nginx", sub), 0o755); err != nil {
+			return err
+		}
+	}
+	if Server(d.Settings) == ServerNginx {
+		if err := ensureNginxCerts(m.home, httpsDomains(d)); err != nil {
+			return fmt.Errorf("nginx certificates: %w", err)
+		}
+	}
+	return fsutil.WriteFileAtomic(m.NginxConfPath(), []byte(NginxConf(d, m.home)), 0o644)
+}
+
+// isServerFor: the service that serves the sites for server srv.
+func isServerFor(s model.Service, srv string) bool {
+	if srv == ServerNginx {
+		return IsSitesNginx(s)
+	}
+	return s.Kind == "caddy"
+}
+
+// SwitchServer is called after setting siteServer changed from old to the
+// current value. The servers share the proxy ports, so running services of
+// the old server are stopped, and if one was running the new server's
+// service is started in its place. Runs in the background.
+func (m *Manager) SwitchServer(old string) {
+	if _, err := m.EnsureServers(); err != nil {
+		return
+	}
+	d := m.st.Snapshot()
+	cur := Server(d.Settings)
+	if old == cur {
+		return
+	}
+	var stop []string
+	var start string
+	for _, s := range d.Services {
+		if isServerFor(s, old) && m.sup.State(s.ID) == model.StateRunning {
+			stop = append(stop, s.ID)
+		}
+		if start == "" && isServerFor(s, cur) {
+			start = s.ID
+		}
+	}
+	if len(stop) == 0 {
+		return
+	}
+	go func() {
+		for _, id := range stop {
+			_ = m.sup.StopWait(id)
+		}
+		if start != "" && m.sup.State(start) != model.StateRunning {
+			_ = m.sup.Start(start)
+		}
+	}()
+}
+
+// EnsureServers creates the site server services that are missing: the
+// "Caddy" service when a caddy runtime exists, and the "Nginx (sites)"
+// service when nginx serves the sites and an nginx runtime exists. Reports
+// whether it created one.
+func (m *Manager) EnsureServers() (bool, error) {
+	c, err := m.EnsureCaddy()
+	if err != nil {
+		return c, err
+	}
+	n, err := m.EnsureNginx()
+	return c || n, err
+}
+
+// EnsureNginx creates the managed "Nginx (sites)" service when siteServer
+// is nginx, an nginx runtime exists and no such service does.
+func (m *Manager) EnsureNginx() (bool, error) {
+	created := false
+	err := m.st.Update(func(d *store.Data) error {
+		if Server(d.Settings) != ServerNginx {
+			return nil
+		}
+		has := false
+		for _, r := range d.Runtimes {
+			if r.Kind == "nginx" {
+				has = true
+			}
+		}
+		if !has {
+			return nil
+		}
+		for _, s := range d.Services {
+			if IsSitesNginx(s) {
+				return nil
+			}
+		}
+		d.Services = append(d.Services, model.Service{
+			ID: model.NewID("svc_"), Name: "Nginx (sites)", Kind: "nginx", Cwd: m.home,
+			Args: append([]string{}, NginxArgs...), Env: map[string]string{},
+		})
+		created = true
+		return nil
+	})
+	if err != nil {
+		return false, err
+	}
+	if created {
+		_ = m.Regenerate() // the config must exist before nginx is started
+		m.em.Publish("services.changed", struct{}{})
+	}
+	return created, nil
 }
 
 // EnsureCaddy creates the "Caddy" service when a caddy runtime exists and no
@@ -230,8 +379,8 @@ func validate(in model.SiteInput, selfID string, d store.Data) (model.Site, erro
 			return s, apperr.BadRequest("root must be an absolute path")
 		}
 		root := filepath.Clean(in.Root)
-		if unsafeForCaddy(root) {
-			return s, apperr.BadRequest("root contains characters that are not allowed")
+		if unsafeForCaddy(root) || unsafeForNginx(root) {
+			return s, apperr.BadRequest("root contains characters that are not allowed (quotes, braces, $, backslashes in names, control characters)")
 		}
 		if st, err := os.Stat(root); err != nil || !st.IsDir() {
 			return s, apperr.BadRequest("root %s is not an existing directory", root)

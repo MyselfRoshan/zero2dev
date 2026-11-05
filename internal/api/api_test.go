@@ -58,7 +58,7 @@ func newEnv(t *testing.T) *tenv {
 	home := t.TempDir()
 	ts := httptest.NewUnstartedServer(nil)
 	port := ts.Listener.Addr().(*net.TCPAddr).Port
-	cfg := &config.Config{Home: home, Port: port, Token: strings.Repeat("ab", 32), DevOrigin: devOrigin, HomeSource: config.SourceExe, ExeDir: filepath.Join(home, "bin")}
+	cfg := &config.Config{Home: home, Port: port, Token: strings.Repeat("ab", 32), DevOrigin: devOrigin, HomeSource: config.SourceExe, ExeDir: filepath.Join(home, "exe"), BinDir: filepath.Join(home, "bin")}
 	st, err := store.Open(filepath.Join(home, "state.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -627,7 +627,7 @@ func TestStatusPortableFields(t *testing.T) {
 	e := newEnv(t)
 	var st map[string]any
 	e.do("GET", "/api/status", nil, &st)
-	if st["homeSource"] != "exe" || st["portable"] != true || st["exeDir"] != filepath.Join(e.home, "bin") || st["homeDir"] != e.home || st["version"] != "test" {
+	if st["homeSource"] != "exe" || st["portable"] != true || st["exeDir"] != filepath.Join(e.home, "exe") || st["homeDir"] != e.home || st["version"] != "test" {
 		t.Fatalf("%v", st)
 	}
 	e.srv.Cfg.HomeSource = config.SourceEnv

@@ -37,6 +37,23 @@ func (s *Server) updateSite(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
+func (s *Server) enableSite(w http.ResponseWriter, r *http.Request) error {
+	return s.setSiteEnabled(w, r, true)
+}
+
+func (s *Server) disableSite(w http.ResponseWriter, r *http.Request) error {
+	return s.setSiteEnabled(w, r, false)
+}
+
+func (s *Server) setSiteEnabled(w http.ResponseWriter, r *http.Request, on bool) error {
+	v, err := s.Sites.SetEnabled(r.PathValue("id"), on)
+	if err != nil {
+		return err
+	}
+	writeJSON(w, 200, v)
+	return nil
+}
+
 func (s *Server) deleteSite(w http.ResponseWriter, r *http.Request) error {
 	if err := s.Sites.Delete(r.PathValue("id")); err != nil {
 		return err

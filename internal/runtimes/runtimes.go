@@ -21,7 +21,9 @@ type Emitter interface{ Publish(typ string, data any) }
 
 // Manager manages the runtime list.
 type Manager struct {
-	home     string
+	home string
+	// Bin is the folder installed runtimes live in (default <home>/bin).
+	Bin      string
 	st       *store.Store
 	em       Emitter
 	OnChange func() // called after the runtime list changed (may be nil)
@@ -29,7 +31,28 @@ type Manager struct {
 
 // New creates a Manager.
 func New(home string, st *store.Store, em Emitter) *Manager {
-	return &Manager{home: home, st: st, em: em}
+	m := &Manager{home: home, Bin: filepath.Join(home, "bin"), st: st, em: em}
+	m.ensureDefaults()
+	return m
+}
+
+// ensureDefaults gives every kind that has runtimes a default (state files from
+// 0.0.1 have none): the first runtime of the kind, which is what services used before.
+func (m *Manager) ensureDefaults() {
+	_ = m.st.Update(func(d *store.Data) error {
+		has := map[string]bool{}
+		for _, r := range d.Runtimes {
+			if r.Default {
+				has[r.Kind] = true
+			}
+		}
+		for i := range d.Runtimes {
+			if k := d.Runtimes[i].Kind; !has[k] {
+				d.Runtimes[i].Default, has[k] = true, true
+			}
+		}
+		return nil
+	})
 }
 
 // Detected is a tool found on PATH.
@@ -51,7 +74,7 @@ var tools = []struct {
 	{"go", "go", []string{"version"}},
 	{"java", "java", []string{"-version"}},
 	{"caddy", "caddy", []string{"version"}},
-	{"nginx", "other", []string{"-v"}},
+	{"nginx", "nginx", []string{"-v"}},
 }
 
 var versionRE = regexp.MustCompile(`\d+(?:\.\d+){1,3}`)
@@ -92,15 +115,12 @@ func (m *Manager) Detect() []Detected {
 		if d.Version == "" {
 			d.Version = "unknown"
 		}
-		if t.kind == "other" {
-			d.Name = t.prog
-		}
 		res = append(res, d)
 	}
 	return res
 }
 
-var display = map[string]string{"node": "Node.js", "php": "PHP", "go": "Go", "java": "Java", "caddy": "Caddy"}
+var display = map[string]string{"node": "Node.js", "php": "PHP", "go": "Go", "java": "Java", "caddy": "Caddy", "nginx": "nginx"}
 
 // DisplayName builds e.g. "Node.js 22.11.0".
 func DisplayName(kind, version, binary string) string {
@@ -148,7 +168,15 @@ func (m *Manager) Register(kind, binary, version string) (model.Runtime, error) 
 		ID: model.NewID("rt_"), Kind: kind, Version: version, Name: DisplayName(kind, version, binary),
 		Binary: binary, Source: "registered", InstalledAt: time.Now().UTC().Truncate(time.Second),
 	}
-	return rt, m.Add(rt)
+	if err := m.Add(rt); err != nil {
+		return rt, err
+	}
+	for _, r := range m.st.Snapshot().Runtimes { // return what was stored (Default is decided by Add)
+		if r.ID == rt.ID {
+			return r, nil
+		}
+	}
+	return rt, nil
 }
 
 // Add stores a runtime (used by Register and the installer).
@@ -159,6 +187,12 @@ func (m *Manager) Add(rt model.Runtime) error {
 				return apperr.Conflict("%s is already registered as %s", rt.Binary, r.ID)
 			}
 		}
+		rt.Default = true
+		for _, r := range d.Runtimes {
+			if r.Kind == rt.Kind && r.Default {
+				rt.Default = false // the kind already has a default
+			}
+		}
 		d.Runtimes = append(d.Runtimes, rt)
 		return nil
 	})
@@ -167,6 +201,36 @@ func (m *Manager) Add(rt model.Runtime) error {
 	}
 	m.changed()
 	return nil
+}
+
+// SetDefault makes a runtime the one services of its kind use when they name none.
+func (m *Manager) SetDefault(id string) (model.Runtime, error) {
+	var out model.Runtime
+	err := m.st.Update(func(d *store.Data) error {
+		kind, found := "", false
+		for _, r := range d.Runtimes {
+			if r.ID == id {
+				kind, found = r.Kind, true
+			}
+		}
+		if !found {
+			return apperr.NotFound("runtime %s not found", id)
+		}
+		for i := range d.Runtimes {
+			if d.Runtimes[i].Kind == kind {
+				d.Runtimes[i].Default = d.Runtimes[i].ID == id
+				if d.Runtimes[i].ID == id {
+					out = d.Runtimes[i]
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return out, err
+	}
+	m.changed()
+	return out, nil
 }
 
 func (m *Manager) changed() {
@@ -202,12 +266,23 @@ func (m *Manager) Delete(id string) error {
 	}
 	if err := m.st.Update(func(d *store.Data) error {
 		out := d.Runtimes[:0]
+		hadDefault := false
 		for _, r := range d.Runtimes {
 			if r.ID != id {
 				out = append(out, r)
+			} else if r.Default {
+				hadDefault = true
 			}
 		}
 		d.Runtimes = out
+		if hadDefault { // promote the first remaining runtime of that kind
+			for i := range d.Runtimes {
+				if d.Runtimes[i].Kind == rt.Kind {
+					d.Runtimes[i].Default = true
+					break
+				}
+			}
+		}
 		return nil
 	}); err != nil {
 		return err
@@ -216,10 +291,10 @@ func (m *Manager) Delete(id string) error {
 	return nil
 }
 
-// installDir returns <home>/runtimes/<first component> for a binary below
+// installDir returns <bin>/<first component> for a binary below
 // the runtimes dir, or "" if the binary is elsewhere (never delete outside).
 func (m *Manager) installDir(binary string) string {
-	root := filepath.Join(m.home, "runtimes")
+	root := m.Bin
 	rel, err := filepath.Rel(root, binary)
 	if err != nil || rel == "." || strings.HasPrefix(rel, "..") {
 		return ""

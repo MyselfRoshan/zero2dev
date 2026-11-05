@@ -14,8 +14,8 @@ func TestEmbeddedManifestValid(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(es) != 6 {
-		t.Fatalf("want 6 entries, got %d", len(es))
+	if len(es) != 8 {
+		t.Fatalf("want 8 entries, got %d", len(es))
 	}
 	for _, e := range es {
 		if e.Homepage == "" || !strings.HasPrefix(e.Homepage, "https://") {
@@ -23,6 +23,12 @@ func TestEmbeddedManifestValid(t *testing.T) {
 		}
 		if e.FileName == "" || strings.ContainsAny(e.FileName, "/?") {
 			t.Errorf("%s: fileName %q", e.ID, e.FileName)
+		}
+		if e.Kind == "nginx" {
+			if e.Checksum.Type != "none" || !e.Unverified || e.Line == "" {
+				t.Errorf("%s: nginx entries are unverified entries with a version line: %+v", e.ID, e)
+			}
+			continue
 		}
 		if e.Checksum.Type != "shasums" || e.Checksum.URL == "" {
 			t.Errorf("%s: must use a published checksum", e.ID)
@@ -45,7 +51,7 @@ func TestOverrideAndValidation(t *testing.T) {
 
 func TestAnnotate(t *testing.T) {
 	es := []model.CatalogEntry{{ID: "a", BinaryRelPath: "bin/a", OS: "linux", Arch: "amd64"}}
-	got := Annotate(es, "/h", []model.Runtime{{Binary: filepath.Join("/h", "runtimes", "a", "bin", "a")}})
+	got := Annotate(es, "/h/bin", []model.Runtime{{Binary: filepath.Join("/h/bin", "a", "bin", "a")}})
 	if !got[0].Installed {
 		t.Fatal("should be installed")
 	}

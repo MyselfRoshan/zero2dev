@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"sort"
+	"strconv"
 	"strings"
 
 	"zero2dev/internal/model"
@@ -30,7 +32,32 @@ func Load(home string) ([]model.CatalogEntry, error) {
 	} else if err != nil {
 		return nil, err
 	}
-	return Parse(b)
+	es, err := Parse(b)
+	if err != nil {
+		return nil, err
+	}
+	return mergeRemote(es, loadCache(home).Entries), nil
+}
+
+// mergeRemote appends cached remote entries that are valid and not already
+// listed (the manifest wins on an id clash).
+func mergeRemote(es, remote []model.CatalogEntry) []model.CatalogEntry {
+	seen := map[string]bool{}
+	for _, e := range es {
+		seen[e.ID] = true
+	}
+	for i := range remote {
+		e := remote[i]
+		if seen[e.ID] || validate(&e) != nil {
+			continue
+		}
+		e.Source = "remote"
+		e.Installed, e.Supported = false, false
+		e.FileName = FileName(e.URL)
+		seen[e.ID] = true
+		es = append(es, e)
+	}
+	return es
 }
 
 // Parse decodes and validates a manifest (a JSON array of entries).
@@ -50,6 +77,9 @@ func Parse(b []byte) ([]model.CatalogEntry, error) {
 		seen[es[i].ID] = true
 		es[i].Installed, es[i].Supported = false, false
 		es[i].FileName = FileName(es[i].URL)
+		if es[i].Source == "" {
+			es[i].Source = "builtin"
+		}
 	}
 	return es, nil
 }
@@ -90,8 +120,12 @@ func validate(e *model.CatalogEntry) error {
 		if !IsAllowedURL(e.Checksum.URL) {
 			return errors.New("shasums url must be https")
 		}
+	case "none":
+		if !e.Unverified {
+			return errors.New("checksum type none needs unverified:true")
+		}
 	default:
-		return errors.New("checksum type must be sha256 or shasums")
+		return errors.New("checksum type must be sha256, shasums or none")
 	}
 	rel := filepath.ToSlash(e.BinaryRelPath)
 	if rel == "" || strings.HasPrefix(rel, "/") || strings.Contains(rel, "..") || filepath.VolumeName(e.BinaryRelPath) != "" {
@@ -132,14 +166,15 @@ func Find(es []model.CatalogEntry, id string) (model.CatalogEntry, bool) {
 	return model.CatalogEntry{}, false
 }
 
-// Annotate sets Supported and Installed (an installed runtime whose binary is
-// the entry's binary inside <home>/runtimes/<id>).
-func Annotate(es []model.CatalogEntry, home string, rts []model.Runtime) []model.CatalogEntry {
+// Annotate sets Supported, Installed and Latest (an installed runtime whose
+// binary is the entry's binary inside <bin>/<id>), and orders the
+// list by kind, then newest version first.
+func Annotate(es []model.CatalogEntry, bin string, rts []model.Runtime) []model.CatalogEntry {
 	out := make([]model.CatalogEntry, len(es))
 	for i, e := range es {
 		e.Supported = Supported(e)
 		e.FileName = FileName(e.URL)
-		want := filepath.Join(home, "runtimes", e.ID, filepath.FromSlash(e.BinaryRelPath))
+		want := filepath.Join(bin, e.ID, filepath.FromSlash(e.BinaryRelPath))
 		for _, r := range rts {
 			if r.Binary == want {
 				e.Installed = true
@@ -147,5 +182,48 @@ func Annotate(es []model.CatalogEntry, home string, rts []model.Runtime) []model
 		}
 		out[i] = e
 	}
+	best := map[string]string{}
+	key := func(e model.CatalogEntry) string { return e.Kind + "|" + e.OS + "|" + e.Arch + "|" + e.Line }
+	for _, e := range out {
+		if v, ok := best[key(e)]; !ok || CompareVersions(e.Version, v) > 0 {
+			best[key(e)] = e.Version
+		}
+	}
+	for i := range out {
+		out[i].Latest = CompareVersions(out[i].Version, best[key(out[i])]) == 0
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].Kind != out[j].Kind {
+			return out[i].Kind < out[j].Kind
+		}
+		if out[i].OS != out[j].OS {
+			return out[i].OS > out[j].OS // windows before linux
+		}
+		return CompareVersions(out[i].Version, out[j].Version) > 0
+	})
 	return out
+}
+
+var numRE = regexp.MustCompile(`\d+`)
+
+// CompareVersions compares dotted versions numerically ("21.0.5+11" > "21.0.4+7",
+// "1.26.10" > "1.26.9"). Non-numeric parts are ignored.
+func CompareVersions(a, b string) int {
+	x, y := numRE.FindAllString(a, -1), numRE.FindAllString(b, -1)
+	for i := 0; i < len(x) || i < len(y); i++ {
+		var p, q int
+		if i < len(x) {
+			p, _ = strconv.Atoi(x[i])
+		}
+		if i < len(y) {
+			q, _ = strconv.Atoi(y[i])
+		}
+		if p != q {
+			if p > q {
+				return 1
+			}
+			return -1
+		}
+	}
+	return 0
 }

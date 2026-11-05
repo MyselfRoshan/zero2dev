@@ -1,6 +1,6 @@
 {
   "name": "zero2dev-web",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "private": true,
   "type": "module",
   "scripts": {
@@ -13,7 +13,12 @@
     "check": "vp check",
     "e2e": "node e2e/smoke.mjs"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@iconify-icons/logos": "^2.0.6",
+    "@iconify-icons/lucide": "^2.0.27",
+    "@iconify-icons/simple-icons": "^2.0.8",
+    "@iconify/svelte": "^5.2.4"
+  },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "7.3.1",
     "@tsconfig/svelte": "5.0.8",
@@ -24,7 +29,15 @@
     "vite": "npm:@voidzero-dev/vite-plus-core@1.5.0",
     "vite-plus": "1.5.0"
   },
-  "overrides": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@1.5.0"
+  "packageManager": "pnpm@10.22.0",
+  "pnpm": {
+    "overrides": {
+      "vite": "npm:@voidzero-dev/vite-plus-core@1.5.0"
+    },
+    "peerDependencyRules": {
+      "allowedVersions": {
+        "vite": "*"
+      }
+    }
   }
 }

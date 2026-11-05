@@ -33,7 +33,7 @@ func TestFromEnvAndToken(t *testing.T) {
 			t.Fatalf("token mode %v", st.Mode())
 		}
 	}
-	for _, d := range []string{"runtimes", "config", "logs", "tmp", "caddy/data", "caddy/config"} {
+	for _, d := range []string{"config", "logs", "tmp", "caddy/data", "caddy/config"} {
 		if _, err := os.Stat(filepath.Join(home, d)); err != nil {
 			t.Fatalf("missing %s", d)
 		}

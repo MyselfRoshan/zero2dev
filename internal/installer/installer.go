@@ -36,10 +36,12 @@ type Emitter interface{ Publish(typ string, data any) }
 // Installer runs install and import jobs.
 type Installer struct {
 	home string
-	st   *store.Store
-	rt   *runtimes.Manager
-	em   Emitter
-	log  *fileLog
+	// Bin is the folder runtimes are installed into (default <home>/bin).
+	Bin string
+	st  *store.Store
+	rt  *runtimes.Manager
+	em  Emitter
+	log *fileLog
 
 	Catalog func() ([]model.CatalogEntry, error)
 	// Client overrides the HTTP client (tests); nil builds one from settings.
@@ -60,13 +62,21 @@ type Installer struct {
 type job struct {
 	model.Job
 	catalogID string
+	kind      string
 	finished  time.Time
+	opt       Options
+}
+
+// Options are the per-request switches of install and import.
+type Options struct {
+	// AcceptUnverified allows entries whose publisher gives no checksum.
+	AcceptUnverified bool
 }
 
 // New creates an Installer.
 func New(home string, st *store.Store, rt *runtimes.Manager, em Emitter) *Installer {
 	return &Installer{
-		home: home, st: st, rt: rt, em: em, Version: "0.0.1",
+		home: home, Bin: filepath.Join(home, "bin"), st: st, rt: rt, em: em, Version: "0.0.2",
 		log:     &fileLog{path: filepath.Join(home, "logs", "installer.log")},
 		Catalog: func() ([]model.CatalogEntry, error) { return catalog.Load(home) },
 		Rename:  os.Rename, Sleep: time.Sleep, RenameAttempts: 20,
@@ -108,8 +118,8 @@ func (in *Installer) prepare(catalogID string) (model.CatalogEntry, error) {
 }
 
 // register creates the job unless the entry is installed or being installed.
-func (in *Installer) register(e model.CatalogEntry, typ, step string) (*job, error) {
-	if catalog.Annotate([]model.CatalogEntry{e}, in.home, in.st.Snapshot().Runtimes)[0].Installed {
+func (in *Installer) register(e model.CatalogEntry, typ, step string, opt Options) (*job, error) {
+	if catalog.Annotate([]model.CatalogEntry{e}, in.Bin, in.st.Snapshot().Runtimes)[0].Installed {
 		return nil, apperr.Conflict("%s is already installed", e.ID)
 	}
 	in.mu.Lock()
@@ -124,18 +134,25 @@ func (in *Installer) register(e model.CatalogEntry, typ, step string) (*job, err
 			return nil, apperr.Conflict("%s is already being installed (%s)", e.ID, j.ID)
 		}
 	}
-	j := &job{Job: model.Job{ID: model.NewID("job_"), Type: typ, State: "running", Step: step}, catalogID: e.ID}
+	j := &job{Job: model.Job{ID: model.NewID("job_"), Type: typ, State: "running", Step: step}, catalogID: e.ID, kind: e.Kind, opt: opt}
 	in.jobs[j.ID] = j
 	return j, nil
 }
 
 // Start validates the request and runs the install in the background.
-func (in *Installer) Start(catalogID string) (model.Job, error) {
+func (in *Installer) Start(catalogID string, opts ...Options) (model.Job, error) {
+	var opt Options
+	if len(opts) > 0 {
+		opt = opts[0]
+	}
 	e, err := in.prepare(catalogID)
 	if err != nil {
 		return model.Job{}, err
 	}
-	j, err := in.register(e, "install", "Downloading")
+	if e.Unverified && !opt.AcceptUnverified {
+		return model.Job{}, apperr.New(400, "unverified", "%s publishes no checksum for this download, so it cannot be verified. Confirm to install it anyway.", e.Name)
+	}
+	j, err := in.register(e, "install", "Downloading", opt)
 	if err != nil {
 		return model.Job{}, err
 	}
@@ -148,7 +165,11 @@ func (in *Installer) Start(catalogID string) (model.Job, error) {
 
 // Import verifies and installs an archive the user downloaded themselves.
 // sha is optional; without it the published checksum is fetched (10 s).
-func (in *Installer) Import(catalogID, filePath, sha string) (model.Job, error) {
+func (in *Installer) Import(catalogID, filePath, sha string, opts ...Options) (model.Job, error) {
+	var opt Options
+	if len(opts) > 0 {
+		opt = opts[0]
+	}
 	e, err := in.prepare(catalogID)
 	if err != nil {
 		return model.Job{}, err
@@ -167,7 +188,7 @@ func (in *Installer) Import(catalogID, filePath, sha string) (model.Job, error) 
 	if sha != "" && !hexRE.MatchString(sha) {
 		return model.Job{}, apperr.BadRequest("checksum must be a SHA-256 (64) or SHA-512 (128) hexadecimal digest")
 	}
-	j, err := in.register(e, "import", "Importing") // conflict checks first
+	j, err := in.register(e, "import", "Importing", opt) // conflict checks first
 	if err != nil {
 		return model.Job{}, err
 	}
@@ -175,7 +196,15 @@ func (in *Installer) Import(catalogID, filePath, sha string) (model.Job, error) 
 	if want == "" {
 		want = in.publishedHash(e)
 	}
-	if want == "" {
+	if want == "" && e.Unverified && opt.AcceptUnverified {
+		in.log.printf(j.ID, "importing %s without a checksum (publisher has none)", e.FileName)
+	} else if want == "" {
+		if e.Unverified {
+			in.mu.Lock()
+			delete(in.jobs, j.ID)
+			in.mu.Unlock()
+			return model.Job{}, apperr.New(400, "unverified", "%s publishes no checksum. Paste a SHA-256 you trust, or confirm to import it unverified.", e.Name)
+		}
 		in.mu.Lock()
 		delete(in.jobs, j.ID)
 		in.mu.Unlock()
@@ -310,6 +339,10 @@ func (in *Installer) fetchArchive(ctx context.Context, j *job, e model.CatalogEn
 	if err != nil {
 		return archive, "", "", stepErr("Downloading", err)
 	}
+	if want == "" {
+		in.log.printf(j.ID, "UNVERIFIED: %s publishes no checksum; downloaded over HTTPS, recorded sha256=%s", e.FileName, got)
+		want = got
+	}
 	return archive, want, got, nil
 }
 
@@ -348,6 +381,10 @@ func (in *Installer) copyArchive(ctx context.Context, j *job, src, want string) 
 	}
 	got := hex.EncodeToString(h.Sum(nil))
 	in.log.printf(j.ID, "imported %d bytes %s=%s", n, algo, got)
+	if want == "" {
+		in.log.printf(j.ID, "UNVERIFIED: no checksum available; recorded %s=%s", algo, got)
+		want = got
+	}
 	return archive, want, got, nil
 }
 
@@ -385,7 +422,7 @@ func (in *Installer) process(j *job, e model.CatalogEntry, archive, want, got st
 	_ = os.Chmod(filepath.Join(stage, rel), 0o755)
 
 	in.progress(j, 95, "Registering")
-	runtimesDir := filepath.Join(in.home, "runtimes")
+	runtimesDir := in.Bin
 	if err := os.MkdirAll(runtimesDir, 0o755); err != nil {
 		return "", stepErr("Registering", err)
 	}
@@ -397,7 +434,7 @@ func (in *Installer) process(j *job, e model.CatalogEntry, archive, want, got st
 		return "", stepErr("Registering", err)
 	}
 	rt := model.Runtime{
-		ID: model.NewID("rt_"), Kind: e.Kind, Version: e.Version, Name: e.Name,
+		ID: model.NewID("rt_"), Kind: e.Kind, Version: e.Version, Name: e.Name, CatalogID: e.ID,
 		Binary: filepath.Join(final, rel), Source: "installed", InstalledAt: time.Now().UTC().Truncate(time.Second),
 	}
 	if err := in.rt.Add(rt); err != nil {
@@ -463,6 +500,9 @@ func hasherFor(want string) (hash.Hash, string) {
 func (in *Installer) expectedHash(ctx context.Context, jobID string, e model.CatalogEntry) (string, error) {
 	if e.Checksum.Type == "sha256" {
 		return strings.ToLower(e.Checksum.Value), nil
+	}
+	if e.Checksum.Type == "none" {
+		return "", nil // the publisher has no checksum; the caller records the computed one
 	}
 	if !catalog.IsAllowedURL(e.Checksum.URL) {
 		return "", errors.New("checksum url not allowed")

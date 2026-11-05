@@ -41,7 +41,7 @@ func TestNoWritesOutsideHome(t *testing.T) {
 	if out, err := exec.Command(goBin, "build", "-o", exe, ".").CombinedOutput(); err != nil {
 		t.Fatalf("build: %v\n%s", err, out)
 	}
-	if out, err := exec.Command(exe, "-version").CombinedOutput(); err != nil || strings.TrimSpace(string(out)) != "zero2dev 0.0.1" {
+	if out, err := exec.Command(exe, "-version").CombinedOutput(); err != nil || strings.TrimSpace(string(out)) != "zero2dev 0.0.2" {
 		t.Fatalf("version: %q %v", out, err)
 	}
 
@@ -211,7 +211,7 @@ func TestNoWritesOutsideHome(t *testing.T) {
 		!strings.Contains(outBuf.String(), "(portable, next to the program)") {
 		t.Fatalf("startup message missing:\n%s", outBuf.String())
 	}
-	for _, d := range []string{"tmp", "caddy/data", "caddy/config", "runtimes", "logs", "state.json"} {
+	for _, d := range []string{"tmp", "caddy/data", "caddy/config", "logs", "state.json"} {
 		if _, err := os.Stat(filepath.Join(data, d)); err != nil {
 			t.Errorf("data/%s missing", d)
 		}

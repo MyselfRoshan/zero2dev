@@ -7,6 +7,7 @@
   import Modal from "../ui/Modal.svelte";
 
   let { entry, onclose }: { entry: CatalogEntry; onclose: () => void } = $props();
+  let accept = $state(false);
 
   let filePath = $state("");
   let sha = $state("");
@@ -24,10 +25,15 @@
     submitted = true;
     formError = "";
     errors = validateImport({ filePath, sha256: sha });
+    if (entry.unverified && !sha.trim() && !accept) {
+      errors = { ...errors, sha256: "Paste the SHA-256 from the download page, or tick the box below to import without a checksum." };
+    }
     if (hasErrors(errors)) return;
     busy = true;
     try {
-      await importRuntime(entry, filePath.trim(), sha);
+      await importRuntime(entry, filePath.trim(), sha, {
+        acceptUnverified: entry.unverified && !sha.trim() && accept,
+      });
       toast("info", `Importing ${entry.fileName}.`);
       onclose();
     } catch (err) {
@@ -58,6 +64,9 @@
       </label>
       {#if errors.sha256}<span class="err">{errors.sha256}</span>{:else}<span class="hint" id="imp-sha-help">Leave empty to check the file against the published checksum. If the network blocks that too, paste the hash from the download page.</span>{/if}
     </div>
+    {#if entry.unverified}
+      <label class="check"><input type="checkbox" bind:checked={accept} /> <span>Import without a checksum. The publisher does not publish one, so only a pasted SHA-256 can verify this file.</span></label>
+    {/if}
     <div class="notice"><Icon name="check" /><span>Zero2Dev works on a copy of this file inside its own data folder. Your downloaded file is never modified or deleted.</span></div>
   </form>
   {#snippet footer()}
