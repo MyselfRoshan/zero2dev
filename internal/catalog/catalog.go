@@ -42,22 +42,34 @@ func Load(home string) ([]model.CatalogEntry, error) {
 	return mergeRemote(es, loadCache(home).Entries), nil
 }
 
-// mergeRemote appends cached remote entries that are valid and not already
-// listed (the manifest wins on an id clash).
+// mergeRemote appends valid cached entries and fills missing manifest metadata.
+// The manifest retains precedence on an id clash.
 func mergeRemote(es, remote []model.CatalogEntry) []model.CatalogEntry {
-	seen := map[string]bool{}
-	for _, e := range es {
-		seen[e.ID] = true
+	seen := map[string]int{}
+	for i, e := range es {
+		seen[e.ID] = i
 	}
+	manifestLen := len(es)
 	for i := range remote {
 		e := remote[i]
-		if seen[e.ID] || validate(&e) != nil {
+		if validate(&e) != nil {
+			continue
+		}
+		if index, ok := seen[e.ID]; ok {
+			if index < manifestLen {
+				if es[index].Line == "" {
+					es[index].Line = e.Line
+				}
+				if es[index].Channel == "" {
+					es[index].Channel = e.Channel
+				}
+			}
 			continue
 		}
 		e.Source = "remote"
 		e.Installed, e.Supported = false, false
 		e.FileName = FileName(e.URL)
-		seen[e.ID] = true
+		seen[e.ID] = len(es)
 		es = append(es, e)
 	}
 	return es

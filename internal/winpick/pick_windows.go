@@ -82,11 +82,45 @@ const (
 	vGetDisplayName = 5 // IShellItem
 )
 
-// call invokes vtable slot i of the COM object obj.
-func call(obj unsafe.Pointer, i int, args ...uintptr) uint32 {
+// method returns the address of vtable slot i on obj.
+func method(obj unsafe.Pointer, i int) uintptr {
 	vtbl := *(*unsafe.Pointer)(obj)
-	fn := *(*uintptr)(unsafe.Add(vtbl, uintptr(i)*unsafe.Sizeof(uintptr(0))))
-	r, _, _ := syscall.SyscallN(fn, append([]uintptr{uintptr(obj)}, args...)...)
+	return *(*uintptr)(unsafe.Add(vtbl, uintptr(i)*unsafe.Sizeof(uintptr(0))))
+}
+
+// Pin pointer arguments and convert them at SyscallN so they stay valid
+// and visible to Go for the duration of the native call.
+func call(obj unsafe.Pointer, i int) uint32 {
+	var pinned runtime.Pinner
+	pinned.Pin(obj)
+	defer pinned.Unpin()
+	r, _, _ := syscall.SyscallN(method(obj, i), uintptr(obj))
+	return uint32(r)
+}
+
+func callPtr(obj unsafe.Pointer, i int, arg unsafe.Pointer) uint32 {
+	var pinned runtime.Pinner
+	pinned.Pin(obj)
+	pinned.Pin(arg)
+	defer pinned.Unpin()
+	r, _, _ := syscall.SyscallN(method(obj, i), uintptr(obj), uintptr(arg))
+	return uint32(r)
+}
+
+func callValue(obj unsafe.Pointer, i int, arg uintptr) uint32 {
+	var pinned runtime.Pinner
+	pinned.Pin(obj)
+	defer pinned.Unpin()
+	r, _, _ := syscall.SyscallN(method(obj, i), uintptr(obj), arg)
+	return uint32(r)
+}
+
+func callValuePtr(obj unsafe.Pointer, i int, arg uintptr, ptr unsafe.Pointer) uint32 {
+	var pinned runtime.Pinner
+	pinned.Pin(obj)
+	pinned.Pin(ptr)
+	defer pinned.Unpin()
+	r, _, _ := syscall.SyscallN(method(obj, i), uintptr(obj), arg, uintptr(ptr))
 	return uint32(r)
 }
 
@@ -123,18 +157,18 @@ func pickFolder(title, start string) (string, bool, error) {
 	defer call(dlg, vRelease)
 
 	var opts uint32
-	call(dlg, vGetOptions, uintptr(unsafe.Pointer(&opts)))
-	call(dlg, vSetOptions, uintptr(opts|fosPickFolders|fosForceFileSystem|fosPathMustExist))
+	callPtr(dlg, vGetOptions, unsafe.Pointer(&opts))
+	callValue(dlg, vSetOptions, uintptr(opts|fosPickFolders|fosForceFileSystem|fosPathMustExist))
 	if title != "" {
-		call(dlg, vSetTitle, uintptr(unsafe.Pointer(utf16(title))))
+		callPtr(dlg, vSetTitle, unsafe.Pointer(utf16(title)))
 	}
-	call(dlg, vSetOkLabel, uintptr(unsafe.Pointer(utf16("Select folder"))))
+	callPtr(dlg, vSetOkLabel, unsafe.Pointer(utf16("Select folder")))
 	if dir := existingDir(start); dir != "" {
 		var item unsafe.Pointer
 		hr, _, _ = procSHCreateItem.Call(uintptr(unsafe.Pointer(utf16(dir))), 0,
 			uintptr(unsafe.Pointer(&iidIShellItem)), uintptr(unsafe.Pointer(&item)))
 		if !failed(uint32(hr)) && item != nil {
-			call(dlg, vSetFolder, uintptr(item))
+			callPtr(dlg, vSetFolder, item)
 			call(item, vRelease)
 		}
 	}
@@ -143,7 +177,7 @@ func pickFolder(title, start string) (string, bool, error) {
 	if owner != 0 {
 		defer procDestroyWindow.Call(owner)
 	}
-	hrShow := call(dlg, vShow, owner)
+	hrShow := callValue(dlg, vShow, owner)
 	if hrShow == errCancelled {
 		return "", false, nil
 	}
@@ -152,12 +186,12 @@ func pickFolder(title, start string) (string, bool, error) {
 	}
 
 	var item unsafe.Pointer
-	if hr := call(dlg, vGetResult, uintptr(unsafe.Pointer(&item))); failed(hr) || item == nil {
+	if hr := callPtr(dlg, vGetResult, unsafe.Pointer(&item)); failed(hr) || item == nil {
 		return "", false, fmt.Errorf("folder dialog returned no result: 0x%08X", hr)
 	}
 	defer call(item, vRelease)
 	var name *uint16
-	if hr := call(item, vGetDisplayName, sigdnFileSysPath, uintptr(unsafe.Pointer(&name))); failed(hr) || name == nil {
+	if hr := callValuePtr(item, vGetDisplayName, sigdnFileSysPath, unsafe.Pointer(&name)); failed(hr) || name == nil {
 		return "", false, fmt.Errorf("the chosen folder has no file system path: 0x%08X", hr)
 	}
 	defer procCoTaskMemFree.Call(uintptr(unsafe.Pointer(name)))

@@ -179,7 +179,9 @@ func (r *Remote) Refresh(ctx context.Context) (Status, []string, error) {
 
 	next := cacheFile{Status: Status{Sources: []SourceStatus{}}}
 	anyOK := false
+	fetchedKinds := make(map[string]bool, len(fetchers))
 	for i, f := range fetchers {
+		fetchedKinds[f.kind] = true
 		next.Status.Sources = append(next.Status.Sources, res[i].st)
 		if res[i].st.OK {
 			anyOK = true
