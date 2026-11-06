@@ -10,24 +10,28 @@ No Electron. No Docker. One Go binary with the Svelte UI embedded.
 
 ## Portable by design
 
-Everything Zero2Dev stores lives in a `data` folder **next to the program**. Nothing is written to your user profile, `AppData`,
-the registry or the Windows certificate store.
+Everything Zero2Dev stores lives in the `data` and `bin` folders **next to the program**. Nothing is written to your user profile,
+`AppData`, the registry or the Windows certificate store.
 
 ```
 zero2dev.exe
+bin\                 Node, Go, Caddy and anything else installed from the catalog
 data\
   token              your access token
   state.json         services, runtimes, sites, settings
-  runtimes\          Node, Go, Caddy and anything else installed from the catalog
+  config\            Caddyfile and nginx.conf, generated, do not edit
   caddy\             Caddy's own data and config (kept out of %AppData%)
-  config\Caddyfile   generated, do not edit
+  nginx\             nginx's logs, temp files and local certificates
+  databases\         one data folder per database service
+  cache\             the list of versions found by "Check for new versions"
   logs\              one log per service, plus installer.log
-  downloads\  tmp\   work areas, safe to delete when Zero2Dev is stopped
+  tmp\               work area for downloads, safe to delete when Zero2Dev is stopped
 ```
 
 - Copy or move the whole folder (to another drive, a USB stick) and it keeps working. Stop Zero2Dev first.
-- To reset everything, stop Zero2Dev and delete `data\`.
-- Set `ZERO2DEV_HOME` to use a different data folder.
+- To reset everything, stop Zero2Dev and delete `data\` (settings, services, sites, database data) and `bin\` (installed runtimes).
+- Set `ZERO2DEV_HOME` to use a different data folder; installed runtimes then go to its `bin` subfolder.
+- Set `ZERO2DEV_BIN` to keep installed runtimes in a folder of your choice instead.
 
 What is *not* isolated: the services you run are your own programs. A Node app still writes to the normal Windows temp folder, and
 runtimes you registered by path stay where they are.
@@ -135,13 +139,15 @@ The UI uses pnpm (version pinned in `web/package.json`, lockfile `web/pnpm-lock.
 `pnpm check` lints and type-checks, `pnpm test` runs the UI tests, `make test` (or `go test ./cmd/... ./internal/...` after building the UI) runs the daemon tests,
 `scripts/smoke.sh` runs a real end-to-end check against the built binary, and `web/e2e/real-daemon.cjs` drives the real UI in Chromium.
 
-Environment variables: `ZERO2DEV_HOME`, `ZERO2DEV_PORT`, `ZERO2DEV_NO_BROWSER`, `ZERO2DEV_DEV_ORIGIN`.
+Environment variables: `ZERO2DEV_HOME`, `ZERO2DEV_BIN`, `ZERO2DEV_PORT`, `ZERO2DEV_NO_BROWSER`, `ZERO2DEV_DEV_ORIGIN`.
 
 ## Security notes
 
 The panel can start programs on your computer, so it is reachable only by you: loopback only, a secret token on every API call,
 and strict Host and Origin checks so a website you visit cannot drive it. Keep `data\token` private.
-The installer only downloads from URLs in the catalog and verifies every archive against a published checksum.
+The installer only downloads from URLs in the catalog and verifies each archive against the publisher's checksum when one is
+published. Some publishers (nginx.org) publish none: those downloads are marked unverified, Zero2Dev asks before installing them,
+and installing them means trusting the download source and the HTTPS connection.
 Unsigned programs that download and run executables can trigger antivirus heuristics.
 
 ## License

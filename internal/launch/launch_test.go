@@ -45,10 +45,10 @@ func TestConnectArgs(t *testing.T) {
 
 func TestStartReturnsWithoutWaiting(t *testing.T) {
 	// The test binary with a filter that matches nothing exits at once.
-	if err := Start(os.Args[0], []string{"-test.run=^$"}, t.TempDir()); err != nil {
+	if err := Start(os.Args[0], []string{"-test.run=^$"}, t.TempDir(), []string{"Z2D_X=1"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := Start(filepath.Join(t.TempDir(), "missing.exe"), nil, ""); err == nil || !strings.Contains(err.Error(), "missing.exe") {
+	if err := Start(filepath.Join(t.TempDir(), "missing.exe"), nil, "", nil); err == nil || !strings.Contains(err.Error(), "missing.exe") {
 		t.Fatalf("a missing program must be reported: %v", err)
 	}
 }

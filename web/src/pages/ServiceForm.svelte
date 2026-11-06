@@ -56,6 +56,11 @@
   $effect(() => {
     if (errors.healthPath || errors.env || (kind !== "custom" && errors.command)) advancedOpen = true;
   });
+  // A program typed for a custom service stays when the type changes and then overrides the
+  // selected version, so keep it visible under Advanced.
+  $effect(() => {
+    if (kind !== "custom" && command.trim()) advancedOpen = true;
+  });
 
   $effect(() => {
     // Drop a runtime choice that no longer matches the selected kind.

@@ -82,13 +82,18 @@ const (
 	vGetDisplayName = 5 // IShellItem
 )
 
-// call invokes vtable slot i of the COM object obj.
-func call(obj unsafe.Pointer, i int, args ...uintptr) uint32 {
+// method returns the address of vtable slot i of the COM object obj. Call it as
+// hres(syscall.SyscallN(method(obj, i), uintptr(obj), args...)) with every
+// uintptr(unsafe.Pointer(...)) conversion written inside that SyscallN call:
+// only there does the compiler keep the pointed-to Go memory alive and in place
+// for the length of the native call.
+func method(obj unsafe.Pointer, i int) uintptr {
 	vtbl := *(*unsafe.Pointer)(obj)
-	fn := *(*uintptr)(unsafe.Add(vtbl, uintptr(i)*unsafe.Sizeof(uintptr(0))))
-	r, _, _ := syscall.SyscallN(fn, append([]uintptr{uintptr(obj)}, args...)...)
-	return uint32(r)
+	return *(*uintptr)(unsafe.Add(vtbl, uintptr(i)*unsafe.Sizeof(uintptr(0))))
 }
+
+// hres takes the results of syscall.SyscallN and returns the HRESULT.
+func hres(r, _ uintptr, _ syscall.Errno) uint32 { return uint32(r) }
 
 func failed(hr uint32) bool { return int32(hr) < 0 }
 
@@ -120,22 +125,22 @@ func pickFolder(title, start string) (string, bool, error) {
 	if failed(uint32(hr)) {
 		return "", false, fmt.Errorf("cannot create the folder dialog: 0x%08X", uint32(hr))
 	}
-	defer call(dlg, vRelease)
+	defer syscall.SyscallN(method(dlg, vRelease), uintptr(dlg))
 
 	var opts uint32
-	call(dlg, vGetOptions, uintptr(unsafe.Pointer(&opts)))
-	call(dlg, vSetOptions, uintptr(opts|fosPickFolders|fosForceFileSystem|fosPathMustExist))
+	syscall.SyscallN(method(dlg, vGetOptions), uintptr(dlg), uintptr(unsafe.Pointer(&opts)))
+	syscall.SyscallN(method(dlg, vSetOptions), uintptr(dlg), uintptr(opts|fosPickFolders|fosForceFileSystem|fosPathMustExist))
 	if title != "" {
-		call(dlg, vSetTitle, uintptr(unsafe.Pointer(utf16(title))))
+		syscall.SyscallN(method(dlg, vSetTitle), uintptr(dlg), uintptr(unsafe.Pointer(utf16(title))))
 	}
-	call(dlg, vSetOkLabel, uintptr(unsafe.Pointer(utf16("Select folder"))))
+	syscall.SyscallN(method(dlg, vSetOkLabel), uintptr(dlg), uintptr(unsafe.Pointer(utf16("Select folder"))))
 	if dir := existingDir(start); dir != "" {
 		var item unsafe.Pointer
 		hr, _, _ = procSHCreateItem.Call(uintptr(unsafe.Pointer(utf16(dir))), 0,
 			uintptr(unsafe.Pointer(&iidIShellItem)), uintptr(unsafe.Pointer(&item)))
 		if !failed(uint32(hr)) && item != nil {
-			call(dlg, vSetFolder, uintptr(item))
-			call(item, vRelease)
+			syscall.SyscallN(method(dlg, vSetFolder), uintptr(dlg), uintptr(item))
+			syscall.SyscallN(method(item, vRelease), uintptr(item))
 		}
 	}
 
@@ -143,7 +148,7 @@ func pickFolder(title, start string) (string, bool, error) {
 	if owner != 0 {
 		defer procDestroyWindow.Call(owner)
 	}
-	hrShow := call(dlg, vShow, owner)
+	hrShow := hres(syscall.SyscallN(method(dlg, vShow), uintptr(dlg), owner))
 	if hrShow == errCancelled {
 		return "", false, nil
 	}
@@ -152,12 +157,12 @@ func pickFolder(title, start string) (string, bool, error) {
 	}
 
 	var item unsafe.Pointer
-	if hr := call(dlg, vGetResult, uintptr(unsafe.Pointer(&item))); failed(hr) || item == nil {
+	if hr := hres(syscall.SyscallN(method(dlg, vGetResult), uintptr(dlg), uintptr(unsafe.Pointer(&item)))); failed(hr) || item == nil {
 		return "", false, fmt.Errorf("folder dialog returned no result: 0x%08X", hr)
 	}
-	defer call(item, vRelease)
+	defer syscall.SyscallN(method(item, vRelease), uintptr(item))
 	var name *uint16
-	if hr := call(item, vGetDisplayName, sigdnFileSysPath, uintptr(unsafe.Pointer(&name))); failed(hr) || name == nil {
+	if hr := hres(syscall.SyscallN(method(item, vGetDisplayName), uintptr(item), sigdnFileSysPath, uintptr(unsafe.Pointer(&name)))); failed(hr) || name == nil {
 		return "", false, fmt.Errorf("the chosen folder has no file system path: 0x%08X", hr)
 	}
 	defer procCoTaskMemFree.Call(uintptr(unsafe.Pointer(name)))
