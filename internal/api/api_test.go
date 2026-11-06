@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bufio"
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -35,7 +36,7 @@ import (
 func TestMain(m *testing.M) {
 	if os.Getenv("Z2D_HELPER") == "idle" {
 		fmt.Println("hello from helper")
-		select {}
+		blockForever()
 	}
 	os.Exit(m.Run())
 }
@@ -81,7 +82,15 @@ func newEnv(t *testing.T) *tenv {
 	})
 	ts.Config.Handler = srv
 	ts.Start()
-	t.Cleanup(func() { hub.Close(); sup.StopAll(t.Context()); ts.Close() })
+	// t.Context() is already cancelled during cleanup, which makes StopAll kill without waiting; a live
+	// context lets children exit and log files close before t.TempDir() is removed (Windows locks open files).
+	t.Cleanup(func() {
+		hub.Close()
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		sup.StopAll(ctx)
+		ts.Close()
+	})
 	return &tenv{t: t, ts: ts, token: cfg.Token, home: home, port: port, srv: srv, hub: hub, sup: sup}
 }
 
@@ -733,5 +742,12 @@ func TestImportAndInstallerLogAPI(t *testing.T) {
 	e.errCode("GET", "/api/installer/log?tail=x", nil, 400)
 	if resp, _ := e.raw("GET", "/api/installer/log", nil); resp.StatusCode != 401 {
 		t.Fatal("installer log needs auth")
+	}
+}
+
+// blockForever keeps the helper alive (a bare `select {}` is reported as a deadlock and exits).
+func blockForever() {
+	for {
+		time.Sleep(time.Hour)
 	}
 }

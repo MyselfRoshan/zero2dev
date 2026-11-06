@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.0.3
+
+- **Databases**: MariaDB, MySQL, PostgreSQL and Redis can be installed from the Runtimes page and run as services.
+  - Their data lives in `data\databases\<service id>`.
+  - The first start creates the database files, with `mariadb-install-db`, `mysqld --initialize-insecure` or `initdb`.
+  - They listen on 127.0.0.1 only. The administrator account (`root` / `postgres`) has no password.
+  - **Stop** asks the server to shut down with its own tool (`mariadb-admin`, `mysqladmin`, `pg_ctl`, `redis-cli`) before anything is ended, so data files are not damaged.
+  - The service page shows the connection details and a copyable URL. Deleting a database service keeps its files.
+- **Code editors**: VS Code, VSCodium and Notepad++. VS Code and VSCodium run in portable mode, so settings and extensions stay in the `bin` folder. A service page has **Open in VS Code** (or another installed editor) for its project folder.
+- **Database tools**: HeidiSQL and DBeaver. A MariaDB, MySQL or PostgreSQL service page has **Open in HeidiSQL / DBeaver** with the connection filled in. DBeaver's workspace is kept in `data\tools`.
+- Runtimes are grouped as **Languages, Web servers, Databases, Code editors, Database tools**.
+- **MD5 checksums**: MySQL publishes only MD5, so MySQL downloads are checked against it, and the installer log also records a SHA-256. **Import file** accepts a pasted MD5.
+- **New download sources**:
+  - mariadb.org (SHA-256).
+  - EnterpriseDB for PostgreSQL. It publishes no checksum, so you confirm first, as with nginx.
+  - The VS Code update API (SHA-256).
+  - GitHub releases for Redis (community Windows build), VSCodium, Notepad++, HeidiSQL and DBeaver. GitHub's per-file SHA-256 is used.
+  - MySQL versions come from the built-in list, because its download pages are not meant for programs.
+- API: `POST /api/runtimes/{id}/launch`; new runtime and service kinds; checksum type `md5` (see `docs/API.md`).
+- Tests:
+  - The supervisor and API test helpers no longer exit at once: a bare `select {}` was reported as a deadlock. Most of those tests had been failing on every machine; they run again.
+  - The obsolete `internal/installer/single_test.go`, which tested a removed design, is gone.
+- The roadmap is in `docs/ROADMAP.md`.
+
 ## 0.0.2
 
 - **Runtimes now live in a `bin` folder next to `zero2dev.exe`, separate from `data`.** Runtimes installed by 0.0.1 are moved there on first start. `ZERO2DEV_BIN` overrides the location. `GET /api/status` has a new `binDir`.

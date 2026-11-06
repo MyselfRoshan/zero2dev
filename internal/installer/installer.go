@@ -4,6 +4,7 @@ package installer
 
 import (
 	"context"
+	"crypto/md5"
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/hex"
@@ -76,7 +77,7 @@ type Options struct {
 // New creates an Installer.
 func New(home string, st *store.Store, rt *runtimes.Manager, em Emitter) *Installer {
 	return &Installer{
-		home: home, Bin: filepath.Join(home, "bin"), st: st, rt: rt, em: em, Version: "0.0.2",
+		home: home, Bin: filepath.Join(home, "bin"), st: st, rt: rt, em: em, Version: "0.0.3",
 		log:     &fileLog{path: filepath.Join(home, "logs", "installer.log")},
 		Catalog: func() ([]model.CatalogEntry, error) { return catalog.Load(home) },
 		Rename:  os.Rename, Sleep: time.Sleep, RenameAttempts: 20,
@@ -186,7 +187,7 @@ func (in *Installer) Import(catalogID, filePath, sha string, opts ...Options) (m
 	}
 	sha = strings.TrimSpace(sha)
 	if sha != "" && !hexRE.MatchString(sha) {
-		return model.Job{}, apperr.BadRequest("checksum must be a SHA-256 (64) or SHA-512 (128) hexadecimal digest")
+		return model.Job{}, apperr.BadRequest("checksum must be a SHA-256 (64), SHA-512 (128) or MD5 (32) hexadecimal digest")
 	}
 	j, err := in.register(e, "import", "Importing", opt) // conflict checks first
 	if err != nil {
@@ -212,7 +213,7 @@ func (in *Installer) Import(catalogID, filePath, sha string, opts ...Options) (m
 		if cu == "" {
 			cu = "the publisher's download page (" + e.Homepage + ")"
 		}
-		return model.Job{}, apperr.BadRequest("Cannot verify the file because the published checksum could not be fetched. Paste the SHA-256 or SHA-512 for %s from %s into the checksum field.", e.FileName, cu)
+		return model.Job{}, apperr.BadRequest("Cannot verify the file because the published checksum could not be fetched. Paste the SHA-256, SHA-512 or MD5 for %s from %s into the checksum field.", e.FileName, cu)
 	}
 	snap := in.snapshot(j)
 	go in.run(j, e, func(ctx context.Context) (string, string, string, error) {
@@ -323,7 +324,7 @@ func (in *Installer) fetchArchive(ctx context.Context, j *job, e model.CatalogEn
 			return fatal{err}
 		}
 		defer f.Close()
-		h, algo := hasherFor(want)
+		h := newDigests(want)
 		pr := &progressWriter{total: resp.ContentLength, cb: func(p int) { in.progress(j, p*80/100, "Downloading") }}
 		n, err := io.Copy(io.MultiWriter(f, h, pr), io.LimitReader(body, maxDownload+1))
 		if err != nil {
@@ -332,8 +333,8 @@ func (in *Installer) fetchArchive(ctx context.Context, j *job, e model.CatalogEn
 		if n > maxDownload {
 			return fatal{errors.New("download exceeds size limit")}
 		}
-		got = hex.EncodeToString(h.Sum(nil))
-		in.log.printf(j.ID, "downloaded %d bytes %s=%s", n, algo, got)
+		got = h.sum()
+		in.log.printf(j.ID, "downloaded %d bytes %s=%s%s", n, h.algo, got, h.note())
 		return nil
 	})
 	if err != nil {
@@ -366,7 +367,7 @@ func (in *Installer) copyArchive(ctx context.Context, j *job, src, want string) 
 	if err2 != nil {
 		return "", "", "", stepErr("Importing", err2)
 	}
-	h, algo := hasherFor(want)
+	h := newDigests(want)
 	var total int64
 	if st != nil {
 		total = st.Size()
@@ -379,10 +380,10 @@ func (in *Installer) copyArchive(ctx context.Context, j *job, src, want string) 
 	if err2 != nil {
 		return archive, "", "", stepErr("Importing", err2)
 	}
-	got := hex.EncodeToString(h.Sum(nil))
-	in.log.printf(j.ID, "imported %d bytes %s=%s", n, algo, got)
+	got := h.sum()
+	in.log.printf(j.ID, "imported %d bytes %s=%s%s", n, h.algo, got, h.note())
 	if want == "" {
-		in.log.printf(j.ID, "UNVERIFIED: no checksum available; recorded %s=%s", algo, got)
+		in.log.printf(j.ID, "UNVERIFIED: no checksum available; recorded %s=%s", h.algo, got)
 		want = got
 	}
 	return archive, want, got, nil
@@ -420,6 +421,9 @@ func (in *Installer) process(j *job, e model.CatalogEntry, archive, want, got st
 		return "", stepErr("Extracting", fmt.Errorf("archive does not contain %s", e.BinaryRelPath))
 	}
 	_ = os.Chmod(filepath.Join(stage, rel), 0o755)
+	if err := postInstall(e, stage, rel); err != nil {
+		return "", stepErr("Extracting", err)
+	}
 
 	in.progress(j, 95, "Registering")
 	runtimesDir := in.Bin
@@ -484,21 +488,58 @@ func (in *Installer) moveDir(jobID, src, dst string) error {
 	return nil
 }
 
-// hexRE matches a SHA-256 (64 hex) or SHA-512 (128 hex) digest. Caddy, for
-// one, publishes SHA-512 checksums; Node and Go publish SHA-256.
-var hexRE = regexp.MustCompile(`^([0-9a-fA-F]{64}|[0-9a-fA-F]{128})$`)
+// hexRE matches an MD5 (32 hex), SHA-256 (64 hex) or SHA-512 (128 hex)
+// digest. Caddy publishes SHA-512, Node and Go SHA-256, MySQL only MD5.
+var hexRE = regexp.MustCompile(`^([0-9a-fA-F]{32}|[0-9a-fA-F]{64}|[0-9a-fA-F]{128})$`)
 
-// hasherFor picks the digest algorithm that matches the expected hash.
+// hasherFor picks the digest algorithm from the length of the expected hash.
 func hasherFor(want string) (hash.Hash, string) {
-	if len(want) == 128 {
+	switch len(want) {
+	case 128:
 		return sha512.New(), "sha512"
+	case 32:
+		return md5.New(), "md5"
 	}
 	return sha256.New(), "sha256"
 }
 
+// digests hashes a stream with the algorithm of want and, when that is MD5,
+// also with SHA-256 so the log keeps a strong fingerprint of the file.
+type digests struct {
+	main, strong hash.Hash
+	algo         string
+}
+
+func newDigests(want string) *digests {
+	h, algo := hasherFor(want)
+	d := &digests{main: h, algo: algo}
+	if algo == "md5" {
+		d.strong = sha256.New()
+	}
+	return d
+}
+
+func (d *digests) Write(p []byte) (int, error) {
+	d.main.Write(p)
+	if d.strong != nil {
+		d.strong.Write(p)
+	}
+	return len(p), nil
+}
+
+func (d *digests) sum() string { return hex.EncodeToString(d.main.Sum(nil)) }
+
+// note is " sha256=<hex>" when a strong digest was computed next to MD5.
+func (d *digests) note() string {
+	if d.strong == nil {
+		return ""
+	}
+	return " sha256=" + hex.EncodeToString(d.strong.Sum(nil))
+}
+
 // expectedHash returns the published checksum (SHA-256 or SHA-512) for the entry's archive.
 func (in *Installer) expectedHash(ctx context.Context, jobID string, e model.CatalogEntry) (string, error) {
-	if e.Checksum.Type == "sha256" {
+	if e.Checksum.Type == "sha256" || e.Checksum.Type == "md5" {
 		return strings.ToLower(e.Checksum.Value), nil
 	}
 	if e.Checksum.Type == "none" {
@@ -556,4 +597,16 @@ func (p *progressWriter) Write(b []byte) (int, error) {
 		}
 	}
 	return len(b), nil
+}
+
+// postInstall prepares a freshly extracted tool before it is moved into place.
+// VS Code and VSCodium switch to portable mode when a "data" folder sits next
+// to the program: settings, extensions and caches then stay inside the
+// runtime's own folder instead of %APPDATA% and %USERPROFILE%\.vscode.
+func postInstall(e model.CatalogEntry, stage, binRel string) error {
+	switch e.Kind {
+	case "vscode", "vscodium":
+		return os.MkdirAll(filepath.Join(stage, filepath.Dir(binRel), "data"), 0o755)
+	}
+	return nil
 }

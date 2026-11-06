@@ -1,5 +1,6 @@
 import { api } from "./api";
 import { attempt, loadServices, loadStatus } from "./store.svelte";
+import { isDatabase } from "./catalog";
 import type { Service } from "./types";
 
 export const isActive = (s: Service) => s.state === "running" || s.state === "starting";
@@ -32,6 +33,7 @@ export async function deleteService(s: Service): Promise<boolean> {
   return !!ok;
 }
 
+/** The browser address of a service; databases have none (they are not web servers). */
 export function serviceUrl(s: Service): string | null {
-  return s.port > 0 ? `http://127.0.0.1:${s.port}` : null;
+  return s.port > 0 && !isDatabase(s.kind) ? `http://127.0.0.1:${s.port}` : null;
 }

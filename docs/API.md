@@ -406,3 +406,116 @@ The browser's own directory picker never reveals an absolute path, which service
 - One dialog at a time: a second request while one is open is `409 conflict`.
 - Other operating systems: `501` with code `not_supported`. `GET /api/status` reports `folderPicker: true` only when the dialog is available; the UI shows its **Browse...** buttons only then, and typing a path always works.
 - `internal/winpick` has a test that opens real dialogs and presses their buttons; it needs a desktop session and only runs with `Z2D_DIALOG_TEST=1`.
+
+## Amendment: databases, code editors and database tools (0.0.3)
+
+### Kinds and categories
+
+| Category | Runtime kinds | Service kind? |
+| --- | --- | --- |
+| language | `node`, `php`, `go`, `java` | yes |
+| server | `caddy`, `nginx` | yes |
+| database | `mariadb`, `mysql`, `postgres`, `redis` | yes |
+| editor | `vscode`, `vscodium`, `notepadpp` | no: opened with `launch` |
+| dbtool | `heidisql`, `dbeaver` | no: opened with `launch` |
+
+`model.KindCategory`, `model.Launchable(kind)` and `model.IsDatabase(kind)` hold this table. The UI mirrors it in `RUNTIME_GROUPS` (`web/src/lib/catalog.ts`).
+
+- **Detection:** `mariadbd`, `mysqld`, `postgres` and `redis-server` are probed with `--version`; `code` / `codium` (the `.cmd` wrappers) too.
+- **Registering:** a program of kind `notepadpp`, `heidisql`, `dbeaver`, or a `vscode`/`vscodium` `.exe`, is never run to read its version (it would open a window). The version is the one given, or `unknown`.
+
+### Checksum type `md5`
+
+`{"type": "md5", "value": "<32 hex>"}`. The installer picks the algorithm by digest length: 32 is MD5, 64 SHA-256, 128 SHA-512.
+- With MD5 the installer log also records the file's SHA-256.
+- Import accepts a pasted MD5.
+- `shasums` files may contain MD5 lines.
+- Only MySQL entries use it: MySQL publishes nothing stronger.
+
+### Catalog sources
+
+| Kind | Source | Checksum |
+| --- | --- | --- |
+| mariadb | `downloads.mariadb.org/rest-api/mariadb/` (stable lines: the newest rolling one plus LTS, at most 4), then `/{line}/latest/` and its `winx64.zip`. The URL is rewritten from http to https. | sha256 |
+| postgres | `enterprisedb.com/download-postgresql-binaries`: the Windows x86-64 `getfile.jsp` link of the 5 newest versions, resolved with one HEAD request to its `get.enterprisedb.com/postgresql/postgresql-X-N-windows-x64-binaries.zip` target | none (unverified) |
+| vscode | `update.code.visualstudio.com/api/update/win32-x64-archive/stable/latest` | sha256 (`sha256hash`) |
+| redis, vscodium, notepadpp, heidisql, dbeaver | GitHub releases (`api.github.com/repos/<repo>/releases?per_page=10`), newest stable assets matching the Windows ZIP pattern | sha256 from the asset's `digest`; none means unverified |
+| mysql | none: entries are pinned in the built-in manifest (dev.mysql.com pages are not meant for programs) | md5 |
+
+**Archive layouts** (checked against the real archives):
+
+| Kind | Strip | Binary |
+| --- | --- | --- |
+| mariadb | 1 | `bin/mariadbd.exe` |
+| mysql | 1 | `bin/mysqld.exe` |
+| postgres | 1 | `bin/postgres.exe` |
+| redis | 1 | `redis-server.exe` |
+| dbeaver | 1 | `dbeaver.exe` |
+| vscode | 0 | `Code.exe` |
+| vscodium | 0 | `VSCodium.exe` |
+| notepadpp | 0 | `notepad++.exe` |
+| heidisql | 0 | `heidisql.exe` |
+
+**Portable mode:** after extraction, `vscode` and `vscodium` get an empty `data/` folder next to the binary, which switches them to portable mode.
+
+### Database services
+
+**Data folder:** `<home>/databases/<serviceId>`, computed at each start so it follows a moved folder.
+
+**Default args** (used when `args` is empty):
+
+| Kind | Args |
+| --- | --- |
+| mariadb | `--no-defaults --datadir=DATA --port={port} --bind-address=127.0.0.1` (+ `--console` on Windows) |
+| mysql | the MariaDB args + `--mysqlx=OFF` |
+| postgres | `-D DATA -p {port} -c listen_addresses=127.0.0.1` |
+| redis | `--port {port} --bind 127.0.0.1 --dir DATA` (forward slashes) |
+
+**First start:** when DATA is missing or empty, the database files are created before the server starts.
+
+| Kind | Setup command |
+| --- | --- |
+| mariadb | `mariadb-install-db --datadir=DATA` (or `mysql_install_db`) |
+| mysql | `mysqld --no-defaults --initialize-insecure --datadir=DATA` |
+| postgres | `initdb -D DATA -U postgres -A trust -E UTF8` |
+| redis | create the folder only |
+
+- Each command is the sibling of the server binary. It runs with a 2-minute timeout, and its output goes to the service log as `system` lines.
+- If it fails, `start` answers `409`, the half-made folder is removed and nothing is started.
+- With custom `args` there is no setup: the user manages the data folder.
+
+**Stop:** a database first gets its own shutdown command.
+
+| Kind | Shutdown command |
+| --- | --- |
+| mariadb | `mariadb-admin` (or `mysqladmin`) `--no-defaults -u root --host=127.0.0.1 --port=P --protocol=tcp shutdown` |
+| mysql | `mysqladmin`, same arguments |
+| postgres | `pg_ctl stop -D DATA -m fast -w` (default args only) |
+| redis | `redis-cli -h 127.0.0.1 -p P shutdown` |
+
+- The process tree is ended only if the server has not exited `DBGrace` (20 s) after that. Other services keep the immediate stop.
+- `StopWait` allows twice the grace.
+- Daemon shutdown waits up to 30 s.
+
+**Deleting** a database service keeps its data folder.
+
+### `POST /api/runtimes/{id}/launch` body `{ "path"?: string, "serviceId"?: string }` -> 204
+
+Opens an `editor` or `dbtool` runtime. The program is detached: not in the supervisor's job object, not waited for, and it keeps running when the daemon stops.
+
+**Errors:**
+
+| Status | When |
+| --- | --- |
+| `400` | The runtime is not launchable; `path` is relative or missing; an editor got a `serviceId`; the service is not a database the tool can open (Redis is not supported) |
+| `404` | Unknown runtime or service |
+| `409` | The binary is gone |
+| `501` | Launching is not available |
+
+**Editors:** `args = [path]`, working dir = `path`, or its folder when `path` is a file.
+
+**DBeaver:** always `-data <home>/tools/dbeaver-workspace`. This moves only DBeaver's workspace; DBeaver still writes some files to its default location.
+
+**Database tools with `serviceId`:**
+- HeidiSQL: `--nettype=0` (MariaDB/MySQL) or `8` (PostgreSQL, plus `--databases=postgres`), `--description=<name> --host=127.0.0.1 --port=P --user=<root|postgres>`. The long options take `=` in every version.
+- DBeaver: `-con "driver=<MariaDB|MySQL|PostgreSQL>|host=127.0.0.1|port=P|user=<user>|name=<service name>|connect=true"` (+ `|database=postgres`).

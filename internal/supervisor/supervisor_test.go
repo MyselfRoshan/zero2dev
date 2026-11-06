@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -20,6 +21,9 @@ import (
 // The test binary doubles as a fake server: when Z2D_HELPER is set, TestMain
 // acts according to the mode instead of running tests.
 func TestMain(m *testing.M) {
+	if dbHelper() {
+		return
+	}
 	switch os.Getenv("Z2D_HELPER") {
 	case "":
 		os.Exit(m.Run())
@@ -40,28 +44,28 @@ func TestMain(m *testing.M) {
 		}()
 		fmt.Println("listening on", os.Getenv("PORT"))
 		fmt.Fprintln(os.Stderr, "this is stderr")
-		select {}
+		blockForever()
 	case "exit":
 		fmt.Println("about to fail")
 		os.Exit(3)
 	case "idle": // no port, runs forever
 		fmt.Println("idle up")
-		select {}
+		blockForever()
 	case "ignoreterm": // ignores SIGTERM so only SIGKILL stops it
 		ignoreTerm()
 		fmt.Println("ignoring term")
-		select {}
+		blockForever()
 	case "parent": // spawns a sleeping child and reports its pid
 		c := exec.Command("sleep", "300")
 		_ = c.Start()
 		fmt.Println("child", c.Process.Pid)
-		select {}
+		blockForever()
 	case "dumpenv": // writes its environment to $Z2D_DUMP, then idles
 		_ = os.WriteFile(os.Getenv("Z2D_DUMP"), []byte(strings.Join(os.Environ(), "\n")), 0o644)
 		fmt.Println("env dumped")
-		select {}
+		blockForever()
 	case "noport": // claims a port but never listens
-		select {}
+		blockForever()
 	}
 }
 
@@ -255,6 +259,9 @@ func TestRestart(t *testing.T) {
 }
 
 func TestSigkillAfterGrace(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows has no graceful signal: stopping ends the process tree at once (docs/API.md, Process trees)")
+	}
 	s, _, _, id := setup(t, "ignoreterm", 0)
 	s.Start(id)
 	waitState(t, s, id, "running", 3*time.Second)
@@ -399,5 +406,14 @@ func TestRemoveDeletesLogs(t *testing.T) {
 	}
 	if _, err := os.Stat(s.logPath(id)); err == nil {
 		t.Fatal("log file should be gone")
+	}
+}
+
+// blockForever keeps a helper process alive. A bare `select {}` does not: with
+// no other goroutine, the Go runtime aborts it ("all goroutines are asleep -
+// deadlock!"), so the helper exited instead of idling.
+func blockForever() {
+	for {
+		time.Sleep(time.Hour)
 	}
 }

@@ -41,7 +41,7 @@ func TestNoWritesOutsideHome(t *testing.T) {
 	if out, err := exec.Command(goBin, "build", "-o", exe, ".").CombinedOutput(); err != nil {
 		t.Fatalf("build: %v\n%s", err, out)
 	}
-	if out, err := exec.Command(exe, "-version").CombinedOutput(); err != nil || strings.TrimSpace(string(out)) != "zero2dev 0.0.2" {
+	if out, err := exec.Command(exe, "-version").CombinedOutput(); err != nil || strings.TrimSpace(string(out)) != "zero2dev 0.0.3" {
 		t.Fatalf("version: %q %v", out, err)
 	}
 

@@ -190,6 +190,9 @@ export const api = {
   catalogStatus: () => request<CatalogStatus>("GET", "/api/catalog/status"),
   refreshCatalog: () => request<CatalogRefresh>("POST", "/api/catalog/refresh"),
   setDefaultRuntime: (id: string) => request<Runtime>("POST", `/api/runtimes/${enc(id)}/default`),
+  /** Opens an editor (on `path`) or a database tool (on the database service `serviceId`). */
+  launchRuntime: (id: string, b: { path?: string; serviceId?: string } = {}) =>
+    request<void>("POST", `/api/runtimes/${enc(id)}/launch`, b),
   deleteRuntime: (id: string) => request<void>("DELETE", `/api/runtimes/${enc(id)}`),
   catalog: () => request<CatalogEntry[]>("GET", "/api/catalog"),
   getJob: (id: string) => request<Job>("GET", `/api/jobs/${enc(id)}`),

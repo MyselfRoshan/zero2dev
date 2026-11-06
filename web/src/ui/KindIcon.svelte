@@ -9,6 +9,15 @@
   import java from "@iconify-icons/logos/java";
   import nginx from "@iconify-icons/logos/nginx";
   import caddy from "@iconify-icons/simple-icons/caddy";
+  import mariadb from "@iconify-icons/logos/mariadb-icon";
+  import mysql from "@iconify-icons/logos/mysql-icon";
+  import postgres from "@iconify-icons/logos/postgresql";
+  import redis from "@iconify-icons/logos/redis";
+  import vscode from "@iconify-icons/logos/visual-studio-code";
+  import vscodium from "@iconify-icons/simple-icons/vscodium";
+  import notepadpp from "@iconify-icons/simple-icons/notepadplusplus";
+  import dbeaver from "@iconify-icons/simple-icons/dbeaver";
+  import heidisql from "@iconify-icons/lucide/database-zap";
   import fallback from "@iconify-icons/lucide/package";
   import custom from "@iconify-icons/lucide/square-terminal";
   import type { IconifyIcon } from "@iconify/types";
@@ -16,8 +25,18 @@
   type Props = { kind: string; size?: number; label?: string };
   let { kind, size = 18, label }: Props = $props();
 
-  const icons: Record<string, IconifyIcon> = { node, php, go, java, nginx, caddy, custom };
-  const tint: Record<string, string> = { caddy: "#1f88c0" };
+  const icons: Record<string, IconifyIcon> = {
+    node, php, go, java, nginx, caddy, custom,
+    mariadb, mysql, postgres, redis, vscode, vscodium, notepadpp, heidisql, dbeaver,
+  };
+  // Monochrome marks get their brand colour (chosen to stay readable on light and dark backgrounds).
+  const tint: Record<string, string> = {
+    caddy: "#1f88c0",
+    vscodium: "#2f80ed",
+    notepadpp: "#4a9c32",
+    dbeaver: "#a0785a",
+    heidisql: "#3f8fd2",
+  };
   const icon = $derived(icons[kind] ?? fallback);
 </script>
 

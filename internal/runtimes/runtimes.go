@@ -75,6 +75,28 @@ var tools = []struct {
 	{"java", "java", []string{"-version"}},
 	{"caddy", "caddy", []string{"version"}},
 	{"nginx", "nginx", []string{"-v"}},
+	{"mariadbd", "mariadb", []string{"--version"}},
+	{"mysqld", "mysql", []string{"--version"}},
+	{"postgres", "postgres", []string{"--version"}},
+	{"redis-server", "redis", []string{"--version"}},
+	// "code" / "codium" on PATH are the .cmd command-line wrappers: they print the
+	// version and exit without opening a window.
+	{"code", "vscode", []string{"--version"}},
+	{"codium", "vscodium", []string{"--version"}},
+}
+
+// noProbe reports whether running the binary to read its version must be
+// avoided: desktop programs would open a window. The command-line wrappers of
+// VS Code / VSCodium (code.cmd, codium.cmd) are safe; their .exe is not.
+func noProbe(kind, binary string) bool {
+	switch kind {
+	case "notepadpp", "heidisql", "dbeaver":
+		return true
+	case "vscode", "vscodium":
+		ext := strings.ToLower(filepath.Ext(binary))
+		return ext != ".cmd" && ext != ".bat" && ext != ""
+	}
+	return false
 }
 
 var versionRE = regexp.MustCompile(`\d+(?:\.\d+){1,3}`)
@@ -89,6 +111,9 @@ func probe(binary string, args []string) string {
 }
 
 func argsFor(kind, binary string) []string {
+	if noProbe(kind, binary) {
+		return nil
+	}
 	for _, t := range tools {
 		if t.kind == kind && t.kind != "other" {
 			return t.args
@@ -120,7 +145,11 @@ func (m *Manager) Detect() []Detected {
 	return res
 }
 
-var display = map[string]string{"node": "Node.js", "php": "PHP", "go": "Go", "java": "Java", "caddy": "Caddy", "nginx": "nginx"}
+var display = map[string]string{
+	"node": "Node.js", "php": "PHP", "go": "Go", "java": "Java", "caddy": "Caddy", "nginx": "nginx",
+	"mariadb": "MariaDB", "mysql": "MySQL", "postgres": "PostgreSQL", "redis": "Redis",
+	"vscode": "VS Code", "vscodium": "VSCodium", "notepadpp": "Notepad++", "heidisql": "HeidiSQL", "dbeaver": "DBeaver",
+}
 
 // DisplayName builds e.g. "Node.js 22.11.0".
 func DisplayName(kind, version, binary string) string {
@@ -160,7 +189,10 @@ func (m *Manager) Register(kind, binary, version string) (model.Runtime, error) 
 		return model.Runtime{}, apperr.BadRequest("version is invalid")
 	}
 	if version == "" {
-		if version = probe(binary, argsFor(kind, binary)); version == "" {
+		if args := argsFor(kind, binary); args != nil {
+			version = probe(binary, args)
+		}
+		if version == "" {
 			version = "unknown"
 		}
 	}

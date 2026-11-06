@@ -1,6 +1,6 @@
 # Zero2Dev
 
-Version 0.0.2. A portable local development control panel: one program that opens in your browser at `http://127.0.0.1:7000`.
+Version 0.0.3. A portable local development control panel: one program that opens in your browser at `http://127.0.0.1:7000`.
 Register or install runtimes (Node, Go, Caddy, nginx, PHP and Java), define services (a command, arguments, a folder and a port),
 start and stop them with live logs, and map local domains such as `myapp.localhost` to a folder or a service.
 
@@ -69,13 +69,15 @@ go build ./...              # now works
 `make` rebuilds the UI only when `internal/webui/dist` is missing; run `make web` to force a rebuild after UI changes.
 The release workflow builds the UI in CI too, so nothing generated has to be committed.
 
-## What 0.0.2 does
+## What 0.0.3 does
 
 | Area | Included |
 | --- | --- |
 | Services | Create, edit, delete; start, stop, restart; port-conflict checks; health probes; live and stored logs |
 | Process safety | Children die with the daemon (Windows Job Object, process groups elsewhere); no shell strings are ever run |
 | Runtimes | Detect what is on your PATH, register a program by path, install Node, Go, Caddy, nginx, PHP and Java (many versions side by side, a default per runtime, a version per service, and a button to check for new versions), or import an archive you downloaded yourself |
+| Databases | MariaDB, MySQL, PostgreSQL and Redis as services: data kept in the Zero2Dev folder, created on first start, local only, stopped cleanly; connection details on the service page |
+| Editors and tools | VS Code, VSCodium and Notepad++ (portable), HeidiSQL and DBeaver: **Open in** a project folder or a database with one click |
 | Sites | `*.localhost` domains for a folder or a service, served by a managed Caddy or nginx (your choice in Settings); optional HTTPS |
 | Security | Loopback only, bearer token, Host and Origin checks, single-use event tickets, Caddy admin API turned off |
 
@@ -111,6 +113,8 @@ Browser (Svelte UI)  --REST + SSE-->  zero2dev daemon  --spawns-->  your service
 - `docs/API.md`: the API contract shared by the daemon and the UI.
 
 ## Development
+
+What is being built next, and in which order: [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ```powershell
 # once after cloning: build the UI so the Go code compiles (see Building from source)

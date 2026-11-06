@@ -2,8 +2,8 @@
   import { api, ApiError } from "../lib/api";
   import { lists, toast, upsertService, loadStatus } from "../lib/store.svelte";
   import type { Service, ServiceInput, ServiceKind } from "../lib/types";
-  import { defaultArgsText, needsArgs, serviceKindLabel } from "../lib/ux";
-  import { defaultOptionLabel, RUNTIME_GROUPS, runtimeOptionLabel } from "../lib/catalog";
+  import { DB_PORTS, defaultArgsText, needsArgs, serviceKindLabel } from "../lib/ux";
+  import { defaultOptionLabel, RUNTIME_GROUPS, runtimeOptionLabel, SERVICE_GROUP_IDS } from "../lib/catalog";
   import { envRowsToMap, hasErrors, parsePort, runtimeKindsFor, validateService, type ServiceField } from "../lib/validate";
   import Icon from "../ui/Icon.svelte";
   import Modal from "../ui/Modal.svelte";
@@ -38,10 +38,16 @@
   const runtimeOptions = $derived(lists.runtimes.filter((r) => runtimeKindsFor(kind).includes(r.kind as never)));
   // Same categories as the Runtimes page, the generic kind last.
   const KIND_GROUPS: { label: string; kinds: ServiceKind[] }[] = [
-    ...RUNTIME_GROUPS.map((g) => ({ label: g.title, kinds: g.kinds as ServiceKind[] })),
+    ...RUNTIME_GROUPS.filter((g) => SERVICE_GROUP_IDS.includes(g.id)).map((g) => ({ label: g.title, kinds: g.kinds as ServiceKind[] })),
     { label: "Other", kinds: ["custom"] },
   ];
   const defaultArgsHint = $derived(defaultArgsText(kind));
+  // Databases get their usual port while the field is empty or still holds another database's default.
+  $effect(() => {
+    const def = DB_PORTS[kind];
+    const cur = portText.trim();
+    if (def && (cur === "" || cur === "0" || Object.values(DB_PORTS).includes(Number(cur)))) portText = String(def);
+  });
   // Rarely needed fields live under "Advanced"; it starts open when they hold something.
   // svelte-ignore state_referenced_locally
   let advancedOpen = $state(

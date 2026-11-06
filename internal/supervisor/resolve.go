@@ -15,13 +15,15 @@ import (
 )
 
 // Default program names looked up on PATH per kind.
-var progName = map[string]string{"node": "node", "php": "php", "go": "go", "java": "java", "caddy": "caddy", "nginx": "nginx"}
+var progName = map[string]string{"node": "node", "php": "php", "go": "go", "java": "java", "caddy": "caddy", "nginx": "nginx",
+	"mariadb": "mariadbd", "mysql": "mysqld", "postgres": "postgres", "redis": "redis-server"}
 
 // resolved is everything needed to spawn a service.
 type resolved struct {
 	bin  string
 	args []string
 	env  []string
+	db   *dbPlan // database services: data folder, first-start setup, clean stop
 }
 
 // resolve turns a Service into a concrete command line following the
@@ -67,6 +69,8 @@ func (s *Supervisor) resolve(svc model.Service, d store.Data) (*resolved, error)
 			args = []string{"-p", filepath.ToSlash(filepath.Dir(bin)) + "/"}
 		case "node", "java":
 			return nil, apperr.BadRequest("args required for %s services", svc.Kind)
+		case "mariadb", "mysql", "postgres", "redis":
+			args = defaultDBArgs(svc.Kind, s.DataDir(svc.ID))
 		}
 	}
 	port := strconv.Itoa(svc.Port)
@@ -103,7 +107,7 @@ func (s *Supervisor) resolve(svc model.Service, d store.Data) (*resolved, error)
 		}
 		env = append(env, "XDG_DATA_HOME="+data, "XDG_CONFIG_HOME="+cfg, "TMP="+tmp, "TEMP="+tmp, "TMPDIR="+tmp)
 	}
-	return &resolved{bin: bin, args: out, env: env}, nil
+	return &resolved{bin: bin, args: out, env: env, db: s.planDB(svc, bin, len(svc.Args) > 0)}, nil
 }
 
 // isCaddy: kind caddy, or the resolved binary is named caddy / caddy.exe.

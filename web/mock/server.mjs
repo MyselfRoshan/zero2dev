@@ -18,6 +18,7 @@ const id = (p) => `${p}_${randomBytes(4).toString("hex")}`;
 const now = () => new Date().toISOString();
 
 const state = {
+  launches: [],
   services: [],
   runtimes: [],
   sites: [],
@@ -51,7 +52,24 @@ const THIS_PC = {
 };
 
 // ---- every kind has a version list: builtin entries plus entries "discovered" by a refresh ----
-const KINDS = ["node", "go", "caddy", "php", "java", "nginx"];
+const KINDS = [
+  "node",
+  "go",
+  "caddy",
+  "php",
+  "java",
+  "nginx",
+  "mariadb",
+  "mysql",
+  "postgres",
+  "redis",
+  "vscode",
+  "vscodium",
+  "notepadpp",
+  "heidisql",
+  "dbeaver",
+];
+const gh = (repo, tag, file) => `https://github.com/${repo}/releases/download/${tag}/${file}`;
 function ext(kind, version, line, channel, source, o = {}) {
   const os = o.os || "windows";
   const arch = o.arch || "amd64";
@@ -62,9 +80,34 @@ function ext(kind, version, line, channel, source, o = {}) {
     php: `https://windows.php.net/downloads/releases/php-${version}-Win32-vs16-x64.zip`,
     java: `https://github.com/adoptium/temurin${line}-binaries/releases/download/jdk-${version}%2B9/OpenJDK${line}U-jdk_x64_windows_hotspot_${version}_9.zip`,
     nginx: `https://nginx.org/download/nginx-${version}.zip`,
+    mariadb: `https://downloads.mariadb.org/rest-api/mariadb/${version}/mariadb-${version}-winx64.zip`,
+    mysql: `https://cdn.mysql.com/Downloads/MySQL-${line}/mysql-${version}-winx64.zip`,
+    postgres: `https://get.enterprisedb.com/postgresql/postgresql-${version}-1-windows-x64-binaries.zip`,
+    redis: gh("redis-windows/redis-windows", version, `Redis-${version}-Windows-x64-msys2.zip`),
+    vscode: `https://vscode.download.prss.microsoft.com/dbazure/download/stable/x/VSCode-win32-x64-${version}.zip`,
+    vscodium: gh("VSCodium/vscodium", version, `VSCodium-win32-x64-${version}.zip`),
+    notepadpp: gh("notepad-plus-plus/notepad-plus-plus", "v" + version, `npp.${version}.portable.x64.zip`),
+    heidisql: gh("HeidiSQL/HeidiSQL", "v" + version, `HeidiSQL_${version}_64_Portable.zip`),
+    dbeaver: gh("dbeaver/dbeaver", version, `dbeaver-ce-${version}-windows-x86_64.zip`),
   };
-  const label = { node: "Node.js", go: "Go", caddy: "Caddy", php: "PHP", java: "Java (Temurin)", nginx: "nginx" }[kind];
-  const unverified = kind === "nginx" || (kind === "php" && version.startsWith("7."));
+  const label = {
+    node: "Node.js",
+    go: "Go",
+    caddy: "Caddy",
+    php: "PHP",
+    java: "Java (Temurin)",
+    nginx: "nginx",
+    mariadb: "MariaDB",
+    mysql: "MySQL",
+    postgres: "PostgreSQL",
+    redis: "Redis",
+    vscode: "VS Code",
+    vscodium: "VSCodium",
+    notepadpp: "Notepad++",
+    heidisql: "HeidiSQL",
+    dbeaver: "DBeaver",
+  }[kind];
+  const unverified = kind === "nginx" || kind === "postgres" || (kind === "php" && version.startsWith("7."));
   return {
     id: `${kind}-${version}${os === "windows" ? "" : "-" + os}${arch === "amd64" ? "" : "-" + arch}`,
     kind,
@@ -73,9 +116,11 @@ function ext(kind, version, line, channel, source, o = {}) {
     url: urls[kind],
     checksum: unverified
       ? { type: "none" }
-      : kind === "node"
-        ? { type: "shasums", url: `https://nodejs.org/dist/v${version}/SHASUMS256.txt` }
-        : { type: "sha256", value: "ab".repeat(32) },
+      : kind === "mysql"
+        ? { type: "md5", value: "7b94489d5524dea9b27097068bea25a8" }
+        : kind === "node"
+          ? { type: "shasums", url: `https://nodejs.org/dist/v${version}/SHASUMS256.txt` }
+          : { type: "sha256", value: "ab".repeat(32) },
     binaryRelPath: {
       node: "node.exe",
       go: "bin/go.exe",
@@ -83,8 +128,17 @@ function ext(kind, version, line, channel, source, o = {}) {
       php: "php.exe",
       java: "bin/java.exe",
       nginx: "nginx.exe",
+      mariadb: "bin/mariadbd.exe",
+      mysql: "bin/mysqld.exe",
+      postgres: "bin/postgres.exe",
+      redis: "redis-server.exe",
+      vscode: "Code.exe",
+      vscodium: "VSCodium.exe",
+      notepadpp: "notepad++.exe",
+      heidisql: "heidisql.exe",
+      dbeaver: "dbeaver.exe",
     }[kind],
-    stripComponents: kind === "node" || kind === "go" || kind === "nginx" ? 1 : 0,
+    stripComponents: ["node", "go", "nginx", "mariadb", "mysql", "postgres", "redis", "dbeaver"].includes(kind) ? 1 : 0,
     os,
     arch,
     line,
@@ -107,6 +161,15 @@ const BUILTIN = [
   ext("java", "21.0.4", "21", "lts", "builtin"),
   ext("java", "17.0.12", "17", "lts", "builtin"),
   ext("nginx", "1.26.2", "1.26", "stable", "builtin"),
+  ext("mariadb", "11.4.13", "11.4", "lts", "builtin"),
+  ext("mysql", "8.4.13", "8.4", "lts", "builtin"),
+  ext("postgres", "17.11", "17", "", "builtin"),
+  ext("redis", "8.10.3", "", "", "builtin"),
+  ext("vscode", "1.145.0", "", "", "builtin"),
+  ext("vscodium", "1.143.17232", "", "", "builtin"),
+  ext("notepadpp", "8.9.8.1", "", "", "builtin"),
+  ext("heidisql", "12.22", "", "", "builtin"),
+  ext("dbeaver", "26.2.4", "", "", "builtin"),
 ];
 const REMOTE = [
   ext("node", "22.12.0", "22", "lts", "remote"),
@@ -117,6 +180,9 @@ const REMOTE = [
   ext("java", "21.0.5", "21", "lts", "remote"),
   ext("java", "17.0.13", "17", "lts", "remote"),
   ext("nginx", "1.27.2", "1.27", "mainline", "remote"),
+  ext("mariadb", "11.8.5", "11.8", "lts", "remote"),
+  ext("postgres", "18.6", "18", "", "remote"),
+  ext("vscode", "1.145.1", "", "", "remote"),
 ];
 const discovered = new Set();
 const SOURCES = {
@@ -126,6 +192,14 @@ const SOURCES = {
   php: "windows.php.net",
   java: "api.adoptium.net",
   nginx: "nginx.org",
+  mariadb: "downloads.mariadb.org",
+  postgres: "www.enterprisedb.com",
+  vscode: "update.code.visualstudio.com",
+  redis: "github.com/redis-windows/redis-windows",
+  vscodium: "github.com/VSCodium/vscodium",
+  notepadpp: "github.com/notepad-plus-plus/notepad-plus-plus",
+  heidisql: "github.com/HeidiSQL/HeidiSQL",
+  dbeaver: "github.com/dbeaver/dbeaver",
 };
 let sourceStatus = [];
 let checkedAt = null;
@@ -162,7 +236,8 @@ function fullCatalog() {
 }
 const findEntry = (id) => fullCatalog().find((c) => c.id === id);
 function statusRows(failing = "") {
-  return KINDS.map((kind) => ({
+  // MySQL has no source: its entries are pinned in the built-in manifest.
+  return KINDS.filter((kind) => SOURCES[kind]).map((kind) => ({
     kind,
     name: SOURCES[kind],
     ok: kind !== failing,
@@ -261,7 +336,7 @@ function addLog(svc, stream, text) {
 const isAbs = (p) => /^[A-Za-z]:[\\/]/.test(p) || p.startsWith("/") || p.startsWith("\\\\");
 
 function validateService(b) {
-  const kinds = ["custom", "node", "php", "go", "java", "caddy"];
+  const kinds = ["custom", "node", "php", "go", "java", "caddy", "nginx", "mariadb", "mysql", "postgres", "redis"];
   const allowed = ["name", "kind", "command", "args", "cwd", "env", "port", "healthPath", "runtimeId", "autostart"];
   if (!b || typeof b !== "object") return "invalid JSON body";
   for (const k of Object.keys(b)) if (!allowed.includes(k)) return `unknown field ${k}`;
@@ -514,7 +589,7 @@ async function api(req, res, url) {
   }
   if (m === "GET" && p === "/api/status") {
     return send(res, 200, {
-      version: "0.0.2",
+      version: "0.0.3",
       uptimeSeconds: Math.floor((Date.now() - started) / 1000),
       os: THIS_PC.os,
       arch: THIS_PC.arch,
@@ -715,6 +790,23 @@ async function api(req, res, url) {
     }
     emit("runtimes.changed");
     return send(res, 204);
+  }
+  // Opening an editor or database tool: the mock only validates and answers 204.
+  if ((m2 = p.match(/^\/api\/runtimes\/([^/]+)\/launch$/)) && m === "POST") {
+    const rt = state.runtimes.find((r) => r.id === m2[1]);
+    if (!rt) return fail(res, 404, "not_found", `runtime ${m2[1]} not found`);
+    if (!["vscode", "vscodium", "notepadpp", "heidisql", "dbeaver"].includes(rt.kind))
+      return fail(res, 400, "bad_request", `${rt.name} is run as a service, not opened`);
+    const b = body || {};
+    if (b.serviceId) {
+      const svc = state.services.find((s) => s.id === b.serviceId);
+      if (!svc) return fail(res, 404, "not_found", `service ${b.serviceId} not found`);
+      if (!["mariadb", "mysql", "postgres"].includes(svc.kind) || !["heidisql", "dbeaver"].includes(rt.kind))
+        return fail(res, 400, "bad_request", `${rt.name} cannot open ${svc.name}`);
+    } else if (b.path && !isAbs(b.path)) return fail(res, 400, "bad_request", "path must be absolute");
+    state.launches.push({ runtimeId: rt.id, ...b });
+    res.writeHead(204);
+    return res.end();
   }
   if ((m2 = p.match(/^\/api\/runtimes\/([^/]+)\/default$/)) && m === "POST") {
     const rt = state.runtimes.find((r) => r.id === m2[1]);

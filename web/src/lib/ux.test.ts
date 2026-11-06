@@ -2,6 +2,12 @@ import { describe, expect, it } from "vite-plus/test";
 import type { Runtime, Service } from "./types";
 import {
   commandLine,
+  defaultDBArgs,
+  connectionInfo,
+  DB_PORTS,
+  deleteServiceMessage,
+  dbToolsFor,
+  editorsFor,
   defaultArgsText,
   serviceKindLabel,
   setupSteps,
@@ -96,5 +102,54 @@ describe("sites", () => {
     expect(suggestDomain("My Shop!", "localhost")).toBe("my-shop.localhost");
     expect(suggestDomain("  Café API ", "test")).toBe("cafe-api.test");
     expect(suggestDomain("!!!", "localhost")).toBe("");
+  });
+});
+
+describe("open in", () => {
+  const r = (id: string, kind: string, def = false) => ({ ...rt({ id, kind: kind as Runtime["kind"] }), default: def });
+  it("offers one editor per kind, the default version first choice", () => {
+    const list = [r("a", "notepadpp"), r("b", "vscode"), r("c", "vscode", true), r("d", "node")];
+    expect(editorsFor(list).map((x) => x.id)).toEqual(["c", "a"]);
+  });
+  it("offers database tools only for databases they can open", () => {
+    const list = [r("h", "heidisql"), r("d", "dbeaver"), r("c", "vscode")];
+    expect(dbToolsFor(list, "postgres").map((x) => x.id)).toEqual(["h", "d"]);
+    expect(dbToolsFor(list, "redis")).toEqual([]);
+    expect(dbToolsFor(list, "node")).toEqual([]);
+  });
+});
+
+describe("databases", () => {
+  it("builds connection details for local databases", () => {
+    expect(connectionInfo({ kind: "mariadb", port: 3307 })?.url).toBe("mysql://root@127.0.0.1:3307");
+    expect(connectionInfo({ kind: "postgres", port: 5432 })).toMatchObject({
+      user: "postgres",
+      url: "postgresql://postgres@127.0.0.1:5432/postgres",
+    });
+    expect(connectionInfo({ kind: "redis", port: 6379 })).toMatchObject({ user: "", url: "redis://127.0.0.1:6379" });
+    expect(connectionInfo({ kind: "node", port: 3000 })).toBeNull();
+    expect(connectionInfo({ kind: "mysql", port: 0 })).toBeNull();
+  });
+  it("tells that database files are kept on delete", () => {
+    expect(deleteServiceMessage({ kind: "postgres", id: "svc_1" }, false, "D:/z/data/databases/svc_1")).toContain(
+      "kept in D:/z/data/databases/svc_1",
+    );
+    expect(deleteServiceMessage({ kind: "node", id: "svc_1" }, true, "x")).toMatch(/running.*cannot be undone/);
+    expect(DB_PORTS.postgres).toBe(5432);
+    expect(defaultArgsText("redis")).toMatch(/127\.0\.0\.1/);
+  });
+});
+
+describe("database command line", () => {
+  it("shows the arguments the daemon really uses", () => {
+    const pg = svc({ kind: "postgres", port: 5432 });
+    const runtimes = [rt({ id: "p", kind: "postgres", binary: "D:/z/bin/pg/bin/postgres.exe", default: true })];
+    expect(commandLine(pg, runtimes, { dataDir: "D:/z/data/databases/svc_1" })).toBe(
+      "postgres.exe -D D:/z/data/databases/svc_1 -p 5432 -c listen_addresses=127.0.0.1",
+    );
+    expect(commandLine(svc({ kind: "mysql", port: 3306 }), [], { dataDir: "D", windows: true })).toBe(
+      "mysqld --no-defaults --datadir=D --port=3306 --bind-address=127.0.0.1 --console --mysqlx=OFF",
+    );
+    expect(defaultDBArgs("redis", "C:/a/b").join(" ")).toBe("--port {port} --bind 127.0.0.1 --dir C:/a/b");
   });
 });

@@ -22,7 +22,10 @@ import (
 //go:embed manifest.json
 var defaultManifest []byte
 
-var hex64 = regexp.MustCompile(`^[0-9a-fA-F]{64}$`)
+var (
+	hex64 = regexp.MustCompile(`^[0-9a-fA-F]{64}$`)
+	hex32 = regexp.MustCompile(`^[0-9a-fA-F]{32}$`)
+)
 
 // Load reads <home>/catalog.json if present, otherwise the embedded manifest.
 func Load(home string) ([]model.CatalogEntry, error) {
@@ -116,6 +119,12 @@ func validate(e *model.CatalogEntry) error {
 		if !hex64.MatchString(e.Checksum.Value) {
 			return errors.New("sha256 checksum must be 64 hex chars")
 		}
+	case "md5":
+		// Weaker than SHA-256, but it is all some publishers (MySQL) offer; it
+		// still catches damaged or swapped downloads.
+		if !hex32.MatchString(e.Checksum.Value) {
+			return errors.New("md5 checksum must be 32 hex chars")
+		}
 	case "shasums":
 		if !IsAllowedURL(e.Checksum.URL) {
 			return errors.New("shasums url must be https")
@@ -125,7 +134,7 @@ func validate(e *model.CatalogEntry) error {
 			return errors.New("checksum type none needs unverified:true")
 		}
 	default:
-		return errors.New("checksum type must be sha256, shasums or none")
+		return errors.New("checksum type must be sha256, md5, shasums or none")
 	}
 	rel := filepath.ToSlash(e.BinaryRelPath)
 	if rel == "" || strings.HasPrefix(rel, "/") || strings.Contains(rel, "..") || filepath.VolumeName(e.BinaryRelPath) != "" {

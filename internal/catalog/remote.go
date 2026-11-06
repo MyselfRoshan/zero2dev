@@ -86,7 +86,7 @@ func saveCache(home string, c cacheFile) error {
 	return os.Rename(tmp, p)
 }
 
-// Remote discovers newer versions of PHP, Java and nginx on the publishers' sites.
+// Remote discovers newer versions on the publishers' sites.
 type Remote struct {
 	Home   string
 	Client func() *http.Client // honours the download proxy setting
@@ -94,6 +94,8 @@ type Remote struct {
 	PHPURL, AdoptiumURL, NginxPage, NginxBase string
 	NodeURL, NodeBase, GoURL, GoBase          string
 	CaddyURL, PHPArchiveURL                   string
+	MariaDBURL, PostgresPage, VSCodeURL       string
+	GitHubAPI                                 string // base for the GitHub-hosted tools, ".../repos/"
 	Version                                   string
 
 	mu sync.Mutex
@@ -144,6 +146,19 @@ func (r *Remote) Refresh(ctx context.Context) (Status, []string, error) {
 		{"node", hostLabel(or(r.NodeURL, DefaultNodeURL)), r.fetchNode},
 		{"go", hostLabel(or(r.GoURL, DefaultGoURL)), r.fetchGo},
 		{"caddy", hostLabel(or(r.CaddyURL, DefaultCaddyURL)), r.fetchCaddy},
+		{"mariadb", hostLabel(or(r.MariaDBURL, DefaultMariaDBURL)), r.fetchMariaDB},
+		{"postgres", hostLabel(or(r.PostgresPage, DefaultPostgresPage)), r.fetchPostgres},
+		{"vscode", hostLabel(or(r.VSCodeURL, DefaultVSCodeURL)), r.fetchVSCode},
+	}
+	for _, s := range ghSpecs {
+		fetchers = append(fetchers, struct {
+			kind, name string
+			fn         func(context.Context) ([]model.CatalogEntry, error)
+		}{s.kind, "github.com/" + s.repo, r.fetchGitHub(s)})
+	}
+	fetched := map[string]bool{}
+	for _, f := range fetchers {
+		fetched[f.kind] = true
 	}
 	res := make([]result, len(fetchers))
 	var wg sync.WaitGroup
@@ -178,7 +193,7 @@ func (r *Remote) Refresh(ctx context.Context) (Status, []string, error) {
 		}
 	}
 	for _, e := range old.Entries { // kinds without a fetcher are not expected; keep anyway
-		if e.Kind != "php" && e.Kind != "java" && e.Kind != "nginx" {
+		if !fetched[e.Kind] {
 			next.Entries = append(next.Entries, e)
 		}
 	}

@@ -14,8 +14,8 @@ func TestEmbeddedManifestValid(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(es) != 8 {
-		t.Fatalf("want 8 entries, got %d", len(es))
+	if len(es) != 18 {
+		t.Fatalf("want 18 entries, got %d", len(es))
 	}
 	for _, e := range es {
 		if e.Homepage == "" || !strings.HasPrefix(e.Homepage, "https://") {
@@ -24,14 +24,19 @@ func TestEmbeddedManifestValid(t *testing.T) {
 		if e.FileName == "" || strings.ContainsAny(e.FileName, "/?") {
 			t.Errorf("%s: fileName %q", e.ID, e.FileName)
 		}
-		if e.Kind == "nginx" {
+		switch e.Kind {
+		case "nginx", "postgres": // the publishers have no checksums
 			if e.Checksum.Type != "none" || !e.Unverified || e.Line == "" {
-				t.Errorf("%s: nginx entries are unverified entries with a version line: %+v", e.ID, e)
+				t.Errorf("%s: must be an unverified entry with a version line: %+v", e.ID, e)
 			}
-			continue
-		}
-		if e.Checksum.Type != "shasums" || e.Checksum.URL == "" {
-			t.Errorf("%s: must use a published checksum", e.ID)
+		case "mysql": // MySQL publishes only MD5
+			if e.Checksum.Type != "md5" || e.Unverified || e.Line == "" {
+				t.Errorf("%s: must be checked with MD5: %+v", e.ID, e)
+			}
+		default:
+			if e.Unverified || !(e.Checksum.Type == "shasums" && e.Checksum.URL != "" || e.Checksum.Type == "sha256" && e.Checksum.Value != "") {
+				t.Errorf("%s: must use a published checksum: %+v", e.ID, e.Checksum)
+			}
 		}
 	}
 }
@@ -60,5 +65,18 @@ func TestAnnotate(t *testing.T) {
 func TestFileName(t *testing.T) {
 	if FileName("https://x.test/a/b/caddy_2.8.4_linux_amd64.tar.gz?x=1") != "caddy_2.8.4_linux_amd64.tar.gz" {
 		t.Fatal("FileName")
+	}
+}
+
+func TestMD5Checksum(t *testing.T) {
+	ok := model.CatalogEntry{ID: "mysql-9.1.0-windows-amd64", Kind: "mysql", Version: "9.1.0", URL: "https://cdn.mysql.com/Downloads/MySQL-9.1/mysql-9.1.0-winx64.zip",
+		Checksum: model.Checksum{Type: "md5", Value: "11d70a5011b7760508e98b3a2fe5db3f"}, BinaryRelPath: "bin/mysqld.exe", StripComponents: 1, OS: "windows", Arch: "amd64"}
+	if err := validate(&ok); err != nil {
+		t.Fatalf("md5 entry must be valid: %v", err)
+	}
+	bad := ok
+	bad.Checksum.Value = "11d70a5011b7760508e98b3a2fe5db3"
+	if err := validate(&bad); err == nil {
+		t.Fatal("md5 must be 32 hex chars")
 	}
 }

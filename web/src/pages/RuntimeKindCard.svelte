@@ -1,6 +1,7 @@
 <script lang="ts">
   import {
     UNVERIFIED_MESSAGE,
+    isLaunchable,
     availability,
     canMakeDefault,
     CHECK_TEXT,
@@ -83,6 +84,12 @@
     else toast("error", err.message);
   }
 
+  // ---- open (editors and database tools are opened, not run as services) ----
+  const launchable = $derived(isLaunchable(kind));
+  async function open(r: Runtime) {
+    await attempt(() => api.launchRuntime(r.id), `${runtimeTitle(r)} is opening.`);
+  }
+
   // ---- remove ----
   let removing = $state<Runtime | null>(null);
   let removeBusy = $state(false);
@@ -122,6 +129,9 @@
             <span class="muted small" title={r.installedAt ? fmtDateTime(r.installedAt) : r.binary}>{sourceLabel(r)}</span>
           </div>
           <div class="acts">
+            {#if launchable}
+              <button class="btn sm" type="button" onclick={() => open(r)} aria-label="Open {runtimeTitle(r)}"><Icon name="external" size={14} /> Open</button>
+            {/if}
             {#if canMakeDefault(r, lists.runtimes)}
               <button class="btn sm" type="button" onclick={() => makeDefaultRuntime(r.id)} aria-label="Make {runtimeTitle(r)} the default">Make default</button>
             {/if}
@@ -178,6 +188,8 @@
       </div>
       {#if selected?.unverified && !isInstalled}
         <p class="hint">No checksum is published for this download, so it cannot be verified.</p>
+      {:else if selected?.checksum?.type === "md5" && !isInstalled}
+        <p class="hint" data-testid="md5-hint">Checked against the MD5 the publisher lists. That catches damaged or swapped downloads, but it is weaker than SHA-256.</p>
       {/if}
     {/if}
 

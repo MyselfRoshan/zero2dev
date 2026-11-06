@@ -4,7 +4,7 @@ A step-by-step guide for 0.0.1. Zero2Dev is one program: start it, and the contr
 
 > The screenshots were taken on a Linux test machine, so paths look like `/tmp/...`. On Windows you will see paths such as `C:\work\my-app`. Everything else is identical.
 
-Contents: [1. Start](#1-start-zero2dev) · [2. Install Caddy](#2-install-a-runtime-caddy-node-go) · [3. Run an app](#3-run-an-app-as-a-service) · [4. Give it a local domain](#4-give-it-a-local-domain-sites) · [5. Logs](#5-watch-the-logs) · [6. Settings](#6-settings) · [7. Portable data](#7-your-data-moving-backing-up-resetting) · [8. Troubleshooting](#8-troubleshooting)
+Contents: [1. Start](#1-start-zero2dev) · [2. Install Caddy](#2-install-a-runtime-caddy-node-go) · [3. Run an app](#3-run-an-app-as-a-service) · [4. Give it a local domain](#4-give-it-a-local-domain-sites) · [Databases and editors](#databases-code-editors-and-database-tools) · [5. Logs](#5-watch-the-logs) · [6. Settings](#6-settings) · [7. Portable data](#7-your-data-moving-backing-up-resetting) · [8. Troubleshooting](#8-troubleshooting)
 
 ---
 
@@ -143,6 +143,34 @@ Browsers resolve `*.localhost` to your own computer, so no hosts-file edit and n
 To take a site offline without deleting it, click **Disable** in its row; **Enable** brings it back. It works like Stop and Start for services.
 
 **Prefer nginx?** Install nginx on the **Runtimes** page, then pick **nginx** under **Settings > Site server** and save. Zero2Dev creates an **Nginx (sites)** service, stops Caddy if it was running and starts nginx in its place. Sites, domains and ports stay the same. nginx only listens on `127.0.0.1`.
+
+---
+
+## Databases, code editors and database tools
+
+### A database
+
+1. On **Runtimes**, install a database from the **Databases** group: **MariaDB**, **MySQL**, **PostgreSQL** or **Redis**.
+   - MariaDB, Redis and the editors are checked against a SHA-256.
+   - MySQL is checked against the MD5 it publishes.
+   - PostgreSQL publishes no checksum, so you confirm first, as with nginx.
+2. On **Services**, click **New service** and pick the database as the **Type**. The usual port is filled in (3306, 5432 or 6379). Pick a free one if another database already uses it.
+3. Click **Start**. The first start creates the database files, which takes a few seconds; the log shows each step.
+4. The service page shows **Connection**: host `127.0.0.1`, the port, the user (`root` for MariaDB/MySQL, `postgres` for PostgreSQL) and a URL to copy. There is no password, so the server only accepts connections from this PC.
+
+Good to know:
+- **Where the data lives:** `data\databases\<service id>`. It moves with the Zero2Dev folder, and deleting the service keeps it, so delete that folder yourself when you no longer need it.
+- **Stopping:** **Stop** asks the server to shut down cleanly (`mysqladmin shutdown`, `pg_ctl stop`, `redis-cli shutdown`) and only ends it if it does not stop within 20 seconds.
+- **Run Zero2Dev without administrator rights.** PostgreSQL refuses to start from an administrator account.
+- **Custom arguments:** if you set your own **Arguments**, Zero2Dev does not create or manage the data folder for you.
+
+### Code editors and database tools
+
+- Install **VS Code**, **VSCodium** or **Notepad++** from **Code editors**. VS Code and VSCodium run in portable mode: their settings and extensions stay in the `bin` folder.
+- Each installed editor or tool has an **Open** button on its card.
+- A service page has **Open in VS Code** (one button per installed editor), which opens the project folder.
+- A MariaDB, MySQL or PostgreSQL service page has **Open in HeidiSQL** and **Open in DBeaver** when those are installed. They connect straight to the database. DBeaver keeps its workspace in `data\tools\dbeaver-workspace`.
+- Programs opened this way are not services: they keep running when Zero2Dev stops.
 
 ---
 

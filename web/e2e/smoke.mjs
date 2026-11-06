@@ -90,7 +90,14 @@ await step("runtimes: a card per kind, first check, version list per kind", asyn
   await page.getByText("Java: could not reach api.adoptium.net").waitFor();
   await page.getByText(/Version lists checked/).waitFor();
   const kinds = await page.locator("article[data-kind]").evaluateAll((els) => els.map((e) => e.dataset.kind));
-  assert.deepEqual(kinds, ["node", "php", "go", "java", "caddy", "nginx"]);
+  // prettier-ignore
+  assert.deepEqual(kinds, [
+    "node", "php", "go", "java", // languages
+    "caddy", "nginx", // web servers
+    "mariadb", "mysql", "postgres", "redis", // databases
+    "vscode", "vscodium", "notepadpp", // code editors
+    "heidisql", "dbeaver", // database tools
+  ]);
   for (const k of kinds) await card(k).getByTestId(`count-${k}`).getByText("Not installed").waitFor();
   const opts = await pickOptions("php");
   assert.deepEqual(opts, [
@@ -212,13 +219,15 @@ await step("import: validation, server errors, failure then success", async () =
   await dlg.getByRole("button", { name: "Import file" }).click();
   await dlg.getByText("Enter the path of the file you downloaded.").waitFor();
   await dlg.getByLabel("Path of the downloaded file").fill("Downloads\\x.zip");
-  await dlg.getByLabel("Checksum, SHA-256 or SHA-512 (optional)").fill("abc");
+  await dlg.getByLabel("Checksum, SHA-256, SHA-512 or MD5 (optional)").fill("abc");
   await dlg.getByText(/Use an absolute path/).waitFor();
-  await dlg.getByText(/64 hexadecimal characters and a SHA-512/).waitFor();
+  await dlg
+    .getByText("Paste an MD5 (32), SHA-256 (64) or SHA-512 (128) hexadecimal checksum", { exact: false })
+    .waitFor();
   await shot(page, "13-import-dialog-validation");
   // wrong file name is rejected by the daemon and shown inline
   await dlg.getByLabel("Path of the downloaded file").fill("C:\\Users\\me\\Downloads\\wrong.zip");
-  await dlg.getByLabel("Checksum, SHA-256 or SHA-512 (optional)").fill("");
+  await dlg.getByLabel("Checksum, SHA-256, SHA-512 or MD5 (optional)").fill("");
   await dlg.getByRole("button", { name: "Import file" }).click();
   await dlg
     .getByRole("alert")
@@ -228,7 +237,7 @@ await step("import: validation, server errors, failure then success", async () =
   await dlg
     .getByLabel("Path of the downloaded file")
     .fill("C:\\Users\\me\\Downloads\\locked\\node-v20.18.0-win-x64.zip");
-  await dlg.getByLabel("Checksum, SHA-256 or SHA-512 (optional)").fill("0".repeat(64));
+  await dlg.getByLabel("Checksum, SHA-256, SHA-512 or MD5 (optional)").fill("0".repeat(64));
   await dlg.getByRole("button", { name: "Import file" }).click();
   const fail = page.locator('[data-failed="node-20.18.0"]');
   await fail.getByText(/step: Registering/).waitFor({ timeout: 15000 });
@@ -576,7 +585,7 @@ await step("reconnect: daemon outage shows banner, recovers with fresh ticket", 
 await step("dashboard with data + dark mode + narrow width", async () => {
   await page.goto(BASE + "/#/dashboard");
   await page.locator(".svc").first().waitFor();
-  await page.getByText("v0.0.2").waitFor();
+  await page.getByText("v0.0.3").waitFor();
   await shot(page, "01-dashboard");
   await page.emulateMedia({ colorScheme: "dark" });
   await shot(page, "09-dashboard-dark");
@@ -600,6 +609,63 @@ await step("dashboard with data + dark mode + narrow width", async () => {
   await shot(page, "11-runtimes-900-dark");
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
   assert.equal(overflow, false, "no horizontal page scroll at 900px");
+  await page.emulateMedia({ colorScheme: "light" });
+});
+
+await step("databases, code editors and database tools", async () => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.goto(BASE + "/#/runtimes");
+  for (const h of ["Databases", "Code editors", "Database tools"])
+    await page.getByRole("heading", { name: h }).waitFor();
+  // MySQL is checked with the MD5 it publishes
+  const my = await pickOptions("mysql");
+  assert.ok(
+    my.some((o) => o.includes("MD5")),
+    my.join("|"),
+  );
+  await card("mysql").getByTestId("md5-hint").waitFor();
+  // PostgreSQL has no checksum: unverified
+  assert.ok((await pickOptions("postgres")).some((o) => o.includes("unverified")));
+
+  // install VS Code and HeidiSQL, open VS Code from its card
+  for (const [kind, id, ver] of [
+    ["vscode", "vscode-1.145.0", "1.145.0"],
+    ["heidisql", "heidisql-12.22", "12.22"],
+  ]) {
+    await picker(kind).selectOption(id);
+    await card(kind).getByRole("button", { name: "Install", exact: true }).click();
+    await li(kind, ver).waitFor({ timeout: 15000 });
+  }
+  const opened = page.waitForRequest((r) => /\/api\/runtimes\/[^/]+\/launch$/.test(r.url()) && r.method() === "POST");
+  await li("vscode", "1.145.0")
+    .getByRole("button", { name: /^Open / })
+    .click();
+  await opened;
+  await shot(page, "17-runtimes-databases-editors");
+
+  // a PostgreSQL service: default port, connection details, Open in editor and database tool
+  await page.goto(BASE + "/#/services");
+  await page.getByRole("button", { name: "New service" }).click();
+  await page.getByLabel("Name", { exact: true }).fill("Shop DB");
+  await page.getByLabel("Type").selectOption("postgres");
+  assert.equal(await page.getByLabel(/^Port/).inputValue(), "5432", "databases get their usual port");
+  await page.getByLabel("Project folder", { exact: true }).fill("C:\\work\\shop");
+  await page.getByRole("button", { name: "Create service" }).click();
+  const row = page.locator('tr[data-service="Shop DB"]');
+  await row.waitFor();
+  await row.getByRole("link", { name: "Shop DB", exact: true }).click();
+  assert.equal(await page.getByTestId("connection-url").textContent(), "postgresql://postgres@127.0.0.1:5432/postgres");
+  const toEditor = page.waitForRequest((r) => r.url().includes("/launch") && r.method() === "POST");
+  await page.getByRole("button", { name: "Open Shop DB folder in VS Code" }).click();
+  assert.deepEqual(JSON.parse((await toEditor).postData()), { path: "C:\\work\\shop" });
+  const toTool = page.waitForRequest((r) => r.url().includes("/launch") && r.method() === "POST");
+  await page.getByRole("button", { name: "Open Shop DB in HeidiSQL" }).click();
+  const body = JSON.parse((await toTool).postData());
+  assert.ok(body.serviceId && !body.path, JSON.stringify(body));
+  await shot(page, "18-database-service");
+  await page.emulateMedia({ colorScheme: "dark" });
+  await shot(page, "18b-database-service-dark");
   await page.emulateMedia({ colorScheme: "light" });
 });
 

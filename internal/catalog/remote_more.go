@@ -195,8 +195,9 @@ type ghRelease struct {
 	Draft      bool   `json:"draft"`
 	Prerelease bool   `json:"prerelease"`
 	Assets     []struct {
-		Name string `json:"name"`
-		URL  string `json:"browser_download_url"`
+		Name   string `json:"name"`
+		URL    string `json:"browser_download_url"`
+		Digest string `json:"digest"` // "sha256:<hex>" (GitHub adds it to every asset)
 	} `json:"assets"`
 }
 

@@ -23,6 +23,7 @@ import (
 	"zero2dev/internal/config"
 	"zero2dev/internal/events"
 	"zero2dev/internal/installer"
+	"zero2dev/internal/launch"
 	"zero2dev/internal/model"
 	"zero2dev/internal/runtimes"
 	"zero2dev/internal/sites"
@@ -33,7 +34,7 @@ import (
 )
 
 // version is overridden with -ldflags "-X main.version=...".
-var version = "0.0.2"
+var version = "0.0.3"
 
 func main() {
 	showVersion := flag.Bool("version", false, "print version and exit")
@@ -104,6 +105,7 @@ func run() error {
 		Catalog: func() ([]model.CatalogEntry, error) { return catalog.Load(cfg.Home) }, Remote: remote,
 		UI: webui.FS(), Version: version, Started: time.Now(),
 		PickFolder: folderPicker(),
+		Launch:     launch.Start,
 	})
 
 	// Bind loopback only; never 0.0.0.0.
@@ -139,7 +141,8 @@ func run() error {
 	defer cancel()
 	_ = httpSrv.Shutdown(sctx)
 	// Children must never outlive the daemon.
-	kctx, kcancel := context.WithTimeout(context.Background(), 15*time.Second)
+	// Databases get supervisor.DBGrace to shut down cleanly, so allow a bit more.
+	kctx, kcancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer kcancel()
 	sup.StopAll(kctx)
 	return nil

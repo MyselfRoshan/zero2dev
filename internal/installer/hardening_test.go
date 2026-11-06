@@ -358,8 +358,8 @@ func TestImportValidation(t *testing.T) {
 		{"missing file", filepath.Join(dir, "caddy_x_linux_amd64.zip"), "", "does not exist"},
 		{"directory", dir, "", "not a file"},
 		{"wrong name", wrongName, sum(z), "must be named caddy_x_linux_amd64.zip"},
-		{"malformed sha", file, "abc", "SHA-512 (128) hexadecimal"},
-		{"no checksum available", file, "", "Cannot verify the file because the published checksum could not be fetched. Paste the SHA-256 or SHA-512 for caddy_x_linux_amd64.zip from " + e.srv.URL + "/dl/sums.txt into the checksum field."},
+		{"malformed sha", file, "abc", "SHA-512 (128) or MD5 (32) hexadecimal"},
+		{"no checksum available", file, "", "Cannot verify the file because the published checksum could not be fetched. Paste the SHA-256, SHA-512 or MD5 for caddy_x_linux_amd64.zip from " + e.srv.URL + "/dl/sums.txt into the checksum field."},
 	}
 	for _, c := range cases {
 		_, err := e.in.Import(entry.ID, c.path, c.sha)

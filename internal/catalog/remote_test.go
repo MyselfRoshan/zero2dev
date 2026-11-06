@@ -156,7 +156,9 @@ func publishers(t *testing.T, failJava *bool) *httptest.Server {
 		}
 		fmt.Fprint(w, phpArchiveHTML)
 	})
-	s := httptest.NewServer(mux)
+	var s *httptest.Server
+	toolPublishers(mux, func() string { return s.URL })
+	s = httptest.NewServer(mux)
 	t.Cleanup(s.Close)
 	return s
 }
@@ -165,7 +167,9 @@ func newRemote(home string, s *httptest.Server) *Remote {
 	return &Remote{Home: home, Version: "test",
 		PHPURL: s.URL + "/php/releases.json", AdoptiumURL: s.URL, NginxPage: s.URL + "/nginx/download.html", NginxBase: s.URL + "/nginx/dl/",
 		NodeURL: s.URL + "/node/index.json", NodeBase: s.URL + "/node/dist/", GoURL: s.URL + "/go/dl.json", GoBase: s.URL + "/go/files/",
-		CaddyURL: s.URL + "/caddy/releases.json", PHPArchiveURL: s.URL + "/php/archive/"}
+		CaddyURL: s.URL + "/caddy/releases.json", PHPArchiveURL: s.URL + "/php/archive/",
+		MariaDBURL: s.URL + "/mariadb/", PostgresPage: s.URL + "/pg/page.html", VSCodeURL: s.URL + "/vscode/latest",
+		GitHubAPI: s.URL + "/gh/"}
 }
 
 func TestRefreshCachesAndMerges(t *testing.T) {
@@ -181,7 +185,7 @@ func TestRefreshCachesAndMerges(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if st.CheckedAt == nil || len(st.Sources) != 6 {
+	if st.CheckedAt == nil || len(st.Sources) != 6+3+len(ghSpecs) {
 		t.Fatalf("status %+v", st)
 	}
 	for _, src := range st.Sources {
@@ -275,14 +279,15 @@ func TestDamagedOrHostileCacheIsIgnored(t *testing.T) {
 	home := t.TempDir()
 	os.MkdirAll(home+"/cache", 0o755)
 	os.WriteFile(home+"/cache/remote-catalog.json", []byte("{not json"), 0o644)
-	if es, err := Load(home); err != nil || len(es) != 8 {
+	builtin, _ := Parse(defaultManifest)
+	if es, err := Load(home); err != nil || len(es) != len(builtin) {
 		t.Fatalf("damaged cache must be ignored: %d %v", len(es), err)
 	}
 	// An entry that would not pass validation (plain http to a non-loopback host) is dropped.
 	bad := `{"status":{"sources":[]},"entries":[{"id":"php-9.9.9-windows-amd64","kind":"php","version":"9.9.9","name":"x","url":"http://evil.example/php.zip","checksum":{"type":"sha256","value":"` + sha1hex + `"},"binaryRelPath":"php.exe","os":"windows","arch":"amd64"}]}`
 	os.WriteFile(home+"/cache/remote-catalog.json", []byte(bad), 0o644)
 	es, _ := Load(home)
-	if len(es) != 8 {
+	if len(es) != len(builtin) {
 		t.Fatalf("hostile entry must be dropped, have %d", len(es))
 	}
 }

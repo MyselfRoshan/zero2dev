@@ -1,7 +1,18 @@
 // Mirrors docs/API.md exactly.
 
-export type ServiceKind = "custom" | "node" | "php" | "go" | "java" | "caddy" | "nginx";
-export const SERVICE_KINDS: ServiceKind[] = ["custom", "node", "php", "go", "java", "caddy", "nginx"];
+export type DatabaseKind = "mariadb" | "mysql" | "postgres" | "redis";
+export const DATABASE_KINDS: DatabaseKind[] = ["mariadb", "mysql", "postgres", "redis"];
+export type ServiceKind = "custom" | "node" | "php" | "go" | "java" | "caddy" | "nginx" | DatabaseKind;
+export const SERVICE_KINDS: ServiceKind[] = [
+  "custom",
+  "node",
+  "php",
+  "go",
+  "java",
+  "caddy",
+  "nginx",
+  ...DATABASE_KINDS,
+];
 export type ServiceState = "stopped" | "starting" | "running" | "stopping" | "failed";
 
 export interface Service {
@@ -35,8 +46,34 @@ export interface ServiceInput {
   autostart: boolean;
 }
 
-export type RuntimeKind = "node" | "php" | "go" | "java" | "caddy" | "nginx" | "other";
-export const RUNTIME_KINDS: RuntimeKind[] = ["node", "php", "go", "java", "caddy", "nginx", "other"];
+export type EditorKind = "vscode" | "vscodium" | "notepadpp";
+export type DBToolKind = "heidisql" | "dbeaver";
+export type RuntimeKind =
+  | "node"
+  | "php"
+  | "go"
+  | "java"
+  | "caddy"
+  | "nginx"
+  | DatabaseKind
+  | EditorKind
+  | DBToolKind
+  | "other";
+export const RUNTIME_KINDS: RuntimeKind[] = [
+  "node",
+  "php",
+  "go",
+  "java",
+  "caddy",
+  "nginx",
+  ...DATABASE_KINDS,
+  "vscode",
+  "vscodium",
+  "notepadpp",
+  "heidisql",
+  "dbeaver",
+  "other",
+];
 
 export interface Runtime {
   id: string;
@@ -61,7 +98,7 @@ export interface DetectedRuntime {
 }
 
 export interface Checksum {
-  type: "sha256" | "shasums" | "none";
+  type: "sha256" | "md5" | "shasums" | "none";
   value?: string;
   url?: string;
 }

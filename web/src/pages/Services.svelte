@@ -3,7 +3,8 @@
   import { deleteService, isActive, serviceUrl } from "../lib/actions";
   import { consumeNewFlag } from "../lib/router.svelte";
   import { serviceRuntimeLabel } from "../lib/catalog";
-  import { serviceKindLabel } from "../lib/ux";
+  import { deleteServiceMessage, serviceKindLabel } from "../lib/ux";
+  import { dbDataPath } from "../lib/installer";
   import { app, lists } from "../lib/store.svelte";
   import type { Service } from "../lib/types";
   import ConfirmDialog from "../ui/ConfirmDialog.svelte";
@@ -58,7 +59,7 @@
             </td>
             <td><StateBadge state={s.state} /></td>
             <td><span class="kind-cell"><KindIcon kind={s.kind} size={16} /> {serviceKindLabel(s.kind)}</span>{#if s.runtimeId && serviceRuntimeLabel(s.runtimeId, lists.runtimes)} <span class="badge plain" data-testid="svc-runtime">{serviceRuntimeLabel(s.runtimeId, lists.runtimes)}</span>{/if}</td>
-            <td class="mono">{#if url}<a href={url} target="_blank" rel="noreferrer">{s.port}</a>{:else}<span class="muted">none</span>{/if}</td>
+            <td class="mono">{#if url}<a href={url} target="_blank" rel="noreferrer">{s.port}</a>{:else if s.port > 0}{s.port}{:else}<span class="muted">none</span>{/if}</td>
             <td class="path">{s.cwd}</td>
             <td class="actions">
               <ServiceControls service={s} showRestart />
@@ -78,9 +79,7 @@
 {#if deleting}
   <ConfirmDialog
     title="Delete {deleting.name}?"
-    message={isActive(deleting)
-      ? "This service is running. Zero2Dev will stop it, then delete it and its log file. This cannot be undone."
-      : "This deletes the service and its log file. This cannot be undone."}
+    message={deleteServiceMessage(deleting, isActive(deleting), dbDataPath(app.status?.homeDir ?? "<data folder>", deleting.id))}
     confirmLabel="Delete service"
     {busy}
     onconfirm={confirmDelete}

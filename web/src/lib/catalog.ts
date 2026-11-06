@@ -3,6 +3,15 @@ import type { CatalogEntry, CatalogSource, Runtime, RuntimeKind } from "./types"
 
 export const KIND_LABEL: Record<string, string> = {
   nginx: "nginx",
+  mariadb: "MariaDB",
+  mysql: "MySQL",
+  postgres: "PostgreSQL",
+  redis: "Redis",
+  vscode: "VS Code",
+  vscodium: "VSCodium",
+  notepadpp: "Notepad++",
+  heidisql: "HeidiSQL",
+  dbeaver: "DBeaver",
   php: "PHP",
   java: "Java",
   node: "Node.js",
@@ -14,7 +23,7 @@ export const kindLabel = (k: string): string => KIND_LABEL[k] ?? k;
 
 /** A category of the Runtimes page. Web servers serve sites; they are not what services run on. */
 export interface RuntimeGroup {
-  id: "languages" | "servers";
+  id: "languages" | "servers" | "databases" | "editors" | "dbtools";
   title: string;
   text: string;
   kinds: RuntimeKind[];
@@ -29,7 +38,40 @@ export const RUNTIME_GROUPS: RuntimeGroup[] = [
     text: "Serve your sites at addresses like shop.localhost. One of them serves at a time.",
     kinds: ["caddy", "nginx"],
   },
+  {
+    id: "databases",
+    title: "Databases",
+    text: "Run as services on this PC only, with their data in the Zero2Dev folder.",
+    kinds: ["mariadb", "mysql", "postgres", "redis"],
+  },
+  {
+    id: "editors",
+    title: "Code editors",
+    text: "Open a project folder from its service page. Portable: settings stay in the Zero2Dev folder.",
+    kinds: ["vscode", "vscodium", "notepadpp"],
+  },
+  {
+    id: "dbtools",
+    title: "Database tools",
+    text: "Open a database service with the connection filled in.",
+    kinds: ["heidisql", "dbeaver"],
+  },
 ];
+
+/** Groups whose kinds can be services (editors and database tools are opened, not run as services). */
+export const SERVICE_GROUP_IDS: RuntimeGroup["id"][] = ["languages", "servers", "databases"];
+
+/** Desktop programs that are opened (launched), not supervised. */
+export function isLaunchable(kind: string): boolean {
+  return RUNTIME_GROUPS.some(
+    (g) => (g.id === "editors" || g.id === "dbtools") && g.kinds.includes(kind as RuntimeKind),
+  );
+}
+
+/** Database server kinds. */
+export function isDatabase(kind: string): boolean {
+  return RUNTIME_GROUPS.some((g) => g.id === "databases" && g.kinds.includes(kind as RuntimeKind));
+}
 
 /** Kinds that get a card (and a version list), in display order. */
 export const CARD_KINDS: RuntimeKind[] = RUNTIME_GROUPS.flatMap((g) => g.kinds);
@@ -93,7 +135,7 @@ export function isEntryInstalled(entry: CatalogEntry, runtimes: Runtime[]): bool
   return entry.installed || runtimes.some((r) => !!r.catalogId && r.catalogId === entry.id);
 }
 
-/** Tags shown after the version in the picker: latest, channel, installed, unverified. */
+/** Tags shown after the version in the picker: latest, channel, installed, unverified or MD5. */
 export function entryTags(c: CatalogEntry, runtimes: Runtime[]): string[] {
   const tags: string[] = [];
   if (c.latest) tags.push("latest");
@@ -101,6 +143,7 @@ export function entryTags(c: CatalogEntry, runtimes: Runtime[]): string[] {
   else if (c.channel) tags.push(c.channel);
   if (isEntryInstalled(c, runtimes)) tags.push("installed");
   if (c.unverified) tags.push("unverified");
+  else if (c.checksum?.type === "md5") tags.push("MD5");
   return tags;
 }
 

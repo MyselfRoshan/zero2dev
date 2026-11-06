@@ -1,6 +1,6 @@
 // Pure helpers behind the simplified UI: the getting-started checklist, friendly service
 // kinds, the readable command line and the "points to" choice of the site form.
-import { kindLabel } from "./catalog";
+import { isDatabase, kindLabel } from "./catalog";
 import type { Runtime, Service, ServiceKind, Site, SiteType } from "./types";
 
 // ---- getting started ----
@@ -59,6 +59,27 @@ export function serviceKindLabel(k: string): string {
   return k === "custom" ? "Custom command" : kindLabel(k);
 }
 
+/** Program names looked up on PATH when no runtime is registered (supervisor progName). */
+const PATH_NAMES: Record<string, string> = { mariadb: "mariadbd", mysql: "mysqld", redis: "redis-server" };
+
+/** The arguments the daemon gives a database service with none (supervisor defaultDBArgs). */
+export function defaultDBArgs(kind: string, data: string, windows = true): string[] {
+  switch (kind) {
+    case "mariadb":
+    case "mysql": {
+      const a = ["--no-defaults", `--datadir=${data}`, "--port={port}", "--bind-address=127.0.0.1"];
+      if (windows) a.push("--console");
+      if (kind === "mysql") a.push("--mysqlx=OFF");
+      return a;
+    }
+    case "postgres":
+      return ["-D", data, "-p", "{port}", "-c", "listen_addresses=127.0.0.1"];
+    case "redis":
+      return ["--port", "{port}", "--bind", "127.0.0.1", "--dir", data.replaceAll("\\", "/")];
+  }
+  return [];
+}
+
 /** Kinds that cannot run without arguments (there is no sensible default). */
 export const needsArgs = (k: ServiceKind): boolean => k === "node" || k === "java";
 
@@ -77,6 +98,11 @@ export function defaultArgsText(k: ServiceKind): string {
       return "The script to run, for example server.js. Use {port} to pass the port.";
     case "java":
       return "For example -jar app.jar. Use {port} to pass the port.";
+    case "mariadb":
+    case "mysql":
+    case "postgres":
+    case "redis":
+      return "Leave empty: Zero2Dev keeps the data in its own folder, listens on 127.0.0.1 only and creates the database files on the first start.";
     default:
       return "One value per row. {port} is replaced with the port.";
   }
@@ -97,16 +123,21 @@ export function serviceRuntime(s: Pick<Service, "kind" | "runtimeId">, runtimes:
  * The command line as the user would type it, e.g. `node.exe server.js --port 3000`.
  * Placeholders are filled in; the program is the command, else the runtime binary, else the kind's name on PATH.
  */
-export function commandLine(s: Service, runtimes: Runtime[]): string {
+export function commandLine(
+  s: Service,
+  runtimes: Runtime[],
+  opts: { dataDir?: string; windows?: boolean } = {},
+): string {
   let prog = s.command.trim();
   if (!prog) {
     const rt = s.kind === "custom" ? undefined : serviceRuntime(s, runtimes);
-    prog = rt ? baseName(rt.binary) : s.kind;
+    prog = rt ? baseName(rt.binary) : (PATH_NAMES[s.kind] ?? s.kind);
   }
   let args = s.args;
   if (args.length === 0) {
     if (s.kind === "php") args = ["-S", "127.0.0.1:{port}", "-t", s.cwd];
     else if (s.kind === "go") args = ["run", "."];
+    else if (isDatabase(s.kind)) args = defaultDBArgs(s.kind, opts.dataDir ?? "<data folder>", opts.windows ?? true);
   }
   const port = String(s.port);
   const quote = (a: string) => (/\s/.test(a) ? `"${a}"` : a);
@@ -145,4 +176,75 @@ export function suggestDomain(name: string, suffix: string): string {
     .slice(0, 63)
     .replace(/-+$/, "");
   return label ? `${label}.${suffix}` : "";
+}
+
+// ---- editors and database tools ----
+
+const EDITOR_KINDS = ["vscode", "vscodium", "notepadpp"];
+const DBTOOL_KINDS = ["heidisql", "dbeaver"];
+
+/** One runtime per kind (its default, else the first), in a fixed kind order. */
+function onePerKind(runtimes: Runtime[], kinds: string[]): Runtime[] {
+  const out: Runtime[] = [];
+  for (const k of kinds) {
+    const of = runtimes.filter((r) => r.kind === k);
+    const pick = of.find((r) => r.default) ?? of[0];
+    if (pick) out.push(pick);
+  }
+  return out;
+}
+
+/** Installed code editors to offer "Open in" for a project folder. */
+export function editorsFor(runtimes: Runtime[]): Runtime[] {
+  return onePerKind(runtimes, EDITOR_KINDS);
+}
+
+/** Installed database tools that can open a service of this kind (none for Redis). */
+export function dbToolsFor(runtimes: Runtime[], serviceKind: string): Runtime[] {
+  if (!isDatabase(serviceKind) || serviceKind === "redis") return [];
+  return onePerKind(runtimes, DBTOOL_KINDS);
+}
+
+// ---- databases ----
+
+/** The port a new database service gets (the usual one for each server). */
+export const DB_PORTS: Record<string, number> = { mariadb: 3306, mysql: 3306, postgres: 5432, redis: 6379 };
+
+export interface ConnectionInfo {
+  host: string;
+  port: number;
+  user: string;
+  password: string;
+  url: string;
+}
+
+/** How to connect to a database service Zero2Dev set up (local only, no password). */
+export function connectionInfo(s: Pick<Service, "kind" | "port">): ConnectionInfo | null {
+  if (!isDatabase(s.kind) || s.port <= 0) return null;
+  const host = "127.0.0.1";
+  switch (s.kind) {
+    case "mariadb":
+    case "mysql":
+      return { host, port: s.port, user: "root", password: "none", url: `mysql://root@${host}:${s.port}` };
+    case "postgres":
+      return {
+        host,
+        port: s.port,
+        user: "postgres",
+        password: "none",
+        url: `postgresql://postgres@${host}:${s.port}/postgres`,
+      };
+    default:
+      return { host, port: s.port, user: "", password: "none", url: `redis://${host}:${s.port}` };
+  }
+}
+
+/** The delete confirmation text; database services keep their data folder. */
+export function deleteServiceMessage(s: Pick<Service, "kind" | "id">, running: boolean, dataDir: string): string {
+  const what = running
+    ? "This service is running. Zero2Dev will stop it, then delete it and its log file."
+    : "This deletes the service and its log file.";
+  if (isDatabase(s.kind))
+    return `${what} The database files are kept in ${dataDir}; delete that folder yourself if you no longer need them.`;
+  return `${what} This cannot be undone.`;
 }
