@@ -33,7 +33,7 @@ data\
 - Set `ZERO2DEV_HOME` to use a different data folder; installed runtimes then go to its `bin` subfolder.
 - Set `ZERO2DEV_BIN` to keep installed runtimes in a folder of your choice instead.
 
-What is *not* isolated: the services you run are your own programs. A Node app still writes to the normal Windows temp folder, and
+What is _not_ isolated: the services you run are your own programs. A Node app still writes to the normal Windows temp folder, and
 runtimes you registered by path stay where they are.
 
 ## Quick start (Windows)
@@ -75,15 +75,15 @@ The release workflow builds the UI in CI too, so nothing generated has to be com
 
 ## What 0.0.3 does
 
-| Area | Included |
-| --- | --- |
-| Services | Create, edit, delete; start, stop, restart; port-conflict checks; health probes; live and stored logs |
-| Process safety | Children die with the daemon (Windows Job Object, process groups elsewhere); no shell strings are ever run |
-| Runtimes | Detect what is on your PATH, register a program by path, install Node, Go, Caddy, nginx, PHP and Java (many versions side by side, a default per runtime, a version per service, and a button to check for new versions), or import an archive you downloaded yourself |
-| Databases | MariaDB, MySQL, PostgreSQL and Redis as services: data kept in the Zero2Dev folder, created on first start, local only, stopped cleanly; connection details on the service page |
-| Editors and tools | VS Code, VSCodium and Notepad++ (portable), HeidiSQL and DBeaver: **Open in** a project folder or a database with one click |
-| Sites | `*.localhost` domains for a folder or a service, served by a managed Caddy or nginx (your choice in Settings); optional HTTPS |
-| Security | Loopback only, bearer token, Host and Origin checks, single-use event tickets, Caddy admin API turned off |
+| Area              | Included                                                                                                                                                                                                                                                               |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Services          | Create, edit, delete; start, stop, restart; port-conflict checks; health probes; live and stored logs                                                                                                                                                                  |
+| Process safety    | Children die with the daemon (Windows Job Object, process groups elsewhere); no shell strings are ever run                                                                                                                                                             |
+| Runtimes          | Detect what is on your PATH, register a program by path, install Node, Go, Caddy, nginx, PHP and Java (many versions side by side, a default per runtime, a version per service, and a button to check for new versions), or import an archive you downloaded yourself |
+| Databases         | MariaDB, MySQL, PostgreSQL and Redis as services: data kept in the Zero2Dev folder, created on first start, local only, stopped cleanly; connection details on the service page                                                                                        |
+| Editors and tools | VS Code, VSCodium and Notepad++ (portable), HeidiSQL and DBeaver: **Open in** a project folder or a database with one click                                                                                                                                            |
+| Sites             | `*.localhost` domains for a folder or a service, served by a managed Caddy or nginx (your choice in Settings); optional HTTPS                                                                                                                                          |
+| Security          | Loopback only, bearer token, Host and Origin checks, single-use event tickets, Caddy admin API turned off                                                                                                                                                              |
 
 Not yet: ports 80/443 and hosts-file domains, database templates, auto-update, code signing.
 
@@ -91,7 +91,7 @@ Not yet: ports 80/443 and hosts-file domains, database templates, auto-update, c
 
 1. Open **Runtimes**, expand the failed job and **Show installer log** (it is also the file `data\logs\installer.log`). The error names the step that failed.
 2. On a company network, set a **Download proxy** in Settings (Go ignores the Windows system proxy).
-3. If downloads are blocked, open the entry's **Download page**, save the archive, then use **Import file**. Zero2Dev verifies it against the published checksum, or against the SHA-256 you paste in.
+3. If downloads are blocked, open the entry's **Download page**, save the archive, then use **Import file**. Zero2Dev verifies it against a published checksum, or against a SHA-256 you paste in. If neither is available, you can confirm an unverified import.
 4. Antivirus can briefly lock a freshly extracted `caddy.exe`; Zero2Dev now retries for several seconds before giving up.
 
 ## Sites and HTTPS
@@ -102,7 +102,7 @@ Not yet: ports 80/443 and hosts-file domains, database templates, auto-update, c
 
 Browsers resolve `*.localhost` to your own machine, so no hosts-file edit or admin rights are needed.
 For HTTPS, Caddy makes its own local certificate authority. By default Zero2Dev does **not** add it to Windows (that is a system change).
-Either trust `data\caddy\data\caddy\pki\authorities\local\root.crt` yourself, or turn on *Trust Caddy's local CA* in Settings.
+Either trust `data\caddy\data\caddy\pki\authorities\local\root.crt` yourself, or turn on _Trust Caddy's local CA_ in Settings.
 
 ## How it fits together
 

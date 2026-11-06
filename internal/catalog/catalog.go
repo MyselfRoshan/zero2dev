@@ -49,7 +49,11 @@ func mergeRemote(es, remote []model.CatalogEntry) []model.CatalogEntry {
 	seen := map[string]int{}
 	for i, e := range es {
 		seen[e.ID] = i
+	seen := map[string]int{}
+	for i, e := range es {
+		seen[e.ID] = i
 	}
+	manifestLen := len(es)
 	for i := range remote {
 		e := remote[i]
 		if validate(&e) != nil {

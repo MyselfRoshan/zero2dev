@@ -82,11 +82,7 @@ const (
 	vGetDisplayName = 5 // IShellItem
 )
 
-// method returns the address of vtable slot i of the COM object obj. Call it as
-// hres(syscall.SyscallN(method(obj, i), uintptr(obj), args...)) with every
-// uintptr(unsafe.Pointer(...)) conversion written inside that SyscallN call:
-// only there does the compiler keep the pointed-to Go memory alive and in place
-// for the length of the native call.
+// method returns the address of vtable slot i on obj.
 func method(obj unsafe.Pointer, i int) uintptr {
 	vtbl := *(*unsafe.Pointer)(obj)
 	return *(*uintptr)(unsafe.Add(vtbl, uintptr(i)*unsafe.Sizeof(uintptr(0))))

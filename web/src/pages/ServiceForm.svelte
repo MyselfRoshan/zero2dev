@@ -67,6 +67,11 @@
     if (runtimeId && !runtimeOptions.some((r) => r.id === runtimeId)) runtimeId = "";
   });
 
+  function setKind(value: ServiceKind) {
+    if (kind === "custom" && value !== "custom") command = "";
+    kind = value;
+  }
+
   function build(): { input: ServiceInput; envError?: string } {
     const { env: envMap, error } = envRowsToMap(env);
     const port = parsePort(portText);
@@ -131,7 +136,7 @@
       </div>
       <div class="field"><label>
         <span class="label">Type</span>
-        <select bind:value={kind} aria-invalid={!!errors.kind}>
+        <select bind:value={() => kind, setKind} aria-invalid={!!errors.kind}>
           {#each KIND_GROUPS as g (g.label)}
             <optgroup label={g.label}>{#each g.kinds as k (k)}<option value={k}>{serviceKindLabel(k)}</option>{/each}</optgroup>
           {/each}

@@ -68,6 +68,38 @@ func TestFileName(t *testing.T) {
 	}
 }
 
+func TestMergeRemoteBackfillsOnlyMissingManifestMetadata(t *testing.T) {
+	base := model.CatalogEntry{ID: "node-1", Kind: "node", Version: "1", Name: "Built in", URL: "https://example.com/a.zip", Checksum: model.Checksum{Type: "none"}, Unverified: true, BinaryRelPath: "node", OS: "linux", Arch: "amd64", Channel: "stable"}
+	invalid := base
+	invalid.URL = "http://evil.example/a.zip"
+	invalid.Line = "bad"
+	remote := base
+	remote.Name, remote.Line, remote.Channel = "Remote", "1", "lts"
+	newEntry := remote
+	newEntry.ID = "node-2"
+	newEntry.Source, newEntry.Installed, newEntry.Supported = "untrusted", true, true
+	duplicate := newEntry
+	duplicate.Line = "different"
+	got := mergeRemote([]model.CatalogEntry{base}, []model.CatalogEntry{invalid, remote, newEntry, duplicate})
+	want := base
+	want.Line = "1"
+	if len(got) != 2 || got[0] != want {
+		t.Fatalf("manifest entry should only gain missing metadata: %+v", got)
+	}
+	if got[1].ID != "node-2" || got[1].Line != "1" || got[1].Source != "remote" || got[1].Installed || got[1].Supported || got[1].FileName != "a.zip" {
+		t.Fatalf("remote entry was not normalized: %+v", got[1])
+	}
+	base.Channel = ""
+	got = mergeRemote([]model.CatalogEntry{base}, []model.CatalogEntry{invalid})
+	if got[0] != base {
+		t.Fatalf("invalid clash changed manifest: %+v", got[0])
+	}
+	got = mergeRemote([]model.CatalogEntry{base}, []model.CatalogEntry{remote})
+	if got[0].Channel != "lts" {
+		t.Fatalf("missing channel not backfilled: %+v", got[0])
+	}
+}
+
 func TestMD5Checksum(t *testing.T) {
 	ok := model.CatalogEntry{ID: "mysql-9.1.0-windows-amd64", Kind: "mysql", Version: "9.1.0", URL: "https://cdn.mysql.com/Downloads/MySQL-9.1/mysql-9.1.0-winx64.zip",
 		Checksum: model.Checksum{Type: "md5", Value: "11d70a5011b7760508e98b3a2fe5db3f"}, BinaryRelPath: "bin/mysqld.exe", StripComponents: 1, OS: "windows", Arch: "amd64"}
