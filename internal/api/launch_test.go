@@ -99,6 +99,15 @@ func TestLaunchRuntime(t *testing.T) {
 	if _, err := os.Stat(heidiSettings); err != nil {
 		t.Fatal("HeidiSQL's settings file must be created in data\\heidisql")
 	}
+	if err := os.WriteFile(heidiSettings, []byte("saved"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if r := e.do("POST", "/api/runtimes/rt_heidi/launch", nil, nil); r.StatusCode != 204 {
+		t.Fatalf("heidisql relaunch: %d", r.StatusCode)
+	}
+	if b, _ := os.ReadFile(heidiSettings); string(b) != "saved" {
+		t.Fatalf("a later launch must keep HeidiSQL's settings, got %q", b)
+	}
 
 	n := len(calls)
 	e.errCode("POST", "/api/runtimes/rt_node/launch", nil, 400)                                          // a runtime, not a program

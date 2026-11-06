@@ -121,11 +121,17 @@ func toolDataArgs(rt model.Runtime, home string) (args, env []string, err error)
 	case "heidisql":
 		// The portable build writes portable_settings.txt next to heidisql.exe
 		// unless told otherwise; the file is created so the setting is used.
+		// O_EXCL: two launches at once must never truncate settings the
+		// other (or HeidiSQL itself) already wrote.
 		f := filepath.Join(dir, "portable_settings.txt")
-		if _, err := os.Stat(f); os.IsNotExist(err) {
-			if err := os.WriteFile(f, nil, 0o644); err != nil {
-				return nil, nil, err
-			}
+		fh, err := os.OpenFile(f, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+		if err == nil {
+			err = fh.Close()
+		} else if errors.Is(err, os.ErrExist) {
+			err = nil
+		}
+		if err != nil {
+			return nil, nil, err
 		}
 		return []string{"--psettings=" + f}, nil, nil
 	case "dbeaver":
