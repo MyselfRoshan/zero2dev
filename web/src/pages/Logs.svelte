@@ -37,7 +37,7 @@
   });
 </script>
 
-<PageHead title="Combined logs" sub="Output from every service, live.">
+<PageHead sub="Live output from every service. Pick one service to narrow it down.">
   <label class="row">
     <span class="muted">Service</span>
     <select bind:value={serviceId} style="width: 220px">

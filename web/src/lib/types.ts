@@ -1,7 +1,18 @@
 // Mirrors docs/API.md exactly.
 
-export type ServiceKind = "custom" | "node" | "php" | "go" | "java" | "caddy";
-export const SERVICE_KINDS: ServiceKind[] = ["custom", "node", "php", "go", "java", "caddy"];
+export type DatabaseKind = "mariadb" | "mysql" | "postgres" | "redis";
+export const DATABASE_KINDS: DatabaseKind[] = ["mariadb", "mysql", "postgres", "redis"];
+export type ServiceKind = "custom" | "node" | "php" | "go" | "java" | "caddy" | "nginx" | DatabaseKind;
+export const SERVICE_KINDS: ServiceKind[] = [
+  "custom",
+  "node",
+  "php",
+  "go",
+  "java",
+  "caddy",
+  "nginx",
+  ...DATABASE_KINDS,
+];
 export type ServiceState = "stopped" | "starting" | "running" | "stopping" | "failed";
 
 export interface Service {
@@ -35,8 +46,34 @@ export interface ServiceInput {
   autostart: boolean;
 }
 
-export type RuntimeKind = "node" | "php" | "go" | "java" | "caddy" | "other";
-export const RUNTIME_KINDS: RuntimeKind[] = ["node", "php", "go", "java", "caddy", "other"];
+export type EditorKind = "vscode" | "vscodium" | "notepadpp";
+export type DBToolKind = "heidisql" | "dbeaver";
+export type RuntimeKind =
+  | "node"
+  | "php"
+  | "go"
+  | "java"
+  | "caddy"
+  | "nginx"
+  | DatabaseKind
+  | EditorKind
+  | DBToolKind
+  | "other";
+export const RUNTIME_KINDS: RuntimeKind[] = [
+  "node",
+  "php",
+  "go",
+  "java",
+  "caddy",
+  "nginx",
+  ...DATABASE_KINDS,
+  "vscode",
+  "vscodium",
+  "notepadpp",
+  "heidisql",
+  "dbeaver",
+  "other",
+];
 
 export interface Runtime {
   id: string;
@@ -46,16 +83,22 @@ export interface Runtime {
   binary: string;
   source: "installed" | "registered";
   installedAt: string;
+  /** The catalog entry it was installed from (omitted when empty). */
+  catalogId?: string;
+  /** The default runtime of its kind (at most one per kind). */
+  default?: boolean;
 }
 
 export interface DetectedRuntime {
   kind: string;
   version: string;
   binary: string;
+  /** Set for tools reported with kind "other", e.g. "nginx". */
+  name?: string;
 }
 
 export interface Checksum {
-  type: "sha256" | "shasums";
+  type: "sha256" | "md5" | "shasums" | "none";
   value?: string;
   url?: string;
 }
@@ -75,6 +118,36 @@ export interface CatalogEntry {
   arch: string;
   installed: boolean;
   supported: boolean;
+  /** Version line such as "8.4", "21", "1.26"; "" for node/go/caddy. */
+  line: string; // node "22", go "1.23", caddy "2.8", php "8.4", java "21", nginx "1.26"
+  channel: "lts" | "stable" | "mainline" | "";
+  source: "builtin" | "remote";
+  /** Newest version of this kind/os/arch/line. */
+  latest: boolean;
+  /** The publisher has no checksum (nginx). */
+  unverified: boolean;
+}
+
+export interface CatalogSource {
+  kind: string;
+  name: string;
+  ok: boolean;
+  count: number;
+  error: string;
+  checkedAt: string;
+}
+
+export interface CatalogStatus {
+  checkedAt: string | null;
+  sources: CatalogSource[];
+}
+
+export interface CatalogRefresh extends CatalogStatus {
+  added: string[];
+}
+
+export interface InstallOptions {
+  acceptUnverified?: boolean;
 }
 
 export type SiteType = "static" | "proxy" | "php";
@@ -116,7 +189,11 @@ export interface Settings {
   openBrowserOnStart: boolean;
   trustLocalCA: boolean;
   downloadProxy: string;
+  /** Which program serves the sites. Missing (older daemon) means caddy. */
+  siteServer?: SiteServer;
 }
+
+export type SiteServer = "caddy" | "nginx";
 
 export type HomeSource = "env" | "cwd" | "exe";
 
@@ -129,7 +206,14 @@ export interface Status {
   homeSource: HomeSource;
   portable: boolean;
   exeDir: string;
+  /** The daemon can open the native "Select Folder" dialog (Windows). Missing on older daemons. */
+  folderPicker?: boolean;
   counts: { services: number; running: number; runtimes: number; sites: number };
+}
+
+export interface FolderPick {
+  path: string;
+  cancelled: boolean;
 }
 
 export type LogStream = "stdout" | "stderr" | "system";
@@ -146,6 +230,7 @@ export type ErrorCode =
   | "forbidden_origin"
   | "not_found"
   | "conflict"
+  | "unverified"
   | "internal"
   // client-side only
   | "network"

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"zero2dev/internal/model"
 	"zero2dev/internal/store"
 )
 
@@ -89,5 +90,33 @@ func TestNonCaddyServiceEnvUntouched(t *testing.T) {
 	env := dumpEnv(t, s, st, id)
 	if env["XDG_DATA_HOME"] != "/evil/data" || env["TMPDIR"] != "/evil/tmp" {
 		t.Fatalf("non-caddy services keep their own env: %v %v", env["XDG_DATA_HOME"], env["TMPDIR"])
+	}
+}
+
+func TestFindRuntimeBinaryUsesDefaultThenExplicit(t *testing.T) {
+	d := store.Data{Runtimes: []model.Runtime{
+		{ID: "rt_old", Kind: "php", Binary: "/r/php71/php", Version: "7.1.33"},
+		{ID: "rt_new", Kind: "php", Binary: "/r/php84/php", Version: "8.4.1", Default: true},
+		{ID: "rt_node", Kind: "node", Binary: "/r/node/node", Default: true},
+	}}
+	pick := func(svc model.Service) string {
+		bin, _, err := findRuntimeBinary(svc, d)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return bin
+	}
+	if got := pick(model.Service{Kind: "php"}); got != "/r/php84/php" {
+		t.Fatalf("no runtime named: the default of the kind, got %s", got)
+	}
+	if got := pick(model.Service{Kind: "php", RuntimeID: "rt_old"}); got != "/r/php71/php" {
+		t.Fatalf("a service naming PHP 7.1 must get PHP 7.1, got %s", got)
+	}
+	d.Runtimes[1].Default = false // state without any default: the first of the kind, as in 0.0.1
+	if got := pick(model.Service{Kind: "php"}); got != "/r/php71/php" {
+		t.Fatalf("fallback to the first runtime, got %s", got)
+	}
+	if _, _, err := findRuntimeBinary(model.Service{Kind: "php", RuntimeID: "rt_gone"}, d); err == nil {
+		t.Fatal("an unknown runtime id must fail")
 	}
 }

@@ -30,6 +30,7 @@ type Supervisor struct {
 	// Tunables (tests shorten them).
 	HealthTimeout time.Duration
 	KillGrace     time.Duration
+	DBGrace       time.Duration // databases get longer to shut down cleanly
 
 	mu      sync.Mutex
 	procs   map[string]*proc
@@ -48,6 +49,13 @@ type proc struct {
 	spawned   bool
 	tree      *tree
 	done      chan struct{}
+	// Clean stop (databases): a command that asks the server to shut down,
+	// run before anything is killed, and how long to wait for it.
+	stopBin  string
+	stopArgs []string
+	stopDesc string
+	env      []string
+	grace    time.Duration
 }
 
 func active(state string) bool {
@@ -58,7 +66,7 @@ func active(state string) bool {
 func New(home string, st *store.Store, em Emitter) *Supervisor {
 	return &Supervisor{
 		home: home, st: st, em: em,
-		HealthTimeout: 30 * time.Second, KillGrace: 5 * time.Second,
+		HealthTimeout: 30 * time.Second, KillGrace: 5 * time.Second, DBGrace: DBGrace,
 		procs: map[string]*proc{}, logs: map[string]*svcLog{},
 	}
 }
@@ -177,6 +185,11 @@ func (s *Supervisor) Start(id string) error {
 		revert()
 		return apperr.Conflict("port %d is already in use", svc.Port)
 	}
+	if err := s.initDB(id, r.db, r.env); err != nil {
+		s.logLine(id, "system", err.Error())
+		revert()
+		return apperr.Conflict("%v", err)
+	}
 
 	cmd := exec.Command(r.bin, r.args...) // never a shell
 	cmd.Dir = svc.Cwd
@@ -199,6 +212,11 @@ func (s *Supervisor) Start(id string) error {
 
 	s.mu.Lock()
 	p.tree, p.pid, p.startedAt, p.spawned = tr, cmd.Process.Pid, time.Now(), true
+	p.grace, p.env = s.KillGrace, r.env
+	if r.db != nil && r.db.stopBin != "" {
+		p.stopBin, p.stopArgs, p.stopDesc = r.db.stopBin, r.db.stopArgs, r.db.stopDesc
+		p.grace = max(s.DBGrace, s.KillGrace)
+	}
 	s.mu.Unlock()
 	s.emitStatus(id)
 
@@ -326,11 +344,30 @@ func (s *Supervisor) Stop(id string) error {
 		return apperr.Conflict("service is still starting, try again")
 	}
 	p.stopping, p.state = true, model.StateStopping
+	stopBin, stopArgs, stopDesc, env, grace := p.stopBin, p.stopArgs, p.stopDesc, p.env, p.grace
 	s.mu.Unlock()
 	s.emitStatus(id)
+	if grace <= 0 {
+		grace = s.KillGrace
+	}
+	if stopBin != "" {
+		// Ask the database to shut down and wait for it; only then force it.
+		s.logLine(id, "system", "stopping: asking "+stopDesc+" to shut the server down")
+		go func() {
+			if err := s.runTool(id, stopBin, stopArgs, env, grace); err != nil {
+				s.logLine(id, "system", stopDesc+" failed: "+err.Error())
+			}
+			select {
+			case <-p.done:
+			case <-time.After(grace):
+				s.logLine(id, "system", "the server did not shut down in time; ending it")
+				p.tree.kill()
+			}
+		}()
+		return nil
+	}
 	s.logLine(id, "system", "stopping")
 	p.tree.terminate()
-	grace := s.KillGrace
 	go func() {
 		select {
 		case <-p.done:
@@ -352,9 +389,15 @@ func (s *Supervisor) StopWait(id string) error {
 	if p == nil {
 		return nil
 	}
+	s.mu.Lock()
+	wait := max(p.grace, s.KillGrace)
+	if p.stopBin != "" {
+		wait *= 2 // the stop command, then the wait for the exit
+	}
+	s.mu.Unlock()
 	select {
 	case <-p.done:
-	case <-time.After(s.KillGrace + 3*time.Second):
+	case <-time.After(wait + 3*time.Second):
 		return apperr.Conflict("service did not stop in time")
 	}
 	return nil

@@ -31,7 +31,7 @@ type Store struct {
 func defaults() Data {
 	return Data{
 		Services: []model.Service{}, Runtimes: []model.Runtime{}, Sites: []model.Site{},
-		Settings: model.Settings{DomainSuffix: "localhost", ProxyHTTPPort: 8080, ProxyHTTPSPort: 8443, OpenBrowserOnStart: true},
+		Settings: model.Settings{DomainSuffix: "localhost", ProxyHTTPPort: 8080, ProxyHTTPSPort: 8443, OpenBrowserOnStart: true, SiteServer: "caddy"},
 	}
 }
 
@@ -114,41 +114,41 @@ func (s *Store) Update(fn func(*Data) error) error {
 	return nil
 }
 
-// RebasePath maps a stored installed-runtime binary path onto home: the
-// segments after the first (falling back to the last) "runtimes" segment are
-// joined to <home>/runtimes. Both \ and / separators are understood, so a
-// path written on Windows can be rebased on Linux and vice versa. It returns
-// stored unchanged if there is no "runtimes" segment.
-func RebasePath(home, stored string) string {
+// RebasePath maps a stored installed-runtime binary path onto the runtimes
+// folder bin: the segments after a "runtimes" (the pre-0.1 name, inside the data
+// folder) or "bin" segment are joined to bin, and the first candidate that exists is
+// used. If none exists, a legacy "runtimes" path is rebased anyway (its files may be
+// moved next). Both \ and / separators are understood, so a path written on Windows
+// can be rebased on Linux and vice versa. Anything else is returned unchanged.
+func RebasePath(bin, stored string) string {
 	parts := strings.Split(strings.ReplaceAll(stored, "\\", "/"), "/")
-	var idx []int
+	var cands []string
+	legacy := ""
 	for i, p := range parts {
-		if p == "runtimes" && i < len(parts)-1 {
-			idx = append(idx, i)
-		}
-	}
-	if len(idx) == 0 {
-		return stored
-	}
-	build := func(i int) string {
-		return filepath.Join(append([]string{home, "runtimes"}, parts[i+1:]...)...)
-	}
-	first := build(idx[0])
-	if _, err := os.Stat(first); err != nil && len(idx) > 1 {
-		if last := build(idx[len(idx)-1]); last != first {
-			if _, err := os.Stat(last); err == nil {
-				return last
+		if (p == "runtimes" || p == "bin") && i < len(parts)-1 {
+			c := filepath.Join(append([]string{bin}, parts[i+1:]...)...)
+			cands = append(cands, c)
+			if p == "runtimes" && legacy == "" {
+				legacy = c
 			}
 		}
 	}
-	return first
+	for _, c := range cands {
+		if _, err := os.Stat(c); err == nil {
+			return c
+		}
+	}
+	if legacy != "" {
+		return legacy
+	}
+	return stored
 }
 
 // RebaseRuntimes makes the state relocatable: installed runtimes whose
-// binary no longer exists are re-pointed into <home>/runtimes and the result
+// binary no longer exists are re-pointed into the runtimes folder bin and the result
 // is persisted. Registered runtimes keep their absolute paths. It returns the
 // number of runtimes changed.
-func (s *Store) RebaseRuntimes(home string) (int, error) {
+func (s *Store) RebaseRuntimes(bin string) (int, error) {
 	n := 0
 	err := s.Update(func(d *Data) error {
 		for i := range d.Runtimes {
@@ -159,7 +159,7 @@ func (s *Store) RebaseRuntimes(home string) (int, error) {
 			if _, err := os.Stat(r.Binary); err == nil {
 				continue
 			}
-			if nb := RebasePath(home, r.Binary); nb != r.Binary {
+			if nb := RebasePath(bin, r.Binary); nb != r.Binary {
 				r.Binary = nb
 				n++
 			}

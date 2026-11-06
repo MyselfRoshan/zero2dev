@@ -64,7 +64,7 @@ func TestCorruptFileIsError(t *testing.T) {
 
 func TestRebasePath(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "new")
-	want := filepath.Join(home, "runtimes", "node-22", "bin", "node")
+	want := filepath.Join(home, "node-22", "bin", "node")
 	for _, in := range []string{
 		`C:\Users\me\.zero2dev\runtimes\node-22\bin\node`,
 		"/old/place/data/runtimes/node-22/bin/node",
@@ -79,9 +79,9 @@ func TestRebasePath(t *testing.T) {
 	}
 	// "runtimes" appearing earlier in the path: first segment wins when it resolves,
 	// otherwise the last one is tried.
-	os.MkdirAll(filepath.Join(home, "runtimes", "x"), 0o755)
-	os.WriteFile(filepath.Join(home, "runtimes", "x", "bin"), []byte("b"), 0o755)
-	if got := RebasePath(home, "/srv/runtimes/app/data/runtimes/x/bin"); got != filepath.Join(home, "runtimes", "x", "bin") {
+	os.MkdirAll(filepath.Join(home, "x"), 0o755)
+	os.WriteFile(filepath.Join(home, "x", "bin"), []byte("b"), 0o755)
+	if got := RebasePath(home, "/srv/runtimes/app/data/runtimes/x/bin"); got != filepath.Join(home, "x", "bin") {
 		t.Errorf("nested runtimes segment: %q", got)
 	}
 }
@@ -89,8 +89,8 @@ func TestRebasePath(t *testing.T) {
 func TestRebaseRuntimesOnlyTouchesMissingInstalled(t *testing.T) {
 	dir := t.TempDir()
 	home := filepath.Join(dir, "home")
-	os.MkdirAll(filepath.Join(home, "runtimes", "a"), 0o755)
-	existing := filepath.Join(home, "runtimes", "a", "bin")
+	os.MkdirAll(filepath.Join(home, "bin", "a"), 0o755)
+	existing := filepath.Join(home, "bin", "a", "bin")
 	os.WriteFile(existing, []byte("x"), 0o755)
 	outside := filepath.Join(dir, "runtimes", "registered") // path contains "runtimes" but is registered
 	s, _ := Open(filepath.Join(home, "state.json"))
@@ -102,12 +102,12 @@ func TestRebaseRuntimesOnlyTouchesMissingInstalled(t *testing.T) {
 		}
 		return nil
 	})
-	n, err := s.RebaseRuntimes(home)
+	n, err := s.RebaseRuntimes(filepath.Join(home, "bin"))
 	if err != nil || n != 1 {
 		t.Fatalf("n=%d err=%v", n, err)
 	}
 	rs := s.Snapshot().Runtimes
-	if rs[0].Binary != existing || rs[1].Binary != filepath.Join(home, "runtimes", "b", "bin.exe") || rs[2].Binary != outside {
+	if rs[0].Binary != existing || rs[1].Binary != filepath.Join(home, "bin", "b", "bin.exe") || rs[2].Binary != outside {
 		t.Fatalf("%+v", rs)
 	}
 }

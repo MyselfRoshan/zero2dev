@@ -116,9 +116,9 @@ export function validateRegister(v: { kind: string; binary: string }): Errors<Re
   return e;
 }
 
-export function isValidSha256(s: string): boolean {
-  // SHA-256 is 64 hex characters, SHA-512 (what Caddy publishes) is 128.
-  return /^([0-9a-fA-F]{64}|[0-9a-fA-F]{128})$/.test(s.trim());
+export function isValidChecksum(s: string): boolean {
+  // MD5 is 32 hexadecimal characters (all MySQL publishes), SHA-256 is 64, SHA-512 (Caddy) is 128.
+  return /^([0-9a-fA-F]{32}|[0-9a-fA-F]{64}|[0-9a-fA-F]{128})$/.test(s.trim());
 }
 
 /** Empty is valid (use the environment). Otherwise an http(s) URL with a host, optional user:pass@ and port. */
@@ -144,8 +144,8 @@ export function validateImport(v: { filePath: string; sha256: string }): Errors<
   if (!v.filePath.trim()) e.filePath = "Enter the path of the file you downloaded.";
   else if (!isAbsolutePath(v.filePath.trim()))
     e.filePath = "Use an absolute path, for example C:\\Users\\me\\Downloads\\file.zip.";
-  if (v.sha256.trim() && !isValidSha256(v.sha256))
-    e.sha256 = "A SHA-256 hash has 64 hexadecimal characters and a SHA-512 hash has 128 (0-9, a-f).";
+  if (v.sha256.trim() && !isValidChecksum(v.sha256))
+    e.sha256 = "Paste an MD5 (32), SHA-256 (64) or SHA-512 (128) hexadecimal checksum (0-9, a-f).";
   return e;
 }
 

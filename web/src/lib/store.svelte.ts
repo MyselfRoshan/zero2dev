@@ -1,7 +1,10 @@
+import { addedMessage } from "./catalog";
 import { ApiError, api, consumeTokenFromHash, getToken, onAuthFailure, setToken } from "./api";
 import { EventConnection, type EventType, type StreamState } from "./events";
 import type {
   CatalogEntry,
+  CatalogStatus,
+  InstallOptions,
   Job,
   JobDoneEvent,
   JobProgressEvent,
@@ -49,6 +52,44 @@ export const jobs = $state<Record<string, Job>>({});
 /** catalog id -> job id for installs started from this page */
 export const installJobs = $state<Record<string, string>>({});
 export const toasts = $state<Toast[]>([]);
+
+// ---------- catalog versions ----------
+export const catalogInfo = $state({
+  status: null as CatalogStatus | null,
+  refreshing: false,
+});
+let autoRefreshed = false;
+
+export async function loadCatalogStatus(): Promise<CatalogStatus | null> {
+  await load(api.catalogStatus, (v) => (catalogInfo.status = v));
+  return catalogInfo.status;
+}
+
+/** Asks the publishers for new versions. `silent` suppresses the success toast (failures still toast). */
+export async function refreshCatalog(silent = false): Promise<void> {
+  if (catalogInfo.refreshing) return;
+  catalogInfo.refreshing = true;
+  try {
+    const r = await api.refreshCatalog();
+    catalogInfo.status = { checkedAt: r.checkedAt, sources: r.sources };
+    await loadCatalog();
+    if (!silent) toast("success", addedMessage(r.added));
+  } catch (e) {
+    handleError(e);
+    toast("error", `Could not check for new versions: ${errMessage(e)}`);
+  } finally {
+    catalogInfo.refreshing = false;
+  }
+}
+
+/** On the first visit to the Runtimes page: load the status and, if no check ever ran, check once (silently). */
+export async function initCatalogStatus(): Promise<void> {
+  const st = await loadCatalogStatus();
+  if (st && st.checkedAt === null && !autoRefreshed) {
+    autoRefreshed = true;
+    await refreshCatalog(true);
+  }
+}
 
 // ---------- toasts ----------
 let toastSeq = 0;
@@ -215,12 +256,28 @@ function onJobDone(e: JobDoneEvent) {
   }
   void loadRuntimes();
   void loadCatalog();
+  void loadStatus();
 }
 
-export async function installRuntime(c: CatalogEntry): Promise<void> {
-  const job = await attempt(() => api.installRuntime(c.id));
-  if (!job) return;
-  trackJob(c.id, job);
+/**
+ * Starts an install. Returns the daemon's error instead of toasting so callers can react to
+ * `unverified`; network and auth problems are still handled globally.
+ */
+export async function tryInstall(c: CatalogEntry, opts?: InstallOptions): Promise<ApiError | null> {
+  try {
+    const job = await api.installRuntime(c.id, opts);
+    markOnline();
+    trackJob(c.id, job);
+    return null;
+  } catch (e) {
+    handleError(e);
+    return e instanceof ApiError ? e : new ApiError(0, "unknown", errMessage(e));
+  }
+}
+
+export async function installRuntime(c: CatalogEntry, opts?: InstallOptions): Promise<void> {
+  const err = await tryInstall(c, opts);
+  if (err) toast("error", err.message);
 }
 
 function trackJob(catalogId: string, job: Job) {
@@ -230,8 +287,13 @@ function trackJob(catalogId: string, job: Job) {
 }
 
 /** Imports a file the user downloaded. Throws ApiError so the dialog can show the message inline. */
-export async function importRuntime(c: CatalogEntry, filePath: string, sha256: string): Promise<void> {
-  const job = await api.importRuntime({ catalogId: c.id, filePath, sha256: sha256.trim() || undefined });
+export async function importRuntime(
+  c: CatalogEntry,
+  filePath: string,
+  sha256: string,
+  opts?: InstallOptions,
+): Promise<void> {
+  const job = await api.importRuntime({ catalogId: c.id, filePath, sha256: sha256.trim() || undefined, ...opts });
   markOnline();
   trackJob(c.id, job);
 }
@@ -246,7 +308,12 @@ function pollJob(id: string) {
         mergeJob(id, j);
         setTimeout(tick, 2000);
       } else {
-        onJobDone({ id, state: j.state, error: j.error, runtimeId: j.runtimeId });
+        onJobDone({
+          id,
+          state: j.state,
+          error: j.error,
+          runtimeId: j.runtimeId,
+        });
       }
     } catch {
       setTimeout(tick, 3000);
@@ -364,4 +431,9 @@ export async function retryConnection(): Promise<void> {
   app.conn = "online";
   await loadAll();
   if (app.stream !== "open") startEvents();
+}
+
+export async function makeDefaultRuntime(id: string): Promise<void> {
+  const r = await attempt(() => api.setDefaultRuntime(id));
+  if (r) await loadRuntimes();
 }

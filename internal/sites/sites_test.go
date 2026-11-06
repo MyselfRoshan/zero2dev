@@ -22,9 +22,11 @@ type fakeSup struct {
 	restarted []string
 }
 
-func (f *fakeSup) State(string) string { f.mu.Lock(); defer f.mu.Unlock(); return f.state }
-func (f *fakeSup) setState(s string)   { f.mu.Lock(); f.state = s; f.mu.Unlock() }
-func (f *fakeSup) count() int          { f.mu.Lock(); defer f.mu.Unlock(); return len(f.restarted) }
+func (f *fakeSup) State(string) string   { f.mu.Lock(); defer f.mu.Unlock(); return f.state }
+func (f *fakeSup) setState(s string)     { f.mu.Lock(); f.state = s; f.mu.Unlock() }
+func (f *fakeSup) count() int            { f.mu.Lock(); defer f.mu.Unlock(); return len(f.restarted) }
+func (f *fakeSup) StopWait(string) error { return nil }
+func (f *fakeSup) Start(string) error    { return nil }
 func (f *fakeSup) Restart(id string) error {
 	f.mu.Lock()
 	f.restarted = append(f.restarted, id)

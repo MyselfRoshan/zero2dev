@@ -23,16 +23,18 @@ import (
 	"zero2dev/internal/config"
 	"zero2dev/internal/events"
 	"zero2dev/internal/installer"
+	"zero2dev/internal/launch"
 	"zero2dev/internal/model"
 	"zero2dev/internal/runtimes"
 	"zero2dev/internal/sites"
 	"zero2dev/internal/store"
 	"zero2dev/internal/supervisor"
 	"zero2dev/internal/webui"
+	"zero2dev/internal/winpick"
 )
 
 // version is overridden with -ldflags "-X main.version=...".
-var version = "0.0.1"
+var version = "0.0.3"
 
 func main() {
 	showVersion := flag.Bool("version", false, "print version and exit")
@@ -59,8 +61,11 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	if n := migrateLegacyRuntimes(cfg.Home, cfg.BinDir); n > 0 {
+		fmt.Printf("Moved %d installed runtime(s) from data\\runtimes to %s\n", n, cfg.BinDir)
+	}
 	// Relocatable: re-point installed runtimes if the folder was moved.
-	if n, err := st.RebaseRuntimes(cfg.Home); err != nil {
+	if n, err := st.RebaseRuntimes(cfg.BinDir); err != nil {
 		return err
 	} else if n > 0 {
 		fmt.Printf("Data folder moved: re-pointed %d installed runtime(s)\n", n)
@@ -69,23 +74,38 @@ func run() error {
 	hub := events.New()
 	sup := supervisor.New(cfg.Home, st, hub)
 	rt := runtimes.New(cfg.Home, st, hub)
+	rt.Bin = cfg.BinDir
 	site := sites.New(cfg.Home, st, hub, sup)
 	inst := installer.New(cfg.Home, st, rt, hub)
+	inst.Bin = cfg.BinDir
 	inst.Version = version
-	// A new caddy runtime gets a Caddy service automatically.
-	rt.OnChange = func() { _, _ = site.EnsureCaddy() }
+	// A new caddy (or, when nginx serves the sites, nginx) runtime gets its
+	// site server service automatically.
+	rt.OnChange = func() { _, _ = site.EnsureServers() }
 
-	if _, err := site.EnsureCaddy(); err != nil {
+	if _, err := site.EnsureServers(); err != nil {
 		return err
 	}
 	if err := site.Regenerate(); err != nil {
-		return fmt.Errorf("cannot write Caddyfile: %w", err)
+		return fmt.Errorf("cannot write the site server config: %w", err)
 	}
 
+	remote := &catalog.Remote{
+		Home: cfg.Home, Version: version,
+		Client: func() *http.Client { return installer.HTTPClient(st.Snapshot().Settings.DownloadProxy) },
+		// Loopback-only overrides for tests and offline mirrors; the defaults are the publishers' own sites.
+		PHPURL: os.Getenv("ZERO2DEV_PHP_RELEASES_URL"), AdoptiumURL: os.Getenv("ZERO2DEV_ADOPTIUM_URL"),
+		NginxPage: os.Getenv("ZERO2DEV_NGINX_PAGE_URL"), NginxBase: os.Getenv("ZERO2DEV_NGINX_BASE_URL"),
+		NodeURL: os.Getenv("ZERO2DEV_NODE_URL"), NodeBase: os.Getenv("ZERO2DEV_NODE_BASE_URL"),
+		GoURL: os.Getenv("ZERO2DEV_GO_URL"), GoBase: os.Getenv("ZERO2DEV_GO_BASE_URL"),
+		CaddyURL: os.Getenv("ZERO2DEV_CADDY_URL"), PHPArchiveURL: os.Getenv("ZERO2DEV_PHP_ARCHIVE_URL"),
+	}
 	srv := api.New(api.Deps{
 		Cfg: cfg, Store: st, Hub: hub, Sup: sup, Runtimes: rt, Installer: inst, Sites: site,
-		Catalog: func() ([]model.CatalogEntry, error) { return catalog.Load(cfg.Home) },
-		UI:      webui.FS(), Version: version, Started: time.Now(),
+		Catalog: func() ([]model.CatalogEntry, error) { return catalog.Load(cfg.Home) }, Remote: remote,
+		UI: webui.FS(), Version: version, Started: time.Now(),
+		PickFolder: folderPicker(),
+		Launch:     launch.Start,
 	})
 
 	// Bind loopback only; never 0.0.0.0.
@@ -121,7 +141,8 @@ func run() error {
 	defer cancel()
 	_ = httpSrv.Shutdown(sctx)
 	// Children must never outlive the daemon.
-	kctx, kcancel := context.WithTimeout(context.Background(), 15*time.Second)
+	// Databases get supervisor.DBGrace to shut down cleanly, so allow a bit more.
+	kctx, kcancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer kcancel()
 	sup.StopAll(kctx)
 	return nil
@@ -151,4 +172,13 @@ func clearDir(dir string) {
 	for _, e := range ents {
 		_ = os.RemoveAll(filepath.Join(dir, e.Name()))
 	}
+}
+
+// folderPicker is the native folder dialog when this OS has one, else nil
+// (the UI then hides its Browse buttons).
+func folderPicker() func(title, start string) (string, bool, error) {
+	if !winpick.Supported() {
+		return nil
+	}
+	return winpick.Folder
 }

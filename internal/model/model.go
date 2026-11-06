@@ -68,12 +68,14 @@ type Runtime struct {
 	Name        string    `json:"name"`
 	Binary      string    `json:"binary"`
 	Source      string    `json:"source"`
+	CatalogID   string    `json:"catalogId,omitempty"` // catalog entry an installed runtime came from
+	Default     bool      `json:"default"`             // the runtime services of this kind use when they name none
 	InstalledAt time.Time `json:"installedAt"`
 }
 
 // Checksum describes how an archive is verified.
 type Checksum struct {
-	Type  string `json:"type"` // sha256 | shasums
+	Type  string `json:"type"` // sha256 | shasums | none (only with Unverified entries)
 	Value string `json:"value,omitempty"`
 	URL   string `json:"url,omitempty"`
 }
@@ -94,6 +96,12 @@ type CatalogEntry struct {
 	FileName        string   `json:"fileName"`
 	Installed       bool     `json:"installed"`
 	Supported       bool     `json:"supported"`
+	// Line is the version line ("8.4", "21", "1.26"); Channel is lts|stable|mainline|"".
+	Line       string `json:"line"`
+	Channel    string `json:"channel"`
+	Source     string `json:"source"`     // builtin | remote
+	Latest     bool   `json:"latest"`     // newest of its kind/os/arch/line
+	Unverified bool   `json:"unverified"` // the publisher has no checksum (nginx)
 }
 
 // Site maps a local domain to a folder or an upstream.
@@ -148,6 +156,7 @@ type Settings struct {
 	OpenBrowserOnStart bool   `json:"openBrowserOnStart"`
 	TrustLocalCA       bool   `json:"trustLocalCA"`
 	DownloadProxy      string `json:"downloadProxy"`
+	SiteServer         string `json:"siteServer"` // caddy (default) | nginx: which program serves the sites
 }
 
 // LogLine is one captured output line.
@@ -159,9 +168,42 @@ type LogLine struct {
 
 // ServiceKinds and RuntimeKinds are the accepted enums.
 var (
-	ServiceKinds = []string{"custom", "node", "php", "go", "java", "caddy"}
-	RuntimeKinds = []string{"node", "php", "go", "java", "caddy", "other"}
+	ServiceKinds = []string{"custom", "node", "php", "go", "java", "caddy", "nginx", "mariadb", "mysql", "postgres", "redis"}
+	RuntimeKinds = []string{"node", "php", "go", "java", "caddy", "nginx",
+		"mariadb", "mysql", "postgres", "redis",
+		"vscode", "vscodium", "notepadpp",
+		"heidisql", "dbeaver", "other"}
+	// RemoteKinds can have their version lists fetched from the publishers.
+	RemoteKinds = []string{"node", "go", "caddy", "php", "java", "nginx",
+		"mariadb", "mysql", "postgres", "redis", "vscode", "vscodium", "notepadpp", "heidisql", "dbeaver"}
 )
+
+// Kind categories, as grouped on the Runtimes page.
+const (
+	CatLanguage = "language"
+	CatServer   = "server"
+	CatDatabase = "database"
+	CatEditor   = "editor"
+	CatDBTool   = "dbtool"
+)
+
+// KindCategory maps every runtime kind (except "other") to its category.
+var KindCategory = map[string]string{
+	"node": CatLanguage, "php": CatLanguage, "go": CatLanguage, "java": CatLanguage,
+	"caddy": CatServer, "nginx": CatServer,
+	"mariadb": CatDatabase, "mysql": CatDatabase, "postgres": CatDatabase, "redis": CatDatabase,
+	"vscode": CatEditor, "vscodium": CatEditor, "notepadpp": CatEditor,
+	"heidisql": CatDBTool, "dbeaver": CatDBTool,
+}
+
+// Launchable kinds are desktop programs that are opened, not supervised as services.
+func Launchable(kind string) bool {
+	c := KindCategory[kind]
+	return c == CatEditor || c == CatDBTool
+}
+
+// IsDatabase reports whether a service or runtime kind is a database server.
+func IsDatabase(kind string) bool { return KindCategory[kind] == CatDatabase }
 
 // In reports whether s is in list.
 func In(s string, list []string) bool {

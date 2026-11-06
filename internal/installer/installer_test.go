@@ -145,7 +145,7 @@ func TestInstallZipWithShasums(t *testing.T) {
 	if job.State != "done" || job.Percent != 100 || job.RuntimeID == "" {
 		t.Fatalf("job %+v", job)
 	}
-	b, err := os.ReadFile(filepath.Join(e.home, "runtimes", "fake-1", "node.exe"))
+	b, err := os.ReadFile(filepath.Join(e.home, "bin", "fake-1", "node.exe"))
 	if err != nil || string(b) != "BIN" {
 		t.Fatalf("binary not extracted with strip: %v %q", err, b)
 	}
@@ -161,7 +161,7 @@ func TestInstallZipWithShasums(t *testing.T) {
 	if err := e.rts.Delete(rs[0].ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(e.home, "runtimes", "fake-1")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(e.home, "bin", "fake-1")); !os.IsNotExist(err) {
 		t.Fatal("install folder should be removed")
 	}
 	// no leftovers
@@ -182,7 +182,7 @@ func TestInstallTarGzBareHashAndSymlink(t *testing.T) {
 	if job.State != "done" {
 		t.Fatalf("job %+v", job)
 	}
-	root := filepath.Join(e.home, "runtimes", "fake-2")
+	root := filepath.Join(e.home, "bin", "fake-2")
 	if runtime.GOOS != "windows" {
 		st, err := os.Stat(filepath.Join(root, "bin", "node"))
 		if err != nil || st.Mode()&0o111 == 0 {
@@ -219,7 +219,7 @@ func TestWrongHashRefusesAndExtractsNothing(t *testing.T) {
 		if job.State != "failed" || !strings.Contains(job.Error, "checksum mismatch") {
 			t.Fatalf("%s: job %+v", mode, job)
 		}
-		ents, _ := os.ReadDir(filepath.Join(e.home, "runtimes"))
+		ents, _ := os.ReadDir(filepath.Join(e.home, "bin"))
 		if len(ents) != 0 {
 			t.Fatalf("%s: runtimes dir must stay empty, has %v", mode, ents)
 		}
@@ -249,12 +249,12 @@ func TestZipSlipRejected(t *testing.T) {
 		if job.State != "failed" || !strings.Contains(job.Error, "zip-slip") {
 			t.Fatalf("%q: job %+v", evil, job)
 		}
-		for _, p := range []string{filepath.Join(e.home, "evil.txt"), filepath.Join(e.home, "runtimes", "evil.txt"), filepath.Join(e.home, "..", "evil.txt"), "/abs/evil.txt"} {
+		for _, p := range []string{filepath.Join(e.home, "evil.txt"), filepath.Join(e.home, "bin", "evil.txt"), filepath.Join(e.home, "..", "evil.txt"), "/abs/evil.txt"} {
 			if _, err := os.Stat(p); err == nil {
 				t.Fatalf("%q: file escaped to %s", evil, p)
 			}
 		}
-		if ents, _ := os.ReadDir(filepath.Join(e.home, "runtimes")); len(ents) != 0 {
+		if ents, _ := os.ReadDir(filepath.Join(e.home, "bin")); len(ents) != 0 {
 			t.Fatalf("temp dir not cleaned: %v", ents)
 		}
 		if len(e.rts.List()) != 0 {
@@ -277,7 +277,7 @@ func TestTarSymlinkEscapeRejected(t *testing.T) {
 		if job.State != "failed" {
 			t.Fatalf("case %d: expected failure, got %+v", i, job)
 		}
-		if ents, _ := os.ReadDir(filepath.Join(e.home, "runtimes")); len(ents) != 0 {
+		if ents, _ := os.ReadDir(filepath.Join(e.home, "bin")); len(ents) != 0 {
 			t.Fatalf("case %d: leftovers %v", i, ents)
 		}
 	}

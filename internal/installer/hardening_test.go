@@ -69,7 +69,7 @@ func TestRenamePermanentFailureFallsBackToCopy(t *testing.T) {
 	if job.State != "done" || calls != e.in.RenameAttempts {
 		t.Fatalf("calls=%d job=%+v", calls, job)
 	}
-	final := filepath.Join(e.home, "runtimes", "cp-1")
+	final := filepath.Join(e.home, "bin", "cp-1")
 	if b, err := os.ReadFile(filepath.Join(final, "lib", "a.txt")); err != nil || string(b) != "a" {
 		t.Fatalf("copied tree missing: %v", err)
 	}
@@ -288,7 +288,7 @@ func TestImportLocalZipWithGivenHash(t *testing.T) {
 	if got := e.wait(t, j.ID); got.State != "done" || got.RuntimeID == "" {
 		t.Fatalf("%+v", got)
 	}
-	if b, _ := os.ReadFile(filepath.Join(e.home, "runtimes", "imp-1", "caddy")); string(b) != "BIN" {
+	if b, _ := os.ReadFile(filepath.Join(e.home, "bin", "imp-1", "caddy")); string(b) != "BIN" {
 		t.Fatal("not extracted")
 	}
 	if b, _ := os.ReadFile(file); len(b) != len(z) {
@@ -332,7 +332,7 @@ func TestImportWrongHash(t *testing.T) {
 	if got.State != "failed" || !strings.Contains(got.Error, "Verifying: checksum mismatch") {
 		t.Fatalf("%+v", got)
 	}
-	if ents, _ := os.ReadDir(filepath.Join(e.home, "runtimes")); len(ents) != 0 {
+	if ents, _ := os.ReadDir(filepath.Join(e.home, "bin")); len(ents) != 0 {
 		t.Fatalf("nothing may be extracted: %v", ents)
 	}
 	if _, err := os.Stat(file); err != nil {
@@ -358,8 +358,8 @@ func TestImportValidation(t *testing.T) {
 		{"missing file", filepath.Join(dir, "caddy_x_linux_amd64.zip"), "", "does not exist"},
 		{"directory", dir, "", "not a file"},
 		{"wrong name", wrongName, sum(z), "must be named caddy_x_linux_amd64.zip"},
-		{"malformed sha", file, "abc", "SHA-512 (128) hexadecimal"},
-		{"no checksum available", file, "", "Cannot verify the file because the published checksum could not be fetched. Paste the SHA-256 or SHA-512 for caddy_x_linux_amd64.zip from " + e.srv.URL + "/dl/sums.txt into the checksum field."},
+		{"malformed sha", file, "abc", "SHA-512 (128) or MD5 (32) hexadecimal"},
+		{"no checksum available", file, "", "Cannot verify the file because the published checksum could not be fetched. Paste the SHA-256, SHA-512 or MD5 for caddy_x_linux_amd64.zip from " + e.srv.URL + "/dl/sums.txt into the checksum field."},
 	}
 	for _, c := range cases {
 		_, err := e.in.Import(entry.ID, c.path, c.sha)
@@ -428,7 +428,7 @@ func TestMovedHomeKeepsRuntimesAndCatalogFlags(t *testing.T) {
 	if st.Snapshot().Runtimes[0].Binary != oldBinary {
 		t.Fatal("precondition: still the old path before rebase")
 	}
-	n, err := st.RebaseRuntimes(moved)
+	n, err := st.RebaseRuntimes(filepath.Join(moved, "bin"))
 	if err != nil || n != 1 {
 		t.Fatalf("rebase n=%d err=%v", n, err)
 	}
@@ -440,7 +440,7 @@ func TestMovedHomeKeepsRuntimesAndCatalogFlags(t *testing.T) {
 			registered = r
 		}
 	}
-	want := filepath.Join(moved, "runtimes", "imp-1", "caddy")
+	want := filepath.Join(moved, "bin", "imp-1", "caddy")
 	if installed.Binary != want {
 		t.Fatalf("binary %q, want %q", installed.Binary, want)
 	}
@@ -450,7 +450,7 @@ func TestMovedHomeKeepsRuntimesAndCatalogFlags(t *testing.T) {
 	if registered.Binary != outside {
 		t.Fatalf("registered runtime must not be rewritten: %q", registered.Binary)
 	}
-	es := catalog.Annotate([]model.CatalogEntry{entry}, moved, st.Snapshot().Runtimes)
+	es := catalog.Annotate([]model.CatalogEntry{entry}, filepath.Join(moved, "bin"), st.Snapshot().Runtimes)
 	if !es[0].Installed {
 		t.Fatal("catalog installed flag must survive the move")
 	}
@@ -459,7 +459,7 @@ func TestMovedHomeKeepsRuntimesAndCatalogFlags(t *testing.T) {
 	if st2.Snapshot().Runtimes[0].Binary != want && st2.Snapshot().Runtimes[1].Binary != want {
 		t.Fatal("rebase not persisted")
 	}
-	if n, _ := st2.RebaseRuntimes(moved); n != 0 {
+	if n, _ := st2.RebaseRuntimes(filepath.Join(moved, "bin")); n != 0 {
 		t.Fatalf("second rebase changed %d", n)
 	}
 }

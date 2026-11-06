@@ -24,6 +24,7 @@ const (
 // Config is the daemon's static configuration (from env at startup).
 type Config struct {
 	Home       string
+	BinDir     string // downloaded runtimes live here, separate from Home (data)
 	HomeSource string // env | cwd | exe
 	ExeDir     string // directory of the running executable ("" if unknown)
 	Port       int
@@ -103,7 +104,11 @@ func fromEnv(getenv func(string) string, exeFn func() (string, error), cwdFn fun
 	if c.Home, c.HomeSource, c.ExeDir, err = resolveHome(getenv, exeFn, cwdFn); err != nil {
 		return nil, fmt.Errorf("cannot determine data folder: %w", err)
 	}
-	for _, d := range []string{"", "runtimes", "config", "logs", "tmp", filepath.Join("caddy", "data"), filepath.Join("caddy", "config")} {
+	c.BinDir = resolveBin(getenv, c)
+	if err := os.MkdirAll(c.BinDir, 0o755); err != nil {
+		return nil, fmt.Errorf("cannot create runtimes folder %s: %w", c.BinDir, err)
+	}
+	for _, d := range []string{"", "config", "logs", "tmp", filepath.Join("caddy", "data"), filepath.Join("caddy", "config")} {
 		if err := os.MkdirAll(filepath.Join(c.Home, d), 0o755); err != nil {
 			return nil, fmt.Errorf("cannot create data folder %s: %w", c.Home, err)
 		}
@@ -112,6 +117,21 @@ func fromEnv(getenv func(string) string, exeFn func() (string, error), cwdFn fun
 		return nil, err
 	}
 	return c, nil
+}
+
+// resolveBin picks the runtimes folder: ZERO2DEV_BIN, else <exe dir>/bin next to the
+// data folder in portable mode, else <home>/bin (dev and ZERO2DEV_HOME modes).
+func resolveBin(getenv func(string) string, c *Config) string {
+	if b := strings.TrimSpace(getenv("ZERO2DEV_BIN")); b != "" {
+		if abs, err := filepath.Abs(b); err == nil {
+			return abs
+		}
+		return b
+	}
+	if c.HomeSource == SourceExe && c.ExeDir != "" {
+		return filepath.Join(c.ExeDir, "bin")
+	}
+	return filepath.Join(c.Home, "bin")
 }
 
 var tokenRE = regexp.MustCompile(`^[0-9a-f]{64}$`)

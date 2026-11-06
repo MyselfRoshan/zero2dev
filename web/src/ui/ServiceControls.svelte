@@ -22,6 +22,6 @@
 {:else}
   <button class="btn sm" disabled={busy || transitional} onclick={() => run(startService)} aria-label="Start {service.name}"><Icon name="play" size={14} /> Start</button>
 {/if}
-{#if showRestart}
+{#if showRestart && isActive(service)}
   <button class="btn sm" disabled={busy || transitional} onclick={() => run(restartService)} aria-label="Restart {service.name}"><Icon name="restart" size={14} /> Restart</button>
 {/if}

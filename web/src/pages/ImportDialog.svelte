@@ -7,6 +7,7 @@
   import Modal from "../ui/Modal.svelte";
 
   let { entry, onclose }: { entry: CatalogEntry; onclose: () => void } = $props();
+  let accept = $state(false);
 
   let filePath = $state("");
   let sha = $state("");
@@ -24,10 +25,15 @@
     submitted = true;
     formError = "";
     errors = validateImport({ filePath, sha256: sha });
+    if (entry.unverified && !sha.trim() && !accept) {
+      errors = { ...errors, sha256: "Paste the checksum from the download page, or tick the box below to import without a checksum." };
+    }
     if (hasErrors(errors)) return;
     busy = true;
     try {
-      await importRuntime(entry, filePath.trim(), sha);
+      await importRuntime(entry, filePath.trim(), sha, {
+        acceptUnverified: entry.unverified && !sha.trim() && accept,
+      });
       toast("info", `Importing ${entry.fileName}.`);
       onclose();
     } catch (err) {
@@ -53,11 +59,14 @@
     </div>
     <div class="field">
       <label>
-        <span class="label">Checksum, SHA-256 or SHA-512 (optional)</span>
-        <input type="text" class="mono" bind:value={sha} aria-invalid={!!errors.sha256} aria-describedby="imp-sha-help" placeholder="64 or 128 hexadecimal characters" spellcheck="false" autocomplete="off" />
+        <span class="label">Checksum, SHA-256, SHA-512 or MD5 (optional)</span>
+        <input type="text" class="mono" bind:value={sha} aria-invalid={!!errors.sha256} aria-describedby="imp-sha-help" placeholder="32, 64 or 128 hexadecimal characters" spellcheck="false" autocomplete="off" />
       </label>
       {#if errors.sha256}<span class="err">{errors.sha256}</span>{:else}<span class="hint" id="imp-sha-help">Leave empty to check the file against the published checksum. If the network blocks that too, paste the hash from the download page.</span>{/if}
     </div>
+    {#if entry.unverified}
+      <label class="check"><input type="checkbox" bind:checked={accept} /> <span>Import without a checksum. The publisher does not publish one, so only a pasted checksum can verify this file.</span></label>
+    {/if}
     <div class="notice"><Icon name="check" /><span>Zero2Dev works on a copy of this file inside its own data folder. Your downloaded file is never modified or deleted.</span></div>
   </form>
   {#snippet footer()}

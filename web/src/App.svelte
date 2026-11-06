@@ -72,7 +72,6 @@
       <header class="top">
         <h1>{title}</h1>
         <span class="spacer"></span>
-        {#if app.status}<span class="muted small mono">{app.status.os}/{app.status.arch}</span>{/if}
       </header>
 
       {#if app.conn !== "online"}

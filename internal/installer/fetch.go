@@ -37,7 +37,10 @@ func ValidateProxy(s string) (string, error) {
 // newClient builds the HTTP client: explicit timeouts, proxy from the
 // setting (else HTTP_PROXY/HTTPS_PROXY/NO_PROXY). There is deliberately no
 // overall client timeout (archives are large); stalls are caught separately.
-func newClient(proxy string) *http.Client {
+func newClient(proxy string) *http.Client { return HTTPClient(proxy) }
+
+// HTTPClient builds the client used for downloads and version checks (see newClient).
+func HTTPClient(proxy string) *http.Client {
 	tr := &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
 		DialContext:           (&net.Dialer{Timeout: 15 * time.Second, KeepAlive: 30 * time.Second}).DialContext,

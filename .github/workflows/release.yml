@@ -46,22 +46,27 @@ jobs:
         with:
           go-version-file: go.mod
 
+      # pnpm version comes from "packageManager" in web/package.json.
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
+
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: npm
-          cache-dependency-path: web/package-lock.json
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
 
       - name: Check and test the UI
         working-directory: web
         run: |
-          npm ci
-          npm run check
-          npm test
+          pnpm install --frozen-lockfile
+          pnpm run check
+          pnpm test
 
       - name: Build the UI (embedded into the executable)
         working-directory: web
-        run: npm run build
+        run: pnpm run build
 
       - name: Vet and test the daemon
         run: |

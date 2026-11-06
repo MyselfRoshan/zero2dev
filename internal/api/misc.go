@@ -24,9 +24,10 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) error {
 	}
 	writeJSON(w, 200, map[string]any{
 		"version": s.Version, "uptimeSeconds": int64(time.Since(s.Started).Seconds()),
-		"os": runtime.GOOS, "arch": runtime.GOARCH, "homeDir": s.Cfg.Home,
+		"os": runtime.GOOS, "arch": runtime.GOARCH, "homeDir": s.Cfg.Home, "binDir": s.Cfg.BinDir,
 		"homeSource": s.Cfg.HomeSource, "portable": s.Cfg.Portable(), "exeDir": s.Cfg.ExeDir,
-		"counts": map[string]int{"services": len(d.Services), "running": running, "runtimes": len(d.Runtimes), "sites": len(d.Sites)},
+		"folderPicker": s.PickFolder != nil,
+		"counts":       map[string]int{"services": len(d.Services), "running": running, "runtimes": len(d.Runtimes), "sites": len(d.Sites)},
 	})
 	return nil
 }
@@ -34,6 +35,7 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) error {
 func (s *Server) settings() model.Settings {
 	st := s.Store.Snapshot().Settings
 	st.APIPort, st.HomeDir = s.Cfg.Port, s.Cfg.Home
+	st.SiteServer = sites.Server(st)
 	return st
 }
 
@@ -53,6 +55,7 @@ type settingsInput struct {
 	OpenBrowserOnStart *bool   `json:"openBrowserOnStart"`
 	TrustLocalCA       *bool   `json:"trustLocalCA"`
 	DownloadProxy      *string `json:"downloadProxy"`
+	SiteServer         *string `json:"siteServer"`
 }
 
 func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) error {
@@ -61,8 +64,21 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	changedProxy := false
+	oldServer, newServer := "", ""
 	err := s.Store.Update(func(d *store.Data) error {
 		st := &d.Settings
+		oldServer = sites.Server(*st)
+		if in.SiteServer != nil {
+			v := lower(*in.SiteServer)
+			if v != sites.ServerCaddy && v != sites.ServerNginx {
+				return apperr.BadRequest("siteServer must be caddy or nginx")
+			}
+			st.SiteServer = v
+		}
+		newServer = sites.Server(*st)
+		if newServer != oldServer {
+			changedProxy = true
+		}
 		if in.DomainSuffix != nil {
 			suf := lower(*in.DomainSuffix)
 			if !sites.SuffixRE.MatchString(suf) {
@@ -107,9 +123,12 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) error {
 	}
 	if changedProxy {
 		if err := s.Sites.Regenerate(); err != nil {
-			return apperr.Internal("cannot write Caddyfile: %v", err)
+			return apperr.Internal("cannot write the site server config: %v", err)
 		}
 		s.Hub.Publish("sites.changed", struct{}{})
+	}
+	if newServer != oldServer {
+		s.Sites.SwitchServer(oldServer)
 	}
 	writeJSON(w, 200, s.settings())
 	return nil

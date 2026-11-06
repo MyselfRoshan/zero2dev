@@ -2,10 +2,14 @@
   import { onMount } from "svelte";
   import { deleteService, isActive, serviceUrl } from "../lib/actions";
   import { consumeNewFlag } from "../lib/router.svelte";
+  import { serviceRuntimeLabel } from "../lib/catalog";
+  import { deleteServiceMessage, serviceKindLabel } from "../lib/ux";
+  import { dbDataPath } from "../lib/installer";
   import { app, lists } from "../lib/store.svelte";
   import type { Service } from "../lib/types";
   import ConfirmDialog from "../ui/ConfirmDialog.svelte";
   import Icon from "../ui/Icon.svelte";
+  import KindIcon from "../ui/KindIcon.svelte";
   import PageHead from "../ui/PageHead.svelte";
   import ServiceControls from "../ui/ServiceControls.svelte";
   import StateBadge from "../ui/StateBadge.svelte";
@@ -28,21 +32,21 @@
   }
 </script>
 
-<PageHead sub="Commands that Zero2Dev starts, stops and watches.">
+<PageHead sub="Your apps. Zero2Dev starts them, checks their port and keeps their logs.">
   <button class="btn primary" onclick={() => (editing = "new")}><Icon name="plus" /> New service</button>
 </PageHead>
 
 {#if app.loaded.services && lists.services.length === 0}
   <div class="card empty">
     <h2>No services yet</h2>
-    <p>Create a service for each app you run during development. Pick the kind, point it at a folder and Zero2Dev handles the process, the port check and the logs.</p>
-    <button class="btn primary" onclick={() => (editing = "new")}><Icon name="plus" /> Create your first service</button>
+    <p>Add each app you run during development: choose what it is (Node.js, PHP, Go...), point at its folder, and Zero2Dev runs it for you.</p>
+    <button class="btn primary" onclick={() => (editing = "new")}><Icon name="plus" /> Add your first service</button>
   </div>
 {:else}
   <div class="card t-wrap">
     <table class="t">
       <thead>
-        <tr><th>Name</th><th>State</th><th>Kind</th><th>Port</th><th>Folder</th><th><span class="sr-only">Actions</span></th></tr>
+        <tr><th>Name</th><th>Status</th><th>Type</th><th>Port</th><th>Folder</th><th><span class="sr-only">Actions</span></th></tr>
       </thead>
       <tbody>
         {#each lists.services as s (s.id)}
@@ -54,12 +58,11 @@
               {#if s.state === "failed" && s.lastError}<div class="err">{s.lastError}</div>{/if}
             </td>
             <td><StateBadge state={s.state} /></td>
-            <td>{s.kind}</td>
-            <td class="mono">{#if url}<a href={url} target="_blank" rel="noreferrer">{s.port}</a>{:else}<span class="muted">none</span>{/if}</td>
+            <td><span class="kind-cell"><KindIcon kind={s.kind} size={16} /> {serviceKindLabel(s.kind)}</span>{#if s.runtimeId && serviceRuntimeLabel(s.runtimeId, lists.runtimes)} <span class="badge plain" data-testid="svc-runtime">{serviceRuntimeLabel(s.runtimeId, lists.runtimes)}</span>{/if}</td>
+            <td class="mono">{#if url}<a href={url} target="_blank" rel="noreferrer">{s.port}</a>{:else if s.port > 0}{s.port}{:else}<span class="muted">none</span>{/if}</td>
             <td class="path">{s.cwd}</td>
             <td class="actions">
               <ServiceControls service={s} showRestart />
-              <a class="btn sm ghost icon" href="#/services/{s.id}" aria-label="Open {s.name} and its logs" title="Logs"><Icon name="logs" size={14} /></a>
               <button class="btn sm ghost icon" disabled={isActive(s)} onclick={() => (editing = s)} aria-label="Edit {s.name}" title={isActive(s) ? "Stop the service to edit it" : "Edit"}><Icon name="edit" size={14} /></button>
               <button class="btn sm ghost icon danger" onclick={() => (deleting = s)} aria-label="Delete {s.name}" title="Delete"><Icon name="trash" size={14} /></button>
             </td>
@@ -76,9 +79,7 @@
 {#if deleting}
   <ConfirmDialog
     title="Delete {deleting.name}?"
-    message={isActive(deleting)
-      ? "This service is running. Zero2Dev will stop it, then delete it and its log file. This cannot be undone."
-      : "This deletes the service and its log file. This cannot be undone."}
+    message={deleteServiceMessage(deleting, isActive(deleting), dbDataPath(app.status?.homeDir ?? "<data folder>", deleting.id))}
     confirmLabel="Delete service"
     {busy}
     onconfirm={confirmDelete}

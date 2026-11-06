@@ -94,5 +94,208 @@
     "os": "linux",
     "arch": "amd64",
     "homepage": "https://github.com/caddyserver/caddy/releases/tag/v2.8.4"
+  },
+  {
+    "id": "nginx-1.26.2-windows-amd64",
+    "kind": "nginx",
+    "version": "1.26.2",
+    "name": "nginx 1.26.2 (stable)",
+    "url": "https://nginx.org/download/nginx-1.26.2.zip",
+    "checksum": {
+      "type": "none"
+    },
+    "unverified": true,
+    "binaryRelPath": "nginx.exe",
+    "stripComponents": 1,
+    "os": "windows",
+    "arch": "amd64",
+    "homepage": "https://nginx.org/en/download.html",
+    "line": "1.26",
+    "channel": "stable"
+  },
+  {
+    "id": "nginx-1.27.3-windows-amd64",
+    "kind": "nginx",
+    "version": "1.27.3",
+    "name": "nginx 1.27.3 (mainline)",
+    "url": "https://nginx.org/download/nginx-1.27.3.zip",
+    "checksum": {
+      "type": "none"
+    },
+    "unverified": true,
+    "binaryRelPath": "nginx.exe",
+    "stripComponents": 1,
+    "os": "windows",
+    "arch": "amd64",
+    "homepage": "https://nginx.org/en/download.html",
+    "line": "1.27",
+    "channel": "mainline"
+  },
+  {
+    "os": "windows",
+    "arch": "amd64",
+    "id": "mariadb-11.4.13-windows-amd64",
+    "kind": "mariadb",
+    "version": "11.4.13",
+    "name": "MariaDB 11.4.13",
+    "url": "https://downloads.mariadb.org/rest-api/mariadb/11.4.13/mariadb-11.4.13-winx64.zip",
+    "checksum": {
+      "type": "sha256",
+      "value": "d62986d433eeebfde218560b276103831604a61e929e87f1a17f5aebd80257e2"
+    },
+    "binaryRelPath": "bin/mariadbd.exe",
+    "stripComponents": 1,
+    "homepage": "https://mariadb.org/download/",
+    "line": "11.4",
+    "channel": "lts"
+  },
+  {
+    "os": "windows",
+    "arch": "amd64",
+    "id": "mysql-8.4.13-windows-amd64",
+    "kind": "mysql",
+    "version": "8.4.13",
+    "name": "MySQL 8.4.13",
+    "url": "https://cdn.mysql.com/Downloads/MySQL-8.4/mysql-8.4.13-winx64.zip",
+    "checksum": {
+      "type": "md5",
+      "value": "7b94489d5524dea9b27097068bea25a8"
+    },
+    "binaryRelPath": "bin/mysqld.exe",
+    "stripComponents": 1,
+    "homepage": "https://dev.mysql.com/downloads/mysql/8.4.html",
+    "line": "8.4",
+    "channel": "lts"
+  },
+  {
+    "os": "windows",
+    "arch": "amd64",
+    "id": "mysql-26.10.0-windows-amd64",
+    "kind": "mysql",
+    "version": "26.10.0",
+    "name": "MySQL 26.10.0",
+    "url": "https://cdn.mysql.com/Downloads/MySQL-26.10/mysql-26.10.0-winx64.zip",
+    "checksum": {
+      "type": "md5",
+      "value": "11d70a5011b7760508e98b3a2fe5db3f"
+    },
+    "binaryRelPath": "bin/mysqld.exe",
+    "stripComponents": 1,
+    "homepage": "https://dev.mysql.com/downloads/mysql/",
+    "line": "26.10",
+    "channel": "stable"
+  },
+  {
+    "os": "windows",
+    "arch": "amd64",
+    "id": "postgres-17.11-windows-amd64",
+    "kind": "postgres",
+    "version": "17.11",
+    "name": "PostgreSQL 17.11",
+    "url": "https://get.enterprisedb.com/postgresql/postgresql-17.11-5-windows-x64-binaries.zip",
+    "checksum": {
+      "type": "none"
+    },
+    "unverified": true,
+    "binaryRelPath": "bin/postgres.exe",
+    "stripComponents": 1,
+    "homepage": "https://www.enterprisedb.com/download-postgresql-binaries",
+    "line": "17"
+  },
+  {
+    "os": "windows",
+    "arch": "amd64",
+    "id": "redis-8.10.3-windows-amd64",
+    "kind": "redis",
+    "version": "8.10.3",
+    "name": "Redis 8.10.3",
+    "url": "https://github.com/redis-windows/redis-windows/releases/download/8.10.3/Redis-8.10.3-Windows-x64-msys2.zip",
+    "checksum": {
+      "type": "sha256",
+      "value": "af16df340525b431e9ec8dabfd625d5e7a233f82805b5418819904ea909c447f"
+    },
+    "binaryRelPath": "redis-server.exe",
+    "stripComponents": 1,
+    "homepage": "https://github.com/redis-windows/redis-windows/releases/tag/8.10.3"
+  },
+  {
+    "os": "windows",
+    "arch": "amd64",
+    "id": "vscode-1.145.0-windows-amd64",
+    "kind": "vscode",
+    "version": "1.145.0",
+    "name": "VS Code 1.145.0",
+    "url": "https://vscode.download.prss.microsoft.com/dbazure/download/stable/a717861c07586a53d83b80d742cd3f59b20a6273/VSCode-win32-x64-1.145.0.zip",
+    "checksum": {
+      "type": "sha256",
+      "value": "79cf4cc5b17357cc64abdd22a2d7d4884d05f07b3f0defbf5fc0d67fe03d9dc4"
+    },
+    "binaryRelPath": "Code.exe",
+    "stripComponents": 0,
+    "homepage": "https://code.visualstudio.com/updates"
+  },
+  {
+    "os": "windows",
+    "arch": "amd64",
+    "id": "vscodium-1.143.17232-windows-amd64",
+    "kind": "vscodium",
+    "version": "1.143.17232",
+    "name": "VSCodium 1.143.17232",
+    "url": "https://github.com/VSCodium/vscodium/releases/download/1.143.17232/VSCodium-win32-x64-1.143.17232.zip",
+    "checksum": {
+      "type": "sha256",
+      "value": "a1090868af8ac0ac04c22d79fdd02246fa115a78daf38a741d8db06df1753c1d"
+    },
+    "binaryRelPath": "VSCodium.exe",
+    "stripComponents": 0,
+    "homepage": "https://github.com/VSCodium/vscodium/releases/tag/1.143.17232"
+  },
+  {
+    "os": "windows",
+    "arch": "amd64",
+    "id": "notepadpp-8.9.8.1-windows-amd64",
+    "kind": "notepadpp",
+    "version": "8.9.8.1",
+    "name": "Notepad++ 8.9.8.1",
+    "url": "https://github.com/notepad-plus-plus/notepad-plus-plus/releases/download/v8.9.8.1/npp.8.9.8.1.portable.x64.zip",
+    "checksum": {
+      "type": "sha256",
+      "value": "beddf5548e75c97930d1575ba1c7d113e6e2b33d0a200310e734ca08e225f414"
+    },
+    "binaryRelPath": "notepad++.exe",
+    "stripComponents": 0,
+    "homepage": "https://github.com/notepad-plus-plus/notepad-plus-plus/releases/tag/v8.9.8.1"
+  },
+  {
+    "os": "windows",
+    "arch": "amd64",
+    "id": "heidisql-12.22-windows-amd64",
+    "kind": "heidisql",
+    "version": "12.22",
+    "name": "HeidiSQL 12.22",
+    "url": "https://github.com/HeidiSQL/HeidiSQL/releases/download/v12.22/HeidiSQL_12.22_64_Portable.zip",
+    "checksum": {
+      "type": "sha256",
+      "value": "7b36821fa3e16cc37b511d41747efa4c8b980d1e3fa937e52c5931bcc4ee79b4"
+    },
+    "binaryRelPath": "heidisql.exe",
+    "stripComponents": 0,
+    "homepage": "https://github.com/HeidiSQL/HeidiSQL/releases/tag/v12.22"
+  },
+  {
+    "os": "windows",
+    "arch": "amd64",
+    "id": "dbeaver-26.2.4-windows-amd64",
+    "kind": "dbeaver",
+    "version": "26.2.4",
+    "name": "DBeaver 26.2.4",
+    "url": "https://github.com/dbeaver/dbeaver/releases/download/26.2.4/dbeaver-ce-26.2.4-windows-x86_64.zip",
+    "checksum": {
+      "type": "sha256",
+      "value": "e667f516d64f29b87e3571203fc3eb02f0a419b9ff66865043bf9954ebc230c6"
+    },
+    "binaryRelPath": "dbeaver.exe",
+    "stripComponents": 1,
+    "homepage": "https://github.com/dbeaver/dbeaver/releases/tag/26.2.4"
   }
 ]

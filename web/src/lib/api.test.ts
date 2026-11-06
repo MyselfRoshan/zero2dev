@@ -34,6 +34,24 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe("runtime endpoints", () => {
+  it("makes a runtime the default with POST and no body", async () => {
+    const f = vi.fn().mockResolvedValue(res(200, { id: "rt 1", default: true }));
+    setFetch(f as never);
+    const r = await api.setDefaultRuntime("rt 1");
+    expect(f.mock.calls[0][0]).toBe("/api/runtimes/rt%201/default");
+    expect(f.mock.calls[0][1].method).toBe("POST");
+    expect(f.mock.calls[0][1].body).toBeUndefined();
+    expect(r.default).toBe(true);
+  });
+  it("sends only contract fields when installing", async () => {
+    const f = vi.fn().mockResolvedValue(res(202, { id: "job" }));
+    setFetch(f as never);
+    await api.installRuntime("php-7.1.33", { acceptUnverified: true });
+    expect(JSON.parse(f.mock.calls[0][1].body)).toEqual({ catalogId: "php-7.1.33", acceptUnverified: true });
+  });
+});
+
 describe("request", () => {
   it("sends the bearer token and JSON body", async () => {
     localStorage.setItem(TOKEN_KEY, "abc123");

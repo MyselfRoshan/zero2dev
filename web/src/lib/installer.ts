@@ -44,6 +44,11 @@ export function joinPath(home: string, ...parts: string[]): string {
   return [home.replace(/[\\/]+$/, ""), ...parts].join(sep);
 }
 
+/** Where a database service keeps its files (supervisor DataDir). */
+export function dbDataPath(homeDir: string, serviceId: string): string {
+  return joinPath(homeDir, "databases", serviceId);
+}
+
 export function caRootPath(homeDir: string): string {
   return joinPath(homeDir, "caddy", "data", "caddy", "pki", "authorities", "local", "root.crt");
 }

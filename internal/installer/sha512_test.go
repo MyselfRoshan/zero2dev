@@ -29,7 +29,7 @@ func TestInstallZipWithSha512Shasums(t *testing.T) {
 	if job.State != "done" {
 		t.Fatalf("sha512 install failed: %+v", job)
 	}
-	if b, err := os.ReadFile(filepath.Join(e.home, "runtimes", "caddy-fake", "caddy.exe")); err != nil || string(b) != "BIN" {
+	if b, err := os.ReadFile(filepath.Join(e.home, "bin", "caddy-fake", "caddy.exe")); err != nil || string(b) != "BIN" {
 		t.Fatalf("binary missing: %v %q", err, b)
 	}
 	log, _ := os.ReadFile(filepath.Join(e.home, "logs", "installer.log"))
@@ -49,7 +49,7 @@ func TestSha512WrongHashRefuses(t *testing.T) {
 	if job.State != "failed" || !strings.Contains(job.Error, "checksum mismatch") {
 		t.Fatalf("want checksum mismatch, got %+v", job)
 	}
-	if _, err := os.Stat(filepath.Join(e.home, "runtimes", "caddy-bad")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(e.home, "bin", "caddy-bad")); !os.IsNotExist(err) {
 		t.Fatal("nothing must be extracted on a mismatch")
 	}
 }

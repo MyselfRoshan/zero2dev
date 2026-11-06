@@ -5,7 +5,7 @@ import {
   isAbsolutePath,
   parsePort,
   parseSuffixes,
-  isValidSha256,
+  isValidChecksum,
   validateDomain,
   validateImport,
   validateProxyUrl,
@@ -160,13 +160,15 @@ describe("register and settings", () => {
 
 describe("sha256", () => {
   it("accepts 64 (SHA-256) or 128 (SHA-512) hex characters only", () => {
-    expect(isValidSha256("a".repeat(64))).toBe(true);
-    expect(isValidSha256("a".repeat(128))).toBe(true);
-    expect(isValidSha256("a".repeat(100))).toBe(false);
-    expect(isValidSha256(" " + "AB12".repeat(16) + " ")).toBe(true);
-    expect(isValidSha256("a".repeat(63))).toBe(false);
-    expect(isValidSha256("g".repeat(64))).toBe(false);
-    expect(isValidSha256("")).toBe(false);
+    expect(isValidChecksum("a".repeat(32))).toBe(true); // MD5
+    expect(isValidChecksum("a".repeat(31))).toBe(false);
+    expect(isValidChecksum("a".repeat(64))).toBe(true);
+    expect(isValidChecksum("a".repeat(128))).toBe(true);
+    expect(isValidChecksum("a".repeat(100))).toBe(false);
+    expect(isValidChecksum(" " + "AB12".repeat(16) + " ")).toBe(true);
+    expect(isValidChecksum("a".repeat(63))).toBe(false);
+    expect(isValidChecksum("g".repeat(64))).toBe(false);
+    expect(isValidChecksum("")).toBe(false);
   });
 });
 

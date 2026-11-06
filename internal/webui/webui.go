@@ -1,4 +1,9 @@
-// Package webui embeds the built Svelte app (web/dist is emitted into ./dist).
+// Package webui embeds the built Svelte app (web/ is built into ./dist).
+//
+// ./dist is generated and not in git. On a fresh clone every Go command fails
+// with "pattern all:dist: no matching files found" until the UI is built:
+//
+//	cd web && pnpm install && pnpm build    (or: make web, or .\build.ps1)
 package webui
 
 import (

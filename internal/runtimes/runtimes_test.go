@@ -24,3 +24,25 @@ func TestDisplayName(t *testing.T) {
 		t.Fatal("display names")
 	}
 }
+
+func TestNoProbeForDesktopPrograms(t *testing.T) {
+	for _, c := range []struct {
+		kind, bin string
+		skip      bool
+	}{
+		{"notepadpp", `C:\npp\notepad++.exe`, true},
+		{"heidisql", `C:\h\heidisql.exe`, true},
+		{"dbeaver", `C:\d\dbeaver.exe`, true},
+		{"vscode", `C:\vsc\Code.exe`, true},
+		{"vscode", `C:\vsc\bin\code.cmd`, false},
+		{"mariadb", `C:\m\bin\mariadbd.exe`, false},
+		{"node", `C:\n\node.exe`, false},
+	} {
+		if got := argsFor(c.kind, c.bin) == nil; got != c.skip {
+			t.Errorf("%s %s: no probe = %v, want %v", c.kind, c.bin, got, c.skip)
+		}
+	}
+	if DisplayName("postgres", "17.2", "x") != "PostgreSQL 17.2" {
+		t.Fatal(DisplayName("postgres", "17.2", "x"))
+	}
+}

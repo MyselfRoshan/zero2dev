@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# End-to-end smoke test: builds nothing, runs bin/zero2dev against a temp home.
+# End-to-end smoke test: builds nothing, runs dist/zero2dev against a temp home.
 # Requires: bash, curl, python3. Usage: make build && bash scripts/smoke.sh
 set -u
 cd "$(dirname "$0")/.."
-BIN=${BIN:-bin/zero2dev}
+BIN=${BIN:-dist/zero2dev}
 [ -x "$BIN" ] || { echo "build first: make build"; exit 2; }
 
 TMP=$(mktemp -d)
@@ -42,9 +42,10 @@ jget() { python3 -c "import sys,json;d=json.load(sys.stdin);print(eval(sys.argv[
 
 echo "== portable layout"
 [ -d "$DATA" ] && ok "data/ created next to the binary" || bad "no $DATA"
-for d in tmp caddy/data caddy/config runtimes logs config; do [ -d "$DATA/$d" ] && ok "data/$d" || bad "data/$d missing"; done
+for d in tmp caddy/data caddy/config logs config; do [ -d "$DATA/$d" ] && ok "data/$d" || bad "data/$d missing"; done
+[ -d "$(dirname "$DATA")/bin" ] && ok "bin/ (runtimes) next to data/" || bad "bin/ missing next to data/"
 check "status reports portable" "exe True" "$(curl -s "${A[@]}" $B/api/status | jget "d['homeSource']+' '+str(d['portable'])")"
-check "status version" 0.0.1 "$(curl -s "${A[@]}" $B/api/status | jget "d['version']")"
+check "status version" "$(tr -d ' \r\n' < VERSION)" "$(curl -s "${A[@]}" $B/api/status | jget "d['version']")"
 grep -q "(portable, next to the program)" "$TMP/daemon.log" && ok "startup message names the data folder" || bad "no data folder message"
 
 echo "== auth and hygiene"
