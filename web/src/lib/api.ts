@@ -2,12 +2,14 @@ import type {
   CatalogEntry,
   CatalogRefresh,
   CatalogStatus,
+  CommandPreview,
   InstallOptions,
   DetectedRuntime,
   ErrorCode,
   FolderPick,
   Job,
   LogLine,
+  PHPExtensions,
   Runtime,
   RuntimeKind,
   Service,
@@ -17,6 +19,7 @@ import type {
   SiteInput,
   Status,
 } from "./types";
+import type { KindProfile } from "./kinds";
 
 export const TOKEN_KEY = "zero2dev.token";
 
@@ -175,6 +178,11 @@ export const api = {
   startService: (id: string) => request<Service>("POST", `/api/services/${enc(id)}/start`),
   stopService: (id: string) => request<Service>("POST", `/api/services/${enc(id)}/stop`),
   restartService: (id: string) => request<Service>("POST", `/api/services/${enc(id)}/restart`),
+  serviceCommand: (id: string) => request<CommandPreview>("GET", `/api/services/${enc(id)}/command`),
+  previewService: (b: ServiceInput & { id?: string }) => request<CommandPreview>("POST", "/api/services/preview", b),
+  kinds: () => request<KindProfile[]>("GET", "/api/kinds"),
+  projectScripts: (dir: string) =>
+    request<{ scripts: string[] }>("GET", `/api/project/scripts?dir=${encodeURIComponent(dir)}`),
   serviceLogs: (id: string, tail = 500) =>
     request<{ lines: LogLine[] }>("GET", `/api/services/${enc(id)}/logs?tail=${tail}`),
 
@@ -193,6 +201,8 @@ export const api = {
   /** Opens an editor (on `path`) or a database tool (on the database service `serviceId`). */
   launchRuntime: (id: string, b: { path?: string; serviceId?: string } = {}) =>
     request<void>("POST", `/api/runtimes/${enc(id)}/launch`, b),
+  phpExtensions: (id: string) => request<PHPExtensions>("GET", `/api/runtimes/${enc(id)}/php-extensions`),
+  installXdebug: (id: string) => request<Job>("POST", `/api/runtimes/${enc(id)}/xdebug`),
   deleteRuntime: (id: string) => request<void>("DELETE", `/api/runtimes/${enc(id)}`),
   catalog: () => request<CatalogEntry[]>("GET", "/api/catalog"),
   getJob: (id: string) => request<Job>("GET", `/api/jobs/${enc(id)}`),

@@ -3,10 +3,11 @@
   import { api } from "../lib/api";
   import { deleteService, isActive, serviceUrl } from "../lib/actions";
   import { serviceRuntimeLabel } from "../lib/catalog";
-  import { commandLine, connectionInfo, dbToolsFor, deleteServiceMessage, editorsFor, serviceKindLabel } from "../lib/ux";
+  import { connectionInfo, dbToolsFor, deleteServiceMessage, editorsFor, serviceKindLabel } from "../lib/ux";
   import { dbDataPath } from "../lib/installer";
   import { kindLabel } from "../lib/catalog";
-  import type { Runtime } from "../lib/types";
+  import { commandText, profileFor } from "../lib/kinds";
+  import type { CommandPreview, Runtime, Service, ServiceInput } from "../lib/types";
   import { fmtDateTime } from "../lib/format";
   import { navigate } from "../lib/router.svelte";
   import { app, attempt, clearLogs, lists, logs, seedLogs, toast, upsertService } from "../lib/store.svelte";
@@ -46,9 +47,41 @@
   });
 
   const url = $derived(service ? serviceUrl(service) : null);
-  const editors = $derived(editorsFor(lists.runtimes));
+  // Editors open the project folder; databases and the web servers have none.
+  const editors = $derived(
+    service?.cwd && profileFor(lists.kinds, service.kind)?.folder.use !== "hidden" ? editorsFor(lists.runtimes) : [],
+  );
   const conn = $derived(service ? connectionInfo(service) : null);
-  const dataDir = $derived(service ? dbDataPath(app.status?.homeDir ?? "<data folder>", service.kind, service.id) : "");
+  const profile = $derived(service ? profileFor(lists.kinds, service.kind) : undefined);
+  // The exact command line, from the daemon; fetched again whenever the service changes.
+  let command = $state<CommandPreview | null>(null);
+  $effect(() => {
+    if (!service) return;
+    void JSON.stringify([service.args, service.settings, service.customArgs, service.command, service.runtimeId, service.port, service.cwd, lists.runtimes.length]);
+    api.serviceCommand(service.id).then((c) => (command = c), () => (command = null));
+  });
+  const dataDir = $derived(
+    command?.dataDir || (service ? dbDataPath(app.status?.homeDir ?? "<data folder>", service.kind, service.id) : ""),
+  );
+
+  function inputOf(s: Service): ServiceInput {
+    const { name, kind, command, args, settings, customArgs, cwd, env, port, healthPath, runtimeId, autostart } = s;
+    return { name, kind, command, args, settings, customArgs, cwd, env, port, healthPath, runtimeId, autostart };
+  }
+  // A service from before settings existed runs its own command line; offer the guided settings.
+  let guided = $state<CommandPreview | null>(null);
+  async function askGuided() {
+    if (!service) return;
+    guided = (await attempt(() => api.previewService({ ...inputOf(service!), customArgs: false, args: [], command: "", id: service!.id }))) ?? null;
+  }
+  async function switchToGuided() {
+    if (!service) return;
+    busy = true;
+    const saved = await attempt(() => api.updateService(service!.id, { ...inputOf(service!), customArgs: false, args: [], command: "" }), "Now using the settings.");
+    busy = false;
+    if (saved) upsertService(saved);
+    guided = null;
+  }
   async function copy(text: string) {
     try {
       await navigator.clipboard.writeText(text);
@@ -113,8 +146,11 @@
       {#if !conn}<div><dt>Address</dt><dd class="mono">{#if url}<a href={url} target="_blank" rel="noreferrer">{url} <Icon name="external" size={12} /></a>{:else}no port{/if}</dd></div>{/if}
       <div><dt>Process</dt><dd class="mono">{service.pid ? `pid ${service.pid}` : "not running"}</dd></div>
       <div><dt>Started</dt><dd>{fmtDateTime(service.startedAt) || "-"}</dd></div>
-      <div class="wide"><dt>Runs</dt><dd class="mono" data-testid="command-line">{commandLine(service, lists.runtimes, { dataDir, windows: (app.status?.os ?? "windows") === "windows" })}</dd></div>
-      <div class="wide"><dt>Folder</dt><dd class="mono">{service.cwd}</dd></div>
+      <div class="wide"><dt>Runs</dt><dd class="mono" data-testid="command-line">{command ? commandText(command.program, command.args) : "..."}
+        {#if service.customArgs && service.kind !== "custom"}<span class="muted small"> (your own command line, <button type="button" class="linkish" onclick={askGuided}>use the settings instead</button>)</span>{/if}</dd></div>
+      {#if service.cwd && profile?.folder.use !== "hidden"}<div class="wide"><dt>{profile?.folder.label ?? "Folder"}</dt><dd class="mono">{service.cwd}</dd></div>{/if}
+      {#if command?.dataDir}<div class="wide"><dt>Data folder</dt><dd class="mono" data-testid="data-dir">{command.dataDir}</dd></div>{/if}
+      {#if command?.warnings.length}<div class="wide"><dt>Notes</dt><dd>{#each command.warnings as w (w)}<div class="small muted">{w}</div>{/each}</dd></div>{/if}
     </dl>
     {#if conn}
       <section class="conn" aria-labelledby="conn-h" data-testid="connection">
@@ -139,6 +175,17 @@
     />
   </div>
 
+  {#if guided}
+    <ConfirmDialog
+      title="Use the settings for {service.name}?"
+      message={`Its own command line is replaced by the one its settings make: ${commandText(guided.program, guided.args)}. Check the settings with Edit afterwards.`}
+      confirmLabel="Use the settings"
+      danger={false}
+      {busy}
+      onconfirm={switchToGuided}
+      oncancel={() => (guided = null)}
+    />
+  {/if}
   {#if editing}
     <ServiceForm {service} onsaved={() => (editing = false)} oncancel={() => (editing = false)} />
   {/if}

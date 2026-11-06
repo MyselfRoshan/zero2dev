@@ -7,6 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
+import { PHP_EXTENSIONS, PROFILES, preview, profileOf, validateSettings } from "./kinds.mjs";
 
 const PORT = Number(process.env.MOCK_PORT || 7000);
 const TOKEN = process.env.MOCK_TOKEN || "devtoken";
@@ -257,7 +258,19 @@ const DETECT = [
 ];
 
 function newService(input) {
-  return { ...input, id: id("svc"), state: "stopped", pid: 0, startedAt: null, lastError: "" };
+  // Like the daemon: args without settings (a pre-settings client or seed) are the whole command line.
+  const customArgs =
+    input.kind !== "custom" && (input.customArgs ?? (input.settings === undefined && (input.args ?? []).length > 0));
+  return {
+    settings: {},
+    ...input,
+    customArgs,
+    id: id("svc"),
+    state: "stopped",
+    pid: 0,
+    startedAt: null,
+    lastError: "",
+  };
 }
 function siteView(s) {
   const port = s.https ? state.settings.proxyHttpsPort : state.settings.proxyHttpPort;
@@ -337,27 +350,50 @@ const isAbs = (p) => /^[A-Za-z]:[\\/]/.test(p) || p.startsWith("/") || p.startsW
 
 function validateService(b) {
   const kinds = ["custom", "node", "php", "go", "java", "caddy", "nginx", "mariadb", "mysql", "postgres", "redis"];
-  const allowed = ["name", "kind", "command", "args", "cwd", "env", "port", "healthPath", "runtimeId", "autostart"];
+  const allowed = [
+    "name",
+    "kind",
+    "command",
+    "args",
+    "settings",
+    "customArgs",
+    "cwd",
+    "env",
+    "port",
+    "healthPath",
+    "runtimeId",
+    "autostart",
+    "id",
+  ];
   if (!b || typeof b !== "object") return "invalid JSON body";
   for (const k of Object.keys(b)) if (!allowed.includes(k)) return `unknown field ${k}`;
   if (typeof b.name !== "string" || b.name.trim().length < 1 || b.name.length > 64)
     return "name must be 1-64 characters";
   if (!kinds.includes(b.kind)) return "kind must be one of " + kinds.join(", ");
   if (b.kind === "custom" && !b.command) return "command is required for custom services";
-  if ((b.kind === "node" || b.kind === "java") && !(b.args || []).length && !b.command)
-    return `args required for ${b.kind} services`;
-  if (typeof b.cwd !== "string" || !isAbs(b.cwd)) return "cwd must be an absolute path";
-  if (b.cwd.includes("nonexistent")) return `cwd ${b.cwd} does not exist`;
+  const legacy = b.settings === undefined && (b.args || []).length > 0;
+  if (b.kind !== "custom" && !b.customArgs && !legacy) {
+    const err = validateSettings(b.kind, b.settings || {});
+    if (err) return err;
+  }
+  const folder = profileOf(b.kind)?.folder.use ?? "required";
+  if (b.cwd || folder === "required") {
+    if (typeof b.cwd !== "string" || !isAbs(b.cwd)) return "cwd must be an absolute path";
+    if (b.cwd.includes("nonexistent")) return `cwd ${b.cwd} does not exist`;
+  }
   if (!Number.isInteger(b.port ?? 0) || (b.port ?? 0) < 0 || (b.port ?? 0) > 65535) return "port must be 0-65535";
   return null;
 }
 function normalizeService(b) {
+  const legacy = b.settings === undefined && (b.args || []).length > 0;
   return {
     name: b.name.trim(),
     kind: b.kind,
     command: b.command || "",
     args: b.args || [],
-    cwd: b.cwd,
+    settings: { ...b.settings },
+    customArgs: b.kind !== "custom" && (!!b.customArgs || legacy),
+    cwd: b.cwd || "",
     env: b.env || {},
     port: b.port || 0,
     healthPath: b.healthPath || "",
@@ -605,6 +641,74 @@ async function api(req, res, url) {
         sites: state.sites.length,
       },
     });
+  }
+
+  // service types and command lines
+  if (m === "GET" && p === "/api/kinds") return send(res, 200, PROFILES);
+  if (m === "POST" && p === "/api/services/preview") {
+    if (!profileOf(body?.kind)) return fail(res, 400, "bad_request", "kind must be a service kind");
+    const svc = { ...normalizeService({ name: "x", ...body }), id: body.id || "svc_new" };
+    return send(res, 200, preview(svc, { home: state.settings.homeDir, runtimes: state.runtimes }));
+  }
+  if (m === "GET" && (m2 = p.match(/^\/api\/services\/([^/]+)\/command$/))) {
+    const svc = state.services.find((s) => s.id === m2[1]);
+    if (!svc) return fail(res, 404, "not_found", `service ${m2[1]} not found`);
+    return send(res, 200, preview(svc, { home: state.settings.homeDir, runtimes: state.runtimes }));
+  }
+  if (m === "GET" && p === "/api/project/scripts") {
+    const dir = url.searchParams.get("dir") || "";
+    if (!isAbs(dir)) return fail(res, 400, "bad_request", "dir must be an absolute path");
+    return send(res, 200, { scripts: /docs|web|app/i.test(dir) ? ["build", "dev", "start"] : [] });
+  }
+  if ((m2 = p.match(/^\/api\/runtimes\/([^/]+)\/(php-extensions|xdebug)$/))) {
+    const rt = state.runtimes.find((r) => r.id === m2[1]);
+    if (!rt) return fail(res, 404, "not_found", `runtime ${m2[1]} not found`);
+    if (rt.kind !== "php") return fail(res, 400, "bad_request", `${rt.name} is not a PHP runtime`);
+    rt.exts ??= [...PHP_EXTENSIONS];
+    if (m2[2] === "php-extensions" && m === "GET") {
+      const extensions = rt.exts.map((n) => ({
+        name: n,
+        file: `php_${n}.dll`,
+        zend: n === "opcache" || n === "xdebug",
+      }));
+      return send(res, 200, {
+        runtimeId: rt.id,
+        version: rt.version,
+        extDir: rt.binary.replace(/[^\\]*$/, "ext"),
+        managed: true,
+        extensions,
+        xdebug: rt.exts.includes("xdebug"),
+      });
+    }
+    if (m2[2] === "xdebug" && m === "POST") {
+      const job = {
+        id: id("job"),
+        type: "xdebug",
+        state: "running",
+        percent: 0,
+        step: "Downloading",
+        error: "",
+        runtimeId: "",
+      };
+      jobs.set(job.id, job);
+      ilog(`xdebug for ${rt.id} from https://xdebug.org/download`);
+      const t = setInterval(() => {
+        job.percent = Math.min(100, job.percent + 20);
+        emit("job.progress", {
+          id: job.id,
+          percent: job.percent,
+          step: job.percent < 90 ? "Downloading" : "Verifying",
+        });
+        if (job.percent >= 100) {
+          clearInterval(t);
+          rt.exts.push("xdebug");
+          rt.exts.sort();
+          Object.assign(job, { state: "done", runtimeId: rt.id, step: "Registering" });
+          emit("job.done", { id: job.id, state: "done", error: "", runtimeId: rt.id });
+        }
+      }, 150);
+      return send(res, 202, job);
+    }
   }
 
   // services

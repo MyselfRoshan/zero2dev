@@ -337,9 +337,12 @@ func parsePHP(b []byte, base string) ([]model.CatalogEntry, error) {
 			continue
 		}
 		var version string
-		if json.Unmarshal(fields["version"], &version) != nil || !regexp.MustCompile(`^\d+\.\d+\.\d+$`).MatchString(version) {
+		// Rebuilt packages carry a build suffix ("8.4.27-1", php-8.4.27-1-nts-Win32-vs17-x64.zip):
+		// the PHP version is the part before it.
+		if json.Unmarshal(fields["version"], &version) != nil || !regexp.MustCompile(`^\d+\.\d+\.\d+(-\d+)?$`).MatchString(version) {
 			continue
 		}
+		version, _, _ = strings.Cut(version, "-")
 		bestKey, bestN := "", -1
 		for k := range fields {
 			if m := phpKeyRE.FindStringSubmatch(k); m != nil {

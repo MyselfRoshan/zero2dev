@@ -317,8 +317,8 @@ func TestMissingBinaryAndNodeNeedsArgs(t *testing.T) {
 		d.Services[0].Command, d.Services[0].Kind, d.Services[0].Args = os.Args[0], "node", nil
 		return nil
 	})
-	if err := s.Start(id); err == nil || !strings.Contains(err.Error(), "args required") {
-		t.Fatalf("want args required, got %v", err)
+	if err := s.Start(id); err == nil || !strings.Contains(err.Error(), "Script is required") {
+		t.Fatalf("want script required, got %v", err)
 	}
 }
 
@@ -352,8 +352,15 @@ func TestDefaultArgs(t *testing.T) {
 	sv := st.Snapshot().Services[0]
 	sv.Kind, sv.Args = "php", nil
 	r, err := s.resolve(sv, st.Snapshot())
-	if err != nil || strings.Join(r.args, " ") != "-S 127.0.0.1:{port} -t "+sv.Cwd && strings.Join(r.args, " ") != "-S 127.0.0.1:8000 -t "+sv.Cwd {
-		t.Fatalf("php default args: %v %v", r, err)
+	ini := filepath.Join(s.home, "php", sv.ID, "php.ini")
+	if err != nil || strings.Join(r.args, " ") != "-c "+ini+" -S 127.0.0.1:8000 -t "+sv.Cwd {
+		t.Fatalf("php default args: %v %v", r.args, err)
+	}
+	if len(r.files) != 1 || r.files[0].Path != ini {
+		t.Fatalf("php.ini not planned: %+v", r.files)
+	}
+	if _, err := os.Stat(ini); err == nil {
+		t.Fatal("resolve must not write files")
 	}
 	sv.Kind = "caddy"
 	r, err = s.resolve(sv, st.Snapshot())

@@ -1,15 +1,12 @@
 import { describe, expect, it } from "vite-plus/test";
 import type { Runtime, Service } from "./types";
 import {
-  commandLine,
-  defaultDBArgs,
   connectionInfo,
-  DB_PORTS,
   deleteServiceMessage,
   dbToolsFor,
   editorsFor,
-  defaultArgsText,
   serviceKindLabel,
+  serviceRuntime,
   setupSteps,
   siteTargetOf,
   siteTypeFor,
@@ -22,6 +19,8 @@ const svc = (over: Partial<Service>): Service => ({
   kind: "node",
   command: "",
   args: [],
+  settings: {},
+  customArgs: false,
   cwd: "C:\\work\\app",
   env: {},
   port: 3000,
@@ -62,27 +61,16 @@ describe("services", () => {
   it("labels kinds for people", () => {
     expect(serviceKindLabel("node")).toBe("Node.js");
     expect(serviceKindLabel("custom")).toBe("Custom command");
-    expect(defaultArgsText("go")).toMatch(/go run \./);
   });
 
-  it("shows the real command line", () => {
+  it("finds the runtime a service uses", () => {
     const runtimes = [
       rt({ id: "a", binary: "C:\\bin\\node-20\\node.exe" }),
       rt({ id: "b", binary: "C:\\bin\\node-22\\node.exe", default: true }),
     ];
-    expect(commandLine(svc({ args: ["server.js", "--port", "{port}"] }), runtimes)).toBe(
-      "node.exe server.js --port 3000",
-    );
-    // an explicit runtime wins over the default
-    expect(commandLine(svc({ runtimeId: "a", args: ["x.js"] }), runtimes)).toBe("node.exe x.js");
-    // no runtime registered: the kind's name on PATH
-    expect(commandLine(svc({ kind: "go" }), [])).toBe("go run .");
-    expect(commandLine(svc({ kind: "php", port: 8000, cwd: "C:\\my site" }), [])).toBe(
-      'php -S 127.0.0.1:8000 -t "C:\\my site"',
-    );
-    expect(commandLine(svc({ kind: "custom", command: "C:\\tools\\app.exe", args: ["--port={port}"] }), runtimes)).toBe(
-      "C:\\tools\\app.exe --port=3000",
-    );
+    expect(serviceRuntime(svc({}), runtimes)?.id).toBe("b");
+    expect(serviceRuntime(svc({ runtimeId: "a" }), runtimes)?.id).toBe("a");
+    expect(serviceRuntime(svc({ kind: "go" }), runtimes)).toBeUndefined();
   });
 });
 
@@ -135,21 +123,5 @@ describe("databases", () => {
       "kept in D:/z/data/databases/svc_1",
     );
     expect(deleteServiceMessage({ kind: "node", id: "svc_1" }, true, "x")).toMatch(/running.*cannot be undone/);
-    expect(DB_PORTS.postgres).toBe(5432);
-    expect(defaultArgsText("redis")).toMatch(/127\.0\.0\.1/);
-  });
-});
-
-describe("database command line", () => {
-  it("shows the arguments the daemon really uses", () => {
-    const pg = svc({ kind: "postgres", port: 5432 });
-    const runtimes = [rt({ id: "p", kind: "postgres", binary: "D:/z/bin/pg/bin/postgres.exe", default: true })];
-    expect(commandLine(pg, runtimes, { dataDir: "D:/z/data/databases/svc_1" })).toBe(
-      "postgres.exe -D D:/z/data/databases/svc_1 -p 5432 -c listen_addresses=127.0.0.1",
-    );
-    expect(commandLine(svc({ kind: "mysql", port: 3306 }), [], { dataDir: "D", windows: true })).toBe(
-      "mysqld --no-defaults --datadir=D --port=3306 --bind-address=127.0.0.1 --console --mysqlx=OFF",
-    );
-    expect(defaultDBArgs("redis", "C:/a/b").join(" ")).toBe("--port {port} --bind 127.0.0.1 --dir C:/a/b");
   });
 });

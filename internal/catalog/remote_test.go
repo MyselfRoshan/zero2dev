@@ -46,6 +46,12 @@ func TestParsePHP(t *testing.T) {
 			t.Errorf("%q should fail", bad)
 		}
 	}
+	// windows.php.net rebuilds carry a suffix: "8.4.27-1" (2026-11). The version is 8.4.27, the file keeps it.
+	rebuilt := `{"8.4":{"version":"8.4.27-1","nts-vs17-x64":{"zip":{"path":"php-8.4.27-1-nts-Win32-vs17-x64.zip","sha256":"` + sha1hex + `"}}}}`
+	if es, err := parsePHP([]byte(rebuilt), "https://windows.php.net/downloads/releases/"); err != nil || len(es) != 1 ||
+		es[0].Version != "8.4.27" || es[0].ID != "php-8.4.27-windows-amd64" || !strings.HasSuffix(es[0].URL, "php-8.4.27-1-nts-Win32-vs17-x64.zip") || es[0].Checksum.Type != "sha256" {
+		t.Fatalf("rebuilt release: %+v %v", es, err)
+	}
 	// A downloads base on a foreign host is refused.
 	if _, err := parsePHP([]byte(phpJSON), "https://evil.example/"); err == nil {
 		t.Error("foreign host must be refused")

@@ -49,8 +49,21 @@ func Open(path string) (*Store, error) {
 	if err := json.Unmarshal(b, &s.data); err != nil {
 		return nil, errors.New("state file " + path + " is corrupt: " + err.Error())
 	}
+	migrate(&s.data)
 	s.normalize(&s.data)
 	return s, nil
+}
+
+// migrate updates state written by older versions. Services saved before
+// per-kind settings existed (no "settings" key) whose args were given keep
+// exactly that command line: their args become the whole argument list.
+func migrate(d *Data) {
+	for i := range d.Services {
+		sv := &d.Services[i]
+		if sv.Settings == nil && len(sv.Args) > 0 && sv.Kind != "custom" {
+			sv.CustomArgs = true
+		}
+	}
 }
 
 func (s *Store) normalize(d *Data) {
@@ -70,6 +83,9 @@ func (s *Store) normalize(d *Data) {
 		}
 		if sv.Env == nil {
 			sv.Env = map[string]string{}
+		}
+		if sv.Settings == nil {
+			sv.Settings = map[string]string{}
 		}
 		// runtime fields are never persisted meaningfully
 		sv.State, sv.Pid, sv.StartedAt, sv.LastError = model.StateStopped, 0, nil, ""

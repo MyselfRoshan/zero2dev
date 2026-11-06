@@ -28,7 +28,16 @@ export function runtimeKindsFor(kind: ServiceKind): RuntimeKind[] {
 
 export type ServiceField = "name" | "kind" | "command" | "args" | "cwd" | "env" | "port" | "healthPath";
 
-export function validateService(v: ServiceInput): Errors<ServiceField> {
+/** What the service's type asks for (from its profile, GET /api/kinds). */
+export interface ServiceRules {
+  folderRequired: boolean;
+  portRequired: boolean;
+}
+
+export function validateService(
+  v: ServiceInput,
+  rules: ServiceRules = { folderRequired: true, portRequired: false },
+): Errors<ServiceField> {
   const e: Errors<ServiceField> = {};
   const name = v.name.trim();
   if (!name) e.name = "Enter a name.";
@@ -36,12 +45,11 @@ export function validateService(v: ServiceInput): Errors<ServiceField> {
   if (!SERVICE_KINDS.includes(v.kind)) e.kind = "Choose a kind.";
   if (v.kind === "custom" && !v.command.trim())
     e.command = "Custom services need a command (a full path or a name on PATH).";
-  if ((v.kind === "node" || v.kind === "java") && v.args.filter((a) => a.trim()).length === 0) {
-    e.args = `${v.kind === "node" ? "Node" : "Java"} services have no default arguments. Add at least one, for example server.js.`;
-  }
-  if (!v.cwd.trim()) e.cwd = "Enter the working directory.";
-  else if (!isAbsolutePath(v.cwd.trim())) e.cwd = "Use an absolute path, for example C:\\work\\app.";
+  const cwd = v.cwd.trim();
+  if (!cwd && rules.folderRequired) e.cwd = "Choose the folder.";
+  else if (cwd && !isAbsolutePath(cwd)) e.cwd = "Use an absolute path, for example C:\\work\\app.";
   if (!isValidPort(v.port)) e.port = "Port must be a whole number from 0 to 65535 (0 means no port).";
+  else if (rules.portRequired && v.port === 0) e.port = "This type needs a port.";
   const hp = v.healthPath.trim();
   if (hp && !hp.startsWith("/")) e.healthPath = "Health path must start with /.";
   else if (hp && v.port === 0) e.healthPath = "A health path needs a port. Set a port or clear this field.";

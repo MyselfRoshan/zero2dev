@@ -20,7 +20,11 @@ export interface Service {
   name: string;
   kind: ServiceKind;
   command: string;
+  /** Extra arguments after the generated ones, or the whole list when customArgs is true. */
   args: string[];
+  /** Per-kind settings (GET /api/kinds); missing keys use their defaults. */
+  settings: Record<string, string>;
+  customArgs: boolean;
   cwd: string;
   env: Record<string, string>;
   port: number;
@@ -38,12 +42,42 @@ export interface ServiceInput {
   kind: ServiceKind;
   command: string;
   args: string[];
+  settings: Record<string, string>;
+  customArgs: boolean;
   cwd: string;
   env: Record<string, string>;
   port: number;
   healthPath: string;
   runtimeId: string;
   autostart: boolean;
+}
+
+/** What a service runs (POST /api/services/preview, GET /api/services/{id}/command). */
+export interface CommandPreview {
+  program: string;
+  args: string[];
+  /** The variables Zero2Dev adds, KEY=VALUE. */
+  env: string[];
+  workdir: string;
+  dataDir: string;
+  files: string[];
+  warnings: string[];
+}
+
+export interface PHPExtension {
+  name: string;
+  file: string;
+  zend: boolean;
+}
+
+export interface PHPExtensions {
+  runtimeId: string;
+  version: string;
+  extDir: string;
+  /** false: no ext folder next to php (a system PHP); its extensions are not Zero2Dev's to manage. */
+  managed: boolean;
+  extensions: PHPExtension[];
+  xdebug: boolean;
 }
 
 export type EditorKind = "vscode" | "vscodium" | "notepadpp";

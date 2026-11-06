@@ -5,6 +5,7 @@
   import { serviceRuntimeLabel } from "../lib/catalog";
   import { deleteServiceMessage, serviceKindLabel } from "../lib/ux";
   import { dbDataPath } from "../lib/installer";
+  import { profileFor } from "../lib/kinds";
   import { app, lists } from "../lib/store.svelte";
   import type { Service } from "../lib/types";
   import ConfirmDialog from "../ui/ConfirmDialog.svelte";
@@ -60,7 +61,7 @@
             <td><StateBadge state={s.state} /></td>
             <td><span class="kind-cell"><KindIcon kind={s.kind} size={16} /> {serviceKindLabel(s.kind)}</span>{#if s.runtimeId && serviceRuntimeLabel(s.runtimeId, lists.runtimes)} <span class="badge plain" data-testid="svc-runtime">{serviceRuntimeLabel(s.runtimeId, lists.runtimes)}</span>{/if}</td>
             <td class="mono">{#if url}<a href={url} target="_blank" rel="noreferrer">{s.port}</a>{:else if s.port > 0}{s.port}{:else}<span class="muted">none</span>{/if}</td>
-            <td class="path">{s.cwd}</td>
+            <td class="path">{#if profileFor(lists.kinds, s.kind)?.folder.use === "hidden"}<span class="muted">data folder</span>{:else}{s.cwd}{/if}</td>
             <td class="actions">
               <ServiceControls service={s} showRestart />
               <button class="btn sm ghost icon" disabled={isActive(s)} onclick={() => (editing = s)} aria-label="Edit {s.name}" title={isActive(s) ? "Stop the service to edit it" : "Edit"}><Icon name="edit" size={14} /></button>

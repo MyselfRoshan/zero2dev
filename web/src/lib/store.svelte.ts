@@ -17,6 +17,7 @@ import type {
   Site,
   Status,
 } from "./types";
+import type { KindProfile } from "./kinds";
 
 export const MAX_LOG_LINES = 2000;
 
@@ -46,6 +47,8 @@ export const lists = $state({
   runtimes: [] as Runtime[],
   sites: [] as Site[],
   catalog: [] as CatalogEntry[],
+  /** What each service type needs (GET /api/kinds); loaded once. */
+  kinds: [] as KindProfile[],
 });
 
 export const jobs = $state<Record<string, Job>>({});
@@ -150,9 +153,18 @@ export const loadSites = () => load(api.listSites, (v) => (lists.sites = v), "si
 export const loadCatalog = () => load(api.catalog, (v) => (lists.catalog = v), "catalog");
 export const loadStatus = () => load(api.status, (v) => (app.status = v));
 export const loadSettings = () => load(api.getSettings, (v) => (app.settings = v));
+export const loadKinds = () => load(api.kinds, (v) => (lists.kinds = v));
 
 export function loadAll(): Promise<unknown> {
-  return Promise.all([loadStatus(), loadSettings(), loadServices(), loadRuntimes(), loadSites(), loadCatalog()]);
+  return Promise.all([
+    loadStatus(),
+    loadSettings(),
+    loadServices(),
+    loadRuntimes(),
+    loadSites(),
+    loadCatalog(),
+    loadKinds(),
+  ]);
 }
 
 export function upsertService(s: Service): void {
@@ -245,7 +257,7 @@ function onJobDone(e: JobDoneEvent) {
     percent: e.state === "done" ? 100 : (jobs[e.id]?.percent ?? 0),
   });
   const entry = lists.catalog.find((c) => installJobs[c.id] === e.id);
-  const label = entry?.name ?? "Runtime";
+  const label = entry?.name ?? (jobs[e.id]?.type === "xdebug" ? "Xdebug" : "Runtime");
   if (e.state === "done") toast("success", `${label} installed.`);
   else {
     const short = (e.error || "unknown error").slice(0, 160);
@@ -284,6 +296,15 @@ function trackJob(catalogId: string, job: Job) {
   installJobs[catalogId] = job.id;
   if (!finishedJobs.has(job.id)) mergeJob(job.id, job);
   pollJob(job.id);
+}
+
+/** Downloads Xdebug into a PHP runtime's ext folder. Returns the job id, or undefined after a toast. */
+export async function installXdebug(runtimeId: string): Promise<string | undefined> {
+  const job = await attempt(() => api.installXdebug(runtimeId));
+  if (!job) return undefined;
+  if (!finishedJobs.has(job.id)) mergeJob(job.id, job);
+  pollJob(job.id);
+  return job.id;
 }
 
 /** Imports a file the user downloaded. Throws ApiError so the dialog can show the message inline. */

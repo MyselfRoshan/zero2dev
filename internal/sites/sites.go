@@ -283,7 +283,7 @@ func (m *Manager) EnsureNginx() (bool, error) {
 		}
 		d.Services = append(d.Services, model.Service{
 			ID: model.NewID("svc_"), Name: "Nginx (sites)", Kind: "nginx", Cwd: m.home,
-			Args: append([]string{}, NginxArgs...), Env: map[string]string{},
+			Args: append([]string{}, NginxArgs...), CustomArgs: true, Env: map[string]string{},
 		})
 		created = true
 		return nil

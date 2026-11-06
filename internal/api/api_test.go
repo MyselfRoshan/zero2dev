@@ -327,7 +327,7 @@ func TestServiceCRUDAndValidation(t *testing.T) {
 			t.Errorf("missing %s in %s", want, raw)
 		}
 	}
-	e.do("POST", "/api/services", map[string]any{"name": "alpha", "kind": "node", "cwd": dir}, nil)
+	e.do("POST", "/api/services", map[string]any{"name": "alpha", "kind": "node", "cwd": dir, "settings": map[string]string{"script": "server.js"}}, nil)
 	var list []model.Service
 	e.do("GET", "/api/services", nil, &list)
 	if len(list) != 2 || list[0].Name != "alpha" || list[1].Name != "Zeta" {

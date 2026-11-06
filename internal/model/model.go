@@ -34,6 +34,8 @@ type Service struct {
 	Kind       string            `json:"kind"`
 	Command    string            `json:"command"`
 	Args       []string          `json:"args"`
+	Settings   map[string]string `json:"settings"`   // per-kind settings (internal/kinds); missing keys use the defaults
+	CustomArgs bool              `json:"customArgs"` // Args are the whole argument list instead of extra arguments
 	Cwd        string            `json:"cwd"`
 	Env        map[string]string `json:"env"`
 	Port       int               `json:"port"`
@@ -52,6 +54,8 @@ type ServiceInput struct {
 	Kind       string            `json:"kind"`
 	Command    string            `json:"command"`
 	Args       []string          `json:"args"`
+	Settings   map[string]string `json:"settings"` // absent (null) with args: a pre-settings client, args are the whole list
+	CustomArgs bool              `json:"customArgs"`
 	Cwd        string            `json:"cwd"`
 	Env        map[string]string `json:"env"`
 	Port       int               `json:"port"`
@@ -208,6 +212,7 @@ func Launchable(kind string) bool {
 var dataDirNames = map[string]string{
 	"vscode": "code", "vscodium": "codium", "notepadpp": "notepadpp", "heidisql": "heidisql", "dbeaver": "dbeaver",
 	"mariadb": "mariadb", "mysql": "mysql", "postgres": "postgres", "redis": "redis",
+	"php": "php", "node": "node", "go": "go",
 }
 
 // DataDirName is the folder name of a kind's data inside the data folder

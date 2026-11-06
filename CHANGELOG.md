@@ -10,6 +10,19 @@
   - The service page shows the connection details and a copyable URL. Deleting a database service keeps its files.
 - **Code editors**: VS Code, VSCodium and Notepad++. Their settings and extensions are kept in the data folder, one folder per tool (`data\code`, `data\codium`, `data\notepadpp`); `bin` only holds the programs. A service page has **Open in VS Code** (or another installed editor) for its project folder.
 - **Database tools**: HeidiSQL and DBeaver. A MariaDB, MySQL or PostgreSQL service page has **Open in HeidiSQL / DBeaver** with the connection filled in. Their settings go to `data\heidisql` and `data\dbeaver`.
+- **Settings for each service type.** The service form only asks for what the chosen type uses, and shows that type's settings with their defaults filled in and a sentence on what each does, plus the argument or php.ini line it writes. You no longer need a program's documentation to run it.
+  - A live **Command line** at the bottom of the form shows exactly what will run, the variables Zero2Dev adds and the files it writes. The service page shows the same, from the daemon.
+  - **Project folder** now says what it is: your app's code, where the program starts. Zero2Dev never stores data there. Databases have no project folder (the form shows their data folder instead), and a custom command calls it **Working folder**.
+  - Fields a type does not use are gone: no health check, program or project folder for databases; Caddy and nginx are no longer offered as new services (Zero2Dev creates them).
+  - **Node.js**: script or npm script (with the scripts from package.json suggested), `--watch`, `--env-file`, debugger, NODE_ENV. npm's cache goes to `data\node\npm-cache`.
+  - **PHP**: document root, router script, php.ini from development or production, tick-box **extensions** read from that PHP version's ext folder, memory/upload/time limits, errors, time zone, extra php.ini lines. Each PHP service gets its own php.ini in `data\php\<service id>`, written on every start; PHP's folder is never changed.
+  - **Xdebug**: one click downloads the build matching the PHP version from xdebug.org, checked against the SHA-256 it lists, into that version's ext folder. Then tick it and choose its mode.
+  - **Go**: package, build tags, and Go's module and build caches in `data\go` instead of your user profile.
+  - **Java**: JAR or main class, max memory, Spring Boot port, debugger.
+  - **MariaDB/MySQL**: character set, collation, SQL mode, max connections, buffer pool, max packet size, query and slow-query logs. **PostgreSQL**: max connections, shared buffers, statement logging, time zone. **Redis**: persistence (snapshots, every write, none), memory limit and eviction policy, number of databases.
+  - **Advanced > Write my own command line** turns the settings off. Services created before this, with their own arguments, keep running exactly as before and can switch to the settings from their page.
+  - API: `GET /api/kinds`, `POST /api/services/preview`, `GET /api/services/{id}/command`, `GET /api/runtimes/{id}/php-extensions`, `POST /api/runtimes/{id}/xdebug`, `GET /api/project/scripts`; services have `settings` and `customArgs`; `cwd` is optional for databases; the `{data}` placeholder (see `docs/API.md`).
+- Fixed: **Check for new versions** offered the current PHP 8.2 to 8.5 only as unverified downloads. windows.php.net now names rebuilt packages `8.4.27-1`, which the version check refused; those versions are verified with their SHA-256 again.
 - Runtimes are grouped as **Languages, Web servers, Databases, Code editors, Database tools**.
 - **MD5 checksums**: MySQL publishes only MD5, so MySQL downloads are checked against it, and the installer log also records a SHA-256. **Import file** accepts a pasted MD5.
 - **New download sources**:

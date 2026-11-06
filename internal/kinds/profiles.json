@@ -1,0 +1,1462 @@
+[
+  {
+    "kind": "node",
+    "label": "Node.js",
+    "folder": {
+      "use": "required",
+      "label": "Project folder",
+      "hint": "Your app's code (the folder with package.json). Zero2Dev starts Node in this folder and never stores its own data here."
+    },
+    "port": {
+      "use": "optional",
+      "default": 3000,
+      "hint": "The port your app listens on. Your app gets it as the PORT environment variable."
+    },
+    "health": true,
+    "dataDir": "shared",
+    "extraArgs": "Arguments for your app",
+    "extraArgsHint": "Added after the script, for your app to read (process.argv). {port} is replaced with the port.",
+    "env": [
+      {
+        "name": "npm_config_cache",
+        "value": "{home}/node/npm-cache",
+        "help": "npm keeps its download cache in the Zero2Dev data folder instead of your user profile."
+      }
+    ],
+    "options": [
+      {
+        "key": "run",
+        "group": "Run",
+        "label": "Run",
+        "type": "select",
+        "default": "script",
+        "choices": [
+          {
+            "value": "script",
+            "label": "A script file (node <file>)"
+          },
+          {
+            "value": "npm",
+            "label": "An npm script (npm run <name>)"
+          }
+        ],
+        "emit": {
+          "program": {
+            "npm": "npm"
+          }
+        },
+        "help": "Run a JavaScript file directly, or one of the scripts in package.json such as dev or start."
+      },
+      {
+        "key": "script",
+        "group": "Run",
+        "label": "Script",
+        "type": "text",
+        "default": "",
+        "placeholder": "server.js",
+        "required": true,
+        "at": "end",
+        "show": {
+          "run": "script"
+        },
+        "pattern": "^[^<>|\"*?]+$",
+        "emit": {
+          "arg": [
+            "{v}"
+          ]
+        },
+        "help": "The file Node runs, relative to the project folder, for example server.js or src/index.js."
+      },
+      {
+        "key": "npmScript",
+        "group": "Run",
+        "label": "npm script",
+        "type": "text",
+        "default": "dev",
+        "placeholder": "dev",
+        "required": true,
+        "at": "end",
+        "show": {
+          "run": "npm"
+        },
+        "pattern": "^[A-Za-z0-9:._@/-]+$",
+        "suggest": "npmScripts",
+        "emit": {
+          "arg": [
+            "run",
+            "{v}"
+          ]
+        },
+        "help": "The name of a script in package.json. npm is taken from the same folder as the selected Node version."
+      },
+      {
+        "key": "watch",
+        "group": "Run",
+        "label": "Restart when a file changes",
+        "type": "bool",
+        "default": "false",
+        "minVersion": "18.11",
+        "show": {
+          "run": "script"
+        },
+        "emit": {
+          "arg": [
+            "--watch"
+          ]
+        },
+        "help": "Node restarts your app whenever a file it loaded is saved."
+      },
+      {
+        "key": "envFile",
+        "group": "Run",
+        "label": ".env file",
+        "type": "text",
+        "default": "",
+        "placeholder": ".env",
+        "minVersion": "20.6",
+        "show": {
+          "run": "script"
+        },
+        "pattern": "^[^<>|\"*?]+$",
+        "emit": {
+          "arg": [
+            "--env-file={v}"
+          ]
+        },
+        "help": "Load environment variables from this file (relative to the project folder) before the app starts. Empty: none."
+      },
+      {
+        "key": "inspect",
+        "group": "Debugging",
+        "label": "Allow a debugger to attach",
+        "type": "bool",
+        "default": "false",
+        "show": {
+          "run": "script"
+        },
+        "emit": {
+          "arg": [
+            "--inspect=127.0.0.1:{s.inspectPort}"
+          ]
+        },
+        "help": "VS Code or Chrome DevTools can attach to the running app (only from this PC)."
+      },
+      {
+        "key": "inspectPort",
+        "group": "Debugging",
+        "label": "Debugger port",
+        "type": "number",
+        "default": "9229",
+        "min": 1024,
+        "max": 65535,
+        "show": {
+          "run": "script",
+          "inspect": "true"
+        },
+        "help": "The port the debugger connects to. 9229 is what editors expect."
+      },
+      {
+        "key": "nodeEnv",
+        "group": "Run",
+        "label": "NODE_ENV",
+        "type": "select",
+        "default": "development",
+        "choices": [
+          {
+            "value": "development",
+            "label": "development"
+          },
+          {
+            "value": "production",
+            "label": "production"
+          },
+          {
+            "value": "",
+            "label": "Not set"
+          }
+        ],
+        "emit": {
+          "env": "NODE_ENV"
+        },
+        "help": "Many frameworks (Express, Next.js) behave differently in production: less logging, caching on."
+      }
+    ]
+  },
+  {
+    "kind": "php",
+    "label": "PHP",
+    "folder": {
+      "use": "required",
+      "label": "Project folder",
+      "hint": "Your site's code. PHP's built-in web server serves files from here (or from the document root below). Zero2Dev never stores its own data here."
+    },
+    "port": {
+      "use": "required",
+      "default": 8000,
+      "hint": "The port the PHP web server listens on."
+    },
+    "health": true,
+    "dataDir": "service",
+    "extraArgs": "Extra arguments",
+    "extraArgsHint": "Added to the PHP command line after the generated ones.",
+    "fixed": [
+      {
+        "args": [
+          "-c",
+          "{ini}"
+        ],
+        "help": "Use the php.ini Zero2Dev writes for this service from the settings below (in its data folder, rewritten on every start)."
+      },
+      {
+        "args": [
+          "-S",
+          "127.0.0.1:{port}"
+        ],
+        "help": "Run PHP's built-in web server on the port, reachable from this PC only."
+      },
+      {
+        "args": [
+          "-t",
+          "{docroot}"
+        ],
+        "help": "The folder the web server serves: the project folder, or the document root below."
+      }
+    ],
+    "options": [
+      {
+        "key": "docroot",
+        "group": "Web server",
+        "label": "Document root",
+        "type": "text",
+        "default": "",
+        "placeholder": "public",
+        "pattern": "^[^<>|\"*?:]*$",
+        "help": "A subfolder of the project folder to serve. Laravel and Symfony use public. Empty: the project folder itself."
+      },
+      {
+        "key": "router",
+        "group": "Web server",
+        "label": "Router script",
+        "type": "text",
+        "default": "",
+        "placeholder": "public/index.php",
+        "at": "end",
+        "pattern": "^[^<>|\"*?]*$",
+        "emit": {
+          "arg": [
+            "{v}"
+          ]
+        },
+        "help": "A PHP file that handles every request that is not a real file (front controller). Empty: files are served as they are."
+      },
+      {
+        "key": "iniBase",
+        "group": "php.ini",
+        "label": "Start from",
+        "type": "select",
+        "default": "development",
+        "choices": [
+          {
+            "value": "development",
+            "label": "php.ini-development (errors shown)"
+          },
+          {
+            "value": "production",
+            "label": "php.ini-production (errors hidden)"
+          },
+          {
+            "value": "none",
+            "label": "Nothing (PHP's built-in defaults)"
+          }
+        ],
+        "emit": {
+          "special": "phpIniBase"
+        },
+        "help": "The php.ini that comes with PHP to start from. The settings below are added after it and win."
+      },
+      {
+        "key": "extensions",
+        "group": "Extensions",
+        "label": "Extensions",
+        "type": "multi",
+        "default": "curl,fileinfo,mbstring,openssl,mysqli,pdo_mysql,pdo_sqlite,sqlite3,zip,intl",
+        "choicesFrom": "phpExtensions",
+        "pattern": "^[a-z0-9_]*$",
+        "emit": {
+          "special": "phpExtensions"
+        },
+        "help": "The extensions in this PHP version's ext folder. Ticked ones are loaded with extension= (zend_extension= for OPcache and Xdebug)."
+      },
+      {
+        "key": "memoryLimit",
+        "group": "php.ini",
+        "label": "Memory limit",
+        "type": "size",
+        "default": "256M",
+        "pattern": "^(-1|[0-9]+[KMG]?)$",
+        "emit": {
+          "ini": "memory_limit"
+        },
+        "help": "The most memory one request may use. -1 means no limit."
+      },
+      {
+        "key": "uploadMax",
+        "group": "php.ini",
+        "label": "Largest upload",
+        "type": "size",
+        "default": "64M",
+        "pattern": "^[0-9]+[KMG]?$",
+        "emit": {
+          "ini": "upload_max_filesize"
+        },
+        "help": "The largest single file a form may upload."
+      },
+      {
+        "key": "postMax",
+        "group": "php.ini",
+        "label": "Largest form post",
+        "type": "size",
+        "default": "64M",
+        "pattern": "^[0-9]+[KMG]?$",
+        "emit": {
+          "ini": "post_max_size"
+        },
+        "help": "The largest whole request body. Keep it at least as big as the largest upload."
+      },
+      {
+        "key": "maxExecution",
+        "group": "php.ini",
+        "label": "Time limit (seconds)",
+        "type": "number",
+        "default": "60",
+        "min": 0,
+        "max": 86400,
+        "emit": {
+          "ini": "max_execution_time"
+        },
+        "help": "How long a script may run before PHP stops it. 0 means no limit."
+      },
+      {
+        "key": "displayErrors",
+        "group": "php.ini",
+        "label": "Show errors in the page",
+        "type": "bool",
+        "default": "true",
+        "emit": {
+          "ini": "display_errors"
+        },
+        "help": "Print PHP errors and warnings into the page. Useful while developing, never on a live site."
+      },
+      {
+        "key": "timezone",
+        "group": "php.ini",
+        "label": "Time zone",
+        "type": "text",
+        "default": "UTC",
+        "placeholder": "Europe/Berlin",
+        "pattern": "^[A-Za-z_]+(/[A-Za-z0-9_+-]+)*$",
+        "emit": {
+          "ini": "date.timezone"
+        },
+        "help": "The time zone date() uses, as a name like UTC, Asia/Kathmandu or America/New_York."
+      },
+      {
+        "key": "xdebugMode",
+        "group": "Xdebug",
+        "label": "Xdebug mode",
+        "type": "multi",
+        "default": "debug",
+        "choices": [
+          {
+            "value": "debug",
+            "label": "debug (step debugging)"
+          },
+          {
+            "value": "develop",
+            "label": "develop (better error pages)"
+          },
+          {
+            "value": "coverage",
+            "label": "coverage (code coverage)"
+          },
+          {
+            "value": "profile",
+            "label": "profile (profiler files)"
+          },
+          {
+            "value": "trace",
+            "label": "trace (function traces)"
+          }
+        ],
+        "show": {
+          "extensions": "xdebug"
+        },
+        "emit": {
+          "ini": "xdebug.mode"
+        },
+        "help": "What Xdebug does. Profiler and trace files go to the service's data folder."
+      },
+      {
+        "key": "xdebugStart",
+        "group": "Xdebug",
+        "label": "Start debugging",
+        "type": "select",
+        "default": "trigger",
+        "choices": [
+          {
+            "value": "trigger",
+            "label": "Only when asked (XDEBUG_TRIGGER, browser extension)"
+          },
+          {
+            "value": "yes",
+            "label": "On every request"
+          }
+        ],
+        "show": {
+          "extensions": "xdebug"
+        },
+        "emit": {
+          "ini": "xdebug.start_with_request"
+        },
+        "help": "On every request is simplest, but makes every page slower while the editor is not listening."
+      },
+      {
+        "key": "xdebugPort",
+        "group": "Xdebug",
+        "label": "Editor port",
+        "type": "number",
+        "default": "9003",
+        "min": 1024,
+        "max": 65535,
+        "show": {
+          "extensions": "xdebug"
+        },
+        "emit": {
+          "ini": "xdebug.client_port"
+        },
+        "help": "The port your editor listens on for Xdebug. 9003 is the Xdebug 3 default."
+      },
+      {
+        "key": "iniLines",
+        "group": "php.ini",
+        "label": "More php.ini lines",
+        "type": "lines",
+        "default": "",
+        "placeholder": "short_open_tag = On",
+        "emit": {
+          "special": "phpIniLines"
+        },
+        "help": "Anything not listed above, one setting per line as name = value. Added last, so it wins."
+      }
+    ]
+  },
+  {
+    "kind": "go",
+    "label": "Go",
+    "folder": {
+      "use": "required",
+      "label": "Project folder",
+      "hint": "Your app's code (the folder with go.mod). Zero2Dev runs go in this folder and never stores its own data here."
+    },
+    "port": {
+      "use": "optional",
+      "default": 8080,
+      "hint": "The port your app listens on. Your app gets it as the PORT environment variable."
+    },
+    "health": true,
+    "dataDir": "shared",
+    "extraArgs": "Arguments for your app",
+    "extraArgsHint": "Added after the package, for your app to read (os.Args). {port} is replaced with the port.",
+    "fixed": [
+      {
+        "args": [
+          "run"
+        ],
+        "help": "Compile and run the package in one step."
+      }
+    ],
+    "options": [
+      {
+        "key": "package",
+        "group": "Run",
+        "label": "Package",
+        "type": "text",
+        "default": ".",
+        "placeholder": ".",
+        "required": true,
+        "at": "end",
+        "pattern": "^[A-Za-z0-9_./@-]+$",
+        "emit": {
+          "arg": [
+            "{v}"
+          ]
+        },
+        "help": "What to run: . is the project folder itself, ./cmd/api a subfolder with a main package."
+      },
+      {
+        "key": "tags",
+        "group": "Run",
+        "label": "Build tags",
+        "type": "text",
+        "default": "",
+        "placeholder": "dev,sqlite",
+        "pattern": "^[A-Za-z0-9_.,-]*$",
+        "emit": {
+          "arg": [
+            "-tags={v}"
+          ]
+        },
+        "help": "Comma-separated build tags, for files guarded by //go:build. Empty: none."
+      },
+      {
+        "key": "isolate",
+        "group": "Run",
+        "label": "Keep Go's downloads and build cache in the data folder",
+        "type": "bool",
+        "default": "true",
+        "emit": {
+          "envSet": {
+            "GOPATH": "{home}/go/path",
+            "GOCACHE": "{home}/go/cache",
+            "GOENV": "{home}/go/env"
+          }
+        },
+        "help": "Modules and compiled packages go to data\\go instead of your user profile. The first run downloads the modules again once."
+      }
+    ]
+  },
+  {
+    "kind": "java",
+    "label": "Java",
+    "folder": {
+      "use": "required",
+      "label": "Project folder",
+      "hint": "Your app's folder. Zero2Dev starts Java in this folder, so relative paths such as target\\app.jar start here."
+    },
+    "port": {
+      "use": "optional",
+      "default": 8080,
+      "hint": "The port your app listens on. Your app gets it as the PORT environment variable."
+    },
+    "health": true,
+    "dataDir": "none",
+    "extraArgs": "Arguments for your app",
+    "extraArgsHint": "Added after the JAR or main class, for your app to read (main's args). {port} is replaced with the port.",
+    "options": [
+      {
+        "key": "run",
+        "group": "Run",
+        "label": "Run",
+        "type": "select",
+        "default": "jar",
+        "choices": [
+          {
+            "value": "jar",
+            "label": "A JAR file (java -jar)"
+          },
+          {
+            "value": "class",
+            "label": "A main class (java -cp)"
+          }
+        ],
+        "help": "Spring Boot and most build tools produce a runnable JAR. Use a main class for plain compiled classes."
+      },
+      {
+        "key": "jar",
+        "group": "Run",
+        "label": "JAR file",
+        "type": "text",
+        "default": "",
+        "placeholder": "target\\app.jar",
+        "required": true,
+        "at": "end",
+        "show": {
+          "run": "jar"
+        },
+        "pattern": "^[^<>|\"*?]+$",
+        "emit": {
+          "arg": [
+            "-jar",
+            "{v}"
+          ]
+        },
+        "help": "The JAR to run, relative to the project folder."
+      },
+      {
+        "key": "classpath",
+        "group": "Run",
+        "label": "Class path",
+        "type": "text",
+        "default": ".",
+        "placeholder": "build\\classes;lib\\*",
+        "at": "end",
+        "show": {
+          "run": "class"
+        },
+        "pattern": "^[^<>|\"?]+$",
+        "emit": {
+          "arg": [
+            "-cp",
+            "{v}"
+          ]
+        },
+        "help": "Where Java finds your classes and libraries, separated by ; on Windows. lib\\* means every JAR in lib."
+      },
+      {
+        "key": "mainClass",
+        "group": "Run",
+        "label": "Main class",
+        "type": "text",
+        "default": "",
+        "placeholder": "com.example.App",
+        "required": true,
+        "at": "end",
+        "show": {
+          "run": "class"
+        },
+        "pattern": "^[A-Za-z_$][A-Za-z0-9_$.]*$",
+        "emit": {
+          "arg": [
+            "{v}"
+          ]
+        },
+        "help": "The full name of the class with the main method."
+      },
+      {
+        "key": "maxHeap",
+        "group": "Memory",
+        "label": "Max memory",
+        "type": "size",
+        "default": "",
+        "placeholder": "512m",
+        "pattern": "^([0-9]+[kKmMgG]?)?$",
+        "emit": {
+          "arg": [
+            "-Xmx{v}"
+          ]
+        },
+        "help": "The most memory Java may use for objects, like 512m or 2g. Empty: Java's default (a quarter of the RAM)."
+      },
+      {
+        "key": "springPort",
+        "group": "Run",
+        "label": "Pass the port as server.port (Spring Boot)",
+        "type": "bool",
+        "default": "false",
+        "emit": {
+          "arg": [
+            "-Dserver.port={port}"
+          ]
+        },
+        "help": "Spring Boot listens on server.port. Not needed when your app reads PORT itself."
+      },
+      {
+        "key": "debug",
+        "group": "Debugging",
+        "label": "Allow a debugger to attach",
+        "type": "bool",
+        "default": "false",
+        "emit": {
+          "arg": [
+            "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=127.0.0.1:{s.debugPort}"
+          ]
+        },
+        "help": "IntelliJ, VS Code or Eclipse can attach to the running app (only from this PC)."
+      },
+      {
+        "key": "debugPort",
+        "group": "Debugging",
+        "label": "Debugger port",
+        "type": "number",
+        "default": "5005",
+        "min": 1024,
+        "max": 65535,
+        "show": {
+          "debug": "true"
+        },
+        "help": "The port the debugger connects to. 5005 is the usual one."
+      }
+    ]
+  },
+  {
+    "kind": "caddy",
+    "label": "Caddy",
+    "managed": true,
+    "note": "Serves your sites. Zero2Dev writes its configuration from the Sites page; ports and HTTPS are in Settings > Sites and proxy.",
+    "folder": {
+      "use": "hidden"
+    },
+    "port": {
+      "use": "hidden"
+    },
+    "health": false,
+    "dataDir": "none",
+    "extraArgs": "Extra arguments",
+    "extraArgsHint": "Added after the generated ones.",
+    "fixed": [
+      {
+        "args": [
+          "run",
+          "--config",
+          "{home}/config/Caddyfile",
+          "--adapter",
+          "caddyfile"
+        ],
+        "help": "Run Caddy with the Caddyfile Zero2Dev generates from your sites."
+      }
+    ],
+    "env": [
+      {
+        "name": "XDG_DATA_HOME",
+        "value": "{home}/caddy/data",
+        "help": "Caddy keeps certificates in the data folder, not in AppData."
+      },
+      {
+        "name": "XDG_CONFIG_HOME",
+        "value": "{home}/caddy/config",
+        "help": "Caddy keeps its own state in the data folder."
+      }
+    ],
+    "options": []
+  },
+  {
+    "kind": "nginx",
+    "label": "nginx",
+    "managed": true,
+    "note": "Serves your sites when Settings > Sites and proxy > Site server is nginx. Zero2Dev writes its configuration.",
+    "folder": {
+      "use": "hidden"
+    },
+    "port": {
+      "use": "hidden"
+    },
+    "health": false,
+    "dataDir": "none",
+    "extraArgs": "Extra arguments",
+    "extraArgsHint": "Added after the generated ones.",
+    "fixed": [
+      {
+        "args": [
+          "-p",
+          "{binDir}/"
+        ],
+        "help": "nginx looks for its conf, logs and html folders next to nginx.exe."
+      }
+    ],
+    "options": []
+  },
+  {
+    "kind": "mariadb",
+    "label": "MariaDB",
+    "folder": {
+      "use": "hidden"
+    },
+    "port": {
+      "use": "required",
+      "default": 3306,
+      "hint": "The port clients connect to. 3306 is the usual MariaDB and MySQL port."
+    },
+    "health": false,
+    "dataDir": "service",
+    "extraArgs": "Extra arguments",
+    "extraArgsHint": "Any other mariadbd option, such as --skip-name-resolve. Added after the generated ones.",
+    "fixed": [
+      {
+        "args": [
+          "--no-defaults"
+        ],
+        "help": "Ignore any my.ini on this PC, so only these settings apply."
+      },
+      {
+        "args": [
+          "--datadir={data}"
+        ],
+        "help": "The database files live in this service's data folder."
+      },
+      {
+        "args": [
+          "--port={port}"
+        ],
+        "help": "Listen on the service port."
+      },
+      {
+        "args": [
+          "--bind-address=127.0.0.1"
+        ],
+        "help": "Only this PC can connect. The root user has no password."
+      },
+      {
+        "args": [
+          "--console"
+        ],
+        "windows": true,
+        "help": "Write the server log to the service log instead of a file."
+      }
+    ],
+    "options": [
+      {
+        "key": "charset",
+        "group": "Text",
+        "label": "Character set",
+        "type": "select",
+        "default": "utf8mb4",
+        "choices": [
+          {
+            "value": "utf8mb4",
+            "label": "utf8mb4 (all of Unicode, emoji included)"
+          },
+          {
+            "value": "utf8mb3",
+            "label": "utf8mb3 (old 3-byte UTF-8)"
+          },
+          {
+            "value": "latin1",
+            "label": "latin1 (Western European)"
+          },
+          {
+            "value": "",
+            "label": "Server default"
+          }
+        ],
+        "emit": {
+          "arg": [
+            "--character-set-server={v}"
+          ]
+        },
+        "help": "The character set new databases and tables get unless they name one."
+      },
+      {
+        "key": "collation",
+        "group": "Text",
+        "label": "Collation",
+        "type": "text",
+        "default": "",
+        "placeholder": "utf8mb4_unicode_ci",
+        "pattern": "^[A-Za-z0-9_]*$",
+        "emit": {
+          "arg": [
+            "--collation-server={v}"
+          ]
+        },
+        "help": "How text is compared and sorted, for example utf8mb4_unicode_ci. Empty: the default of the character set."
+      },
+      {
+        "key": "sqlMode",
+        "group": "Behaviour",
+        "label": "SQL mode",
+        "type": "select",
+        "default": "",
+        "choices": [
+          {
+            "value": "",
+            "label": "Server default",
+            "args": []
+          },
+          {
+            "value": "strict",
+            "label": "Strict (reject bad values)",
+            "args": [
+              "--sql-mode=STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION"
+            ]
+          },
+          {
+            "value": "permissive",
+            "label": "Permissive (for old apps)",
+            "args": [
+              "--sql-mode=NO_ENGINE_SUBSTITUTION"
+            ]
+          }
+        ],
+        "help": "Permissive quietly fixes invalid values (old WordPress plugins and PHP 5 era apps expect it). Strict reports them as errors."
+      },
+      {
+        "key": "maxConnections",
+        "group": "Performance",
+        "label": "Max connections",
+        "type": "number",
+        "default": "151",
+        "min": 1,
+        "max": 100000,
+        "emit": {
+          "arg": [
+            "--max-connections={v}"
+          ]
+        },
+        "help": "How many clients can be connected at the same time."
+      },
+      {
+        "key": "bufferPool",
+        "group": "Performance",
+        "label": "InnoDB buffer pool",
+        "type": "size",
+        "default": "128M",
+        "pattern": "^[0-9]+[KMG]?$",
+        "emit": {
+          "arg": [
+            "--innodb-buffer-pool-size={v}"
+          ]
+        },
+        "help": "Memory used to cache tables and indexes. More is faster for big databases; 128M is plenty for development."
+      },
+      {
+        "key": "maxPacket",
+        "group": "Performance",
+        "label": "Max packet size",
+        "type": "size",
+        "default": "64M",
+        "pattern": "^[0-9]+[KMG]?$",
+        "emit": {
+          "arg": [
+            "--max-allowed-packet={v}"
+          ]
+        },
+        "help": "The largest single query or row. Raise it when importing big dumps fails with 'packet too large'."
+      },
+      {
+        "key": "generalLog",
+        "group": "Logging",
+        "label": "Log every query",
+        "type": "bool",
+        "default": "false",
+        "emit": {
+          "arg": [
+            "--general-log=1",
+            "--general-log-file={data}/general.log"
+          ]
+        },
+        "help": "Write every statement to general.log in the data folder. Handy for seeing what an app sends; slow."
+      },
+      {
+        "key": "slowLog",
+        "group": "Logging",
+        "label": "Log slow queries",
+        "type": "bool",
+        "default": "false",
+        "emit": {
+          "arg": [
+            "--slow-query-log=1",
+            "--slow-query-log-file={data}/slow.log",
+            "--long-query-time={s.slowSeconds}"
+          ]
+        },
+        "help": "Write queries that take longer than the time below to slow.log in the data folder."
+      },
+      {
+        "key": "slowSeconds",
+        "group": "Logging",
+        "label": "Slow after (seconds)",
+        "type": "number",
+        "default": "2",
+        "min": 0,
+        "max": 3600,
+        "show": {
+          "slowLog": "true"
+        },
+        "help": "A query that takes longer than this counts as slow."
+      }
+    ]
+  },
+  {
+    "kind": "mysql",
+    "label": "MySQL",
+    "folder": {
+      "use": "hidden"
+    },
+    "port": {
+      "use": "required",
+      "default": 3306,
+      "hint": "The port clients connect to. 3306 is the usual MySQL port."
+    },
+    "health": false,
+    "dataDir": "service",
+    "extraArgs": "Extra arguments",
+    "extraArgsHint": "Any other mysqld option, such as --skip-name-resolve. Added after the generated ones.",
+    "fixed": [
+      {
+        "args": [
+          "--no-defaults"
+        ],
+        "help": "Ignore any my.ini on this PC, so only these settings apply."
+      },
+      {
+        "args": [
+          "--datadir={data}"
+        ],
+        "help": "The database files live in this service's data folder."
+      },
+      {
+        "args": [
+          "--port={port}"
+        ],
+        "help": "Listen on the service port."
+      },
+      {
+        "args": [
+          "--bind-address=127.0.0.1"
+        ],
+        "help": "Only this PC can connect. The root user has no password."
+      },
+      {
+        "args": [
+          "--console"
+        ],
+        "windows": true,
+        "help": "Write the server log to the service log instead of a file."
+      },
+      {
+        "args": [
+          "--mysqlx=OFF"
+        ],
+        "help": "Turn off the X protocol, so MySQL does not take a second port (33060)."
+      }
+    ],
+    "options": [
+      {
+        "key": "charset",
+        "group": "Text",
+        "label": "Character set",
+        "type": "select",
+        "default": "utf8mb4",
+        "choices": [
+          {
+            "value": "utf8mb4",
+            "label": "utf8mb4 (all of Unicode, emoji included)"
+          },
+          {
+            "value": "latin1",
+            "label": "latin1 (Western European)"
+          },
+          {
+            "value": "",
+            "label": "Server default"
+          }
+        ],
+        "emit": {
+          "arg": [
+            "--character-set-server={v}"
+          ]
+        },
+        "help": "The character set new databases and tables get unless they name one."
+      },
+      {
+        "key": "collation",
+        "group": "Text",
+        "label": "Collation",
+        "type": "text",
+        "default": "",
+        "placeholder": "utf8mb4_0900_ai_ci",
+        "pattern": "^[A-Za-z0-9_]*$",
+        "emit": {
+          "arg": [
+            "--collation-server={v}"
+          ]
+        },
+        "help": "How text is compared and sorted, for example utf8mb4_0900_ai_ci. Empty: the default of the character set."
+      },
+      {
+        "key": "sqlMode",
+        "group": "Behaviour",
+        "label": "SQL mode",
+        "type": "select",
+        "default": "",
+        "choices": [
+          {
+            "value": "",
+            "label": "Server default (strict)",
+            "args": []
+          },
+          {
+            "value": "permissive",
+            "label": "Permissive (for old apps)",
+            "args": [
+              "--sql-mode=NO_ENGINE_SUBSTITUTION"
+            ]
+          }
+        ],
+        "help": "Permissive quietly fixes invalid values, as old PHP apps expect. MySQL's default is strict."
+      },
+      {
+        "key": "maxConnections",
+        "group": "Performance",
+        "label": "Max connections",
+        "type": "number",
+        "default": "151",
+        "min": 1,
+        "max": 100000,
+        "emit": {
+          "arg": [
+            "--max-connections={v}"
+          ]
+        },
+        "help": "How many clients can be connected at the same time."
+      },
+      {
+        "key": "bufferPool",
+        "group": "Performance",
+        "label": "InnoDB buffer pool",
+        "type": "size",
+        "default": "128M",
+        "pattern": "^[0-9]+[KMG]?$",
+        "emit": {
+          "arg": [
+            "--innodb-buffer-pool-size={v}"
+          ]
+        },
+        "help": "Memory used to cache tables and indexes. 128M is plenty for development."
+      },
+      {
+        "key": "maxPacket",
+        "group": "Performance",
+        "label": "Max packet size",
+        "type": "size",
+        "default": "64M",
+        "pattern": "^[0-9]+[KMG]?$",
+        "emit": {
+          "arg": [
+            "--max-allowed-packet={v}"
+          ]
+        },
+        "help": "The largest single query or row. Raise it when importing big dumps fails with 'packet too large'."
+      },
+      {
+        "key": "generalLog",
+        "group": "Logging",
+        "label": "Log every query",
+        "type": "bool",
+        "default": "false",
+        "emit": {
+          "arg": [
+            "--general-log=1",
+            "--general-log-file={data}/general.log"
+          ]
+        },
+        "help": "Write every statement to general.log in the data folder. Handy for seeing what an app sends; slow."
+      },
+      {
+        "key": "slowLog",
+        "group": "Logging",
+        "label": "Log slow queries",
+        "type": "bool",
+        "default": "false",
+        "emit": {
+          "arg": [
+            "--slow-query-log=1",
+            "--slow-query-log-file={data}/slow.log",
+            "--long-query-time={s.slowSeconds}"
+          ]
+        },
+        "help": "Write queries that take longer than the time below to slow.log in the data folder."
+      },
+      {
+        "key": "slowSeconds",
+        "group": "Logging",
+        "label": "Slow after (seconds)",
+        "type": "number",
+        "default": "2",
+        "min": 0,
+        "max": 3600,
+        "show": {
+          "slowLog": "true"
+        },
+        "help": "A query that takes longer than this counts as slow."
+      }
+    ]
+  },
+  {
+    "kind": "postgres",
+    "label": "PostgreSQL",
+    "folder": {
+      "use": "hidden"
+    },
+    "port": {
+      "use": "required",
+      "default": 5432,
+      "hint": "The port clients connect to. 5432 is the usual PostgreSQL port."
+    },
+    "health": false,
+    "dataDir": "service",
+    "extraArgs": "Extra arguments",
+    "extraArgsHint": "Any other server setting as -c name=value. Added after the generated ones.",
+    "fixed": [
+      {
+        "args": [
+          "-D",
+          "{data}"
+        ],
+        "help": "The database files live in this service's data folder."
+      },
+      {
+        "args": [
+          "-p",
+          "{port}"
+        ],
+        "help": "Listen on the service port."
+      },
+      {
+        "args": [
+          "-c",
+          "listen_addresses=127.0.0.1"
+        ],
+        "help": "Only this PC can connect. The postgres user needs no password."
+      }
+    ],
+    "options": [
+      {
+        "key": "maxConnections",
+        "group": "Performance",
+        "label": "Max connections",
+        "type": "number",
+        "default": "100",
+        "min": 1,
+        "max": 10000,
+        "emit": {
+          "arg": [
+            "-c",
+            "max_connections={v}"
+          ]
+        },
+        "help": "How many clients can be connected at the same time."
+      },
+      {
+        "key": "sharedBuffers",
+        "group": "Performance",
+        "label": "Shared buffers",
+        "type": "size",
+        "default": "128MB",
+        "pattern": "^[0-9]+(kB|MB|GB)$",
+        "emit": {
+          "arg": [
+            "-c",
+            "shared_buffers={v}"
+          ]
+        },
+        "help": "Memory used to cache tables, like 128MB or 1GB. 128MB is plenty for development."
+      },
+      {
+        "key": "logStatement",
+        "group": "Logging",
+        "label": "Log statements",
+        "type": "select",
+        "default": "none",
+        "choices": [
+          {
+            "value": "none",
+            "label": "None"
+          },
+          {
+            "value": "ddl",
+            "label": "Schema changes (CREATE, ALTER, DROP)"
+          },
+          {
+            "value": "mod",
+            "label": "Schema changes and data changes"
+          },
+          {
+            "value": "all",
+            "label": "Every statement"
+          }
+        ],
+        "emit": {
+          "arg": [
+            "-c",
+            "log_statement={v}"
+          ]
+        },
+        "help": "Which statements appear in the service log."
+      },
+      {
+        "key": "slowMs",
+        "group": "Logging",
+        "label": "Log statements slower than (ms)",
+        "type": "number",
+        "default": "-1",
+        "min": -1,
+        "max": 3600000,
+        "emit": {
+          "arg": [
+            "-c",
+            "log_min_duration_statement={v}"
+          ]
+        },
+        "help": "Statements that take longer than this many milliseconds are logged with their duration. -1 turns it off, 0 logs all."
+      },
+      {
+        "key": "timezone",
+        "group": "Behaviour",
+        "label": "Time zone",
+        "type": "text",
+        "default": "",
+        "placeholder": "UTC",
+        "pattern": "^([A-Za-z_]+(/[A-Za-z0-9_+-]+)*)?$",
+        "emit": {
+          "arg": [
+            "-c",
+            "TimeZone={v}"
+          ]
+        },
+        "help": "The time zone for timestamps, like UTC or Asia/Kathmandu. Empty: the one chosen when the database was created."
+      }
+    ]
+  },
+  {
+    "kind": "redis",
+    "label": "Redis",
+    "folder": {
+      "use": "hidden"
+    },
+    "port": {
+      "use": "required",
+      "default": 6379,
+      "hint": "The port clients connect to. 6379 is the usual Redis port."
+    },
+    "health": false,
+    "dataDir": "service",
+    "extraArgs": "Extra arguments",
+    "extraArgsHint": "Any other redis.conf setting as --name value. Added after the generated ones.",
+    "fixed": [
+      {
+        "args": [
+          "--port",
+          "{port}"
+        ],
+        "help": "Listen on the service port."
+      },
+      {
+        "args": [
+          "--bind",
+          "127.0.0.1"
+        ],
+        "help": "Only this PC can connect. There is no password."
+      },
+      {
+        "args": [
+          "--dir",
+          "{dataSlash}"
+        ],
+        "help": "Snapshots and the append-only file go to this service's data folder."
+      }
+    ],
+    "options": [
+      {
+        "key": "persistence",
+        "group": "Data",
+        "label": "Keep the data",
+        "type": "select",
+        "default": "snapshot",
+        "choices": [
+          {
+            "value": "snapshot",
+            "label": "In snapshots now and then (Redis default)",
+            "args": []
+          },
+          {
+            "value": "aof",
+            "label": "After every write (append-only file)",
+            "args": [
+              "--appendonly",
+              "yes"
+            ]
+          },
+          {
+            "value": "none",
+            "label": "Not at all (lost when Redis stops)",
+            "args": [
+              "--save",
+              "",
+              "--appendonly",
+              "no"
+            ]
+          }
+        ],
+        "help": "Snapshots can lose the last minutes after a crash. Every write is safest. Not at all is fastest, for a pure cache."
+      },
+      {
+        "key": "maxMemory",
+        "group": "Memory",
+        "label": "Memory limit",
+        "type": "size",
+        "default": "",
+        "placeholder": "256mb",
+        "pattern": "^([0-9]+([kKmMgG][bB]?)?)?$",
+        "emit": {
+          "arg": [
+            "--maxmemory",
+            "{v}"
+          ]
+        },
+        "help": "The most memory Redis may use, like 256mb. Empty: no limit."
+      },
+      {
+        "key": "maxMemoryPolicy",
+        "group": "Memory",
+        "label": "When the limit is reached",
+        "type": "select",
+        "default": "noeviction",
+        "choices": [
+          {
+            "value": "noeviction",
+            "label": "Refuse new writes"
+          },
+          {
+            "value": "allkeys-lru",
+            "label": "Remove the least recently used keys"
+          },
+          {
+            "value": "volatile-lru",
+            "label": "Remove least recently used keys that have an expiry"
+          },
+          {
+            "value": "allkeys-random",
+            "label": "Remove random keys"
+          }
+        ],
+        "show": {
+          "maxMemory": "*"
+        },
+        "emit": {
+          "arg": [
+            "--maxmemory-policy",
+            "{v}"
+          ]
+        },
+        "help": "Use a removing policy when Redis is a cache."
+      },
+      {
+        "key": "databases",
+        "group": "Data",
+        "label": "Databases",
+        "type": "number",
+        "default": "16",
+        "min": 1,
+        "max": 1000,
+        "emit": {
+          "arg": [
+            "--databases",
+            "{v}"
+          ]
+        },
+        "help": "How many numbered databases (SELECT 0, 1, ...) Redis offers."
+      }
+    ]
+  },
+  {
+    "kind": "custom",
+    "label": "Custom command",
+    "folder": {
+      "use": "required",
+      "label": "Working folder",
+      "hint": "The program starts in this folder, so relative paths start here."
+    },
+    "port": {
+      "use": "optional",
+      "default": 0,
+      "hint": "The port the program listens on, if any. It gets it as the PORT environment variable."
+    },
+    "health": true,
+    "dataDir": "none",
+    "program": true,
+    "extraArgs": "",
+    "extraArgsHint": "One value per row. {port} is the port, {home} the Zero2Dev data folder.",
+    "options": []
+  }
+]
