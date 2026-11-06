@@ -22,7 +22,8 @@ data\
   config\            Caddyfile and nginx.conf, generated, do not edit
   caddy\             Caddy's own data and config (kept out of %AppData%)
   nginx\             nginx's logs, temp files and local certificates
-  databases\         one data folder per database service
+  mariadb\ mysql\ postgres\ redis\   database files, one folder per service
+  code\ codium\ notepadpp\ heidisql\ dbeaver\   settings and workspaces of installed tools
   cache\             the list of versions found by "Check for new versions"
   logs\              one log per service, plus installer.log
   tmp\               work area for downloads, safe to delete when Zero2Dev is stopped
