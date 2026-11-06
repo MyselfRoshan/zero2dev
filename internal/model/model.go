@@ -202,6 +202,18 @@ func Launchable(kind string) bool {
 	return c == CatEditor || c == CatDBTool
 }
 
+// dataDirNames are the per-tool folders inside the data folder. Settings,
+// extensions, workspaces and database files live there; the bin folder only
+// holds the programs themselves.
+var dataDirNames = map[string]string{
+	"vscode": "code", "vscodium": "codium", "notepadpp": "notepadpp", "heidisql": "heidisql", "dbeaver": "dbeaver",
+	"mariadb": "mariadb", "mysql": "mysql", "postgres": "postgres", "redis": "redis",
+}
+
+// DataDirName is the folder name of a kind's data inside the data folder
+// (e.g. "code" for VS Code), or "" for kinds that keep no data there.
+func DataDirName(kind string) string { return dataDirNames[kind] }
+
 // IsDatabase reports whether a service or runtime kind is a database server.
 func IsDatabase(kind string) bool { return KindCategory[kind] == CatDatabase }
 

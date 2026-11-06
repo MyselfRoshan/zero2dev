@@ -85,7 +85,7 @@ func TestParseShasumsMD5(t *testing.T) {
 	}
 }
 
-func TestEditorsInstallPortable(t *testing.T) {
+func TestEditorsInstallProgramOnly(t *testing.T) {
 	z := makeZip(t, map[string]string{"Code.exe": "x", "resources/app/package.json": "{}"})
 	e := newEnv(t, map[string][]byte{"/VSCode-win32-x64-1.145.0.zip": z})
 	entry := model.CatalogEntry{ID: "vscode-1.145.0", Kind: "vscode", Version: "1.145.0", Name: "VS Code 1.145.0",
@@ -99,7 +99,8 @@ func TestEditorsInstallPortable(t *testing.T) {
 	if done := e.wait(t, j.ID); done.State != "done" {
 		t.Fatalf("%+v", done)
 	}
-	if st, err := os.Stat(filepath.Join(e.in.Bin, entry.ID, "data")); err != nil || !st.IsDir() {
-		t.Fatal("VS Code must be installed in portable mode (data folder next to Code.exe)")
+	// bin only holds the program: VS Code's data goes to <data>\code when Zero2Dev opens it.
+	if _, err := os.Stat(filepath.Join(e.in.Bin, entry.ID, "data")); !os.IsNotExist(err) {
+		t.Fatal("no data folder may be created inside bin")
 	}
 }

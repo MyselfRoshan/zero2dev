@@ -47,7 +47,7 @@ export const RUNTIME_GROUPS: RuntimeGroup[] = [
   {
     id: "editors",
     title: "Code editors",
-    text: "Open a project folder from its service page. Portable: settings stay in the Zero2Dev folder.",
+    text: "Open a project folder from its service page. Settings and extensions are kept in the data folder, not in bin.",
     kinds: ["vscode", "vscodium", "notepadpp"],
   },
   {

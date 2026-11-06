@@ -34,9 +34,10 @@ type dbPlan struct {
 	initDesc, stopDesc string   // for the log
 }
 
-// DataDir is where a database service keeps its files: <home>/databases/<id>.
-func (s *Supervisor) DataDir(serviceID string) string {
-	return filepath.Join(s.home, "databases", serviceID)
+// DataDir is where a database service keeps its files: <home>/<kind>/<id>,
+// e.g. data\postgres\svc_1a2b3c4d.
+func (s *Supervisor) DataDir(kind, serviceID string) string {
+	return filepath.Join(s.home, model.DataDirName(kind), serviceID)
 }
 
 // sibling finds the first of names next to bin (with .exe on Windows).
@@ -86,7 +87,7 @@ func (s *Supervisor) planDB(svc model.Service, bin string, custom bool) *dbPlan 
 	}
 	p := &dbPlan{}
 	if !custom {
-		p.data = s.DataDir(svc.ID)
+		p.data = s.DataDir(svc.Kind, svc.ID)
 	}
 	port := strconv.Itoa(svc.Port)
 	switch svc.Kind {

@@ -18,12 +18,16 @@ func TestLaunchRuntime(t *testing.T) {
 		return p
 	}
 	code, dbeaver, heidi, node := exe("Code.exe"), exe("dbeaver.exe"), exe("heidisql.exe"), exe("node.exe")
+	npp, codium, myCode := exe("notepad++.exe"), exe("VSCodium.exe"), exe("Code.exe")
 	project := t.TempDir()
 	e.srv.Store.Update(func(d *store.Data) error {
 		d.Runtimes = append(d.Runtimes,
-			model.Runtime{ID: "rt_code", Kind: "vscode", Name: "VS Code", Binary: code},
-			model.Runtime{ID: "rt_dbv", Kind: "dbeaver", Name: "DBeaver", Binary: dbeaver},
-			model.Runtime{ID: "rt_heidi", Kind: "heidisql", Name: "HeidiSQL", Binary: heidi},
+			model.Runtime{ID: "rt_code", Kind: "vscode", Name: "VS Code", Binary: code, Source: "installed"},
+			model.Runtime{ID: "rt_dbv", Kind: "dbeaver", Name: "DBeaver", Binary: dbeaver, Source: "installed"},
+			model.Runtime{ID: "rt_heidi", Kind: "heidisql", Name: "HeidiSQL", Binary: heidi, Source: "installed"},
+			model.Runtime{ID: "rt_npp", Kind: "notepadpp", Name: "Notepad++", Binary: npp, Source: "installed"},
+			model.Runtime{ID: "rt_codium", Kind: "vscodium", Name: "VSCodium", Binary: codium, Source: "installed"},
+			model.Runtime{ID: "rt_mycode", Kind: "vscode", Name: "My VS Code", Binary: myCode, Source: "registered"},
 			model.Runtime{ID: "rt_node", Kind: "node", Name: "Node.js", Binary: node},
 			model.Runtime{ID: "rt_gone", Kind: "vscode", Name: "Old Code", Binary: filepath.Join(project, "missing.exe")})
 		d.Services = append(d.Services,
@@ -34,12 +38,12 @@ func TestLaunchRuntime(t *testing.T) {
 	})
 
 	type call struct {
-		bin, dir string
-		args     []string
+		bin, dir  string
+		args, env []string
 	}
 	var calls []call
-	e.srv.Launch = func(bin string, args []string, dir string) error {
-		calls = append(calls, call{bin, dir, args})
+	e.srv.Launch = func(bin string, args []string, dir string, env []string) error {
+		calls = append(calls, call{bin, dir, args, env})
 		return nil
 	}
 	last := func() call { return calls[len(calls)-1] }
@@ -51,6 +55,27 @@ func TestLaunchRuntime(t *testing.T) {
 	if c := last(); c.bin != code || c.dir != project || strings.Join(c.args, " ") != project {
 		t.Fatalf("editor call %+v", c)
 	}
+	// Data of Zero2Dev-installed tools lives in <data>\<name>, never in bin.
+	codeData := filepath.Join(e.home, "code")
+	if c := last(); strings.Join(c.env, " ") != "VSCODE_PORTABLE="+codeData {
+		t.Fatalf("VS Code must keep its data in %s: %+v", codeData, c.env)
+	}
+	if st, err := os.Stat(codeData); err != nil || !st.IsDir() {
+		t.Fatal("data\\code must exist")
+	}
+	e.do("POST", "/api/runtimes/rt_codium/launch", nil, nil)
+	if c := last(); strings.Join(c.env, " ") != "VSCODE_PORTABLE="+filepath.Join(e.home, "codium") {
+		t.Fatalf("VSCodium %+v", c.env)
+	}
+	e.do("POST", "/api/runtimes/rt_npp/launch", map[string]string{"path": project}, nil)
+	if c := last(); strings.Join(c.args, " ") != "-settingsDir="+filepath.Join(e.home, "notepadpp")+" "+project {
+		t.Fatalf("Notepad++ %+v", c.args)
+	}
+	// A VS Code registered by path is the user's own install: its usual settings stay.
+	e.do("POST", "/api/runtimes/rt_mycode/launch", map[string]string{"path": project}, nil)
+	if c := last(); len(c.env) != 0 || strings.Join(c.args, " ") != project {
+		t.Fatalf("registered editor must be left alone: %+v", c)
+	}
 	// No body: just open the program.
 	if r := e.do("POST", "/api/runtimes/rt_code/launch", nil, nil); r.StatusCode != 204 || len(last().args) != 0 {
 		t.Fatalf("no body: %d %+v", r.StatusCode, last())
@@ -59,15 +84,29 @@ func TestLaunchRuntime(t *testing.T) {
 	if r := e.do("POST", "/api/runtimes/rt_dbv/launch", map[string]string{"serviceId": "svc_pg"}, nil); r.StatusCode != 204 {
 		t.Fatalf("dbeaver: %d", r.StatusCode)
 	}
-	ws := filepath.Join(e.home, "tools", "dbeaver-workspace")
+	ws := filepath.Join(e.home, "dbeaver", "workspace")
 	if c := last(); c.args[0] != "-data" || c.args[1] != ws || c.args[2] != "-con" || !strings.Contains(c.args[3], "driver=PostgreSQL|host=127.0.0.1|port=5432|user=postgres") {
 		t.Fatalf("dbeaver call %+v", c)
 	}
 	if st, err := os.Stat(ws); err != nil || !st.IsDir() {
 		t.Fatal("workspace folder must exist")
 	}
-	if r := e.do("POST", "/api/runtimes/rt_heidi/launch", map[string]string{"serviceId": "svc_pg"}, nil); r.StatusCode != 204 || last().args[0] != "--nettype=8" {
+	heidiSettings := filepath.Join(e.home, "heidisql", "portable_settings.txt")
+	if r := e.do("POST", "/api/runtimes/rt_heidi/launch", map[string]string{"serviceId": "svc_pg"}, nil); r.StatusCode != 204 ||
+		last().args[0] != "--psettings="+heidiSettings || last().args[1] != "--nettype=8" {
 		t.Fatalf("heidisql: %d %+v", r.StatusCode, last())
+	}
+	if _, err := os.Stat(heidiSettings); err != nil {
+		t.Fatal("HeidiSQL's settings file must be created in data\\heidisql")
+	}
+	if err := os.WriteFile(heidiSettings, []byte("saved"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if r := e.do("POST", "/api/runtimes/rt_heidi/launch", nil, nil); r.StatusCode != 204 {
+		t.Fatalf("heidisql relaunch: %d", r.StatusCode)
+	}
+	if b, _ := os.ReadFile(heidiSettings); string(b) != "saved" {
+		t.Fatalf("a later launch must keep HeidiSQL's settings, got %q", b)
 	}
 
 	n := len(calls)
