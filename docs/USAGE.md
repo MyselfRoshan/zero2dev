@@ -159,17 +159,17 @@ To take a site offline without deleting it, click **Disable** in its row; **Enab
 4. The service page shows **Connection**: host `127.0.0.1`, the port, the user (`root` for MariaDB/MySQL, `postgres` for PostgreSQL) and a URL to copy. There is no password, so the server only accepts connections from this PC.
 
 Good to know:
-- **Where the data lives:** `data\databases\<service id>`. It moves with the Zero2Dev folder, and deleting the service keeps it, so delete that folder yourself when you no longer need it.
+- **Where the data lives:** `data\<database>\<service id>`, for example `data\postgres\svc_1a2b3c4d`. It moves with the Zero2Dev folder, and deleting the service keeps it, so delete that folder yourself when you no longer need it.
 - **Stopping:** **Stop** asks the server to shut down cleanly (`mysqladmin shutdown`, `pg_ctl stop`, `redis-cli shutdown`) and only ends it if it does not stop within 20 seconds.
 - **Run Zero2Dev without administrator rights.** PostgreSQL refuses to start from an administrator account.
 - **Custom arguments:** if you set your own **Arguments**, Zero2Dev does not create or manage the data folder for you.
 
 ### Code editors and database tools
 
-- Install **VS Code**, **VSCodium** or **Notepad++** from **Code editors**. VS Code and VSCodium run in portable mode: their settings and extensions stay in the `bin` folder.
+- Install **VS Code**, **VSCodium** or **Notepad++** from **Code editors**. Their settings and extensions go to `data\code` and `data\codium` (Notepad++: `data\notepadpp`), not into `bin`, which only holds the programs.
 - Each installed editor or tool has an **Open** button on its card.
 - A service page has **Open in VS Code** (one button per installed editor), which opens the project folder.
-- A MariaDB, MySQL or PostgreSQL service page has **Open in HeidiSQL** and **Open in DBeaver** when those are installed. They connect straight to the database. DBeaver keeps its workspace in `data\tools\dbeaver-workspace`.
+- A MariaDB, MySQL or PostgreSQL service page has **Open in HeidiSQL** and **Open in DBeaver** when those are installed. They connect straight to the database. HeidiSQL keeps its settings in `data\heidisql`, DBeaver its workspace in `data\dbeaver\workspace`.
 - Programs opened this way are not services: they keep running when Zero2Dev stops.
 
 ---
@@ -204,7 +204,7 @@ Zero2Dev keeps two folders next to `zero2dev.exe`: `data` for your own informati
 
 ```
 zero2dev.exe
-bin\             downloaded runtimes, one folder per version (php-8.4.1, node-22.12.0, ...)
+bin\             downloaded programs only, one folder per version (php-8.4.1, node-22.12.0, ...)
 data\
   token          your access token
   state.json     your services, runtimes, sites and settings
@@ -212,7 +212,13 @@ data\
   config\        generated Caddyfile and nginx.conf
   nginx\         used by the Nginx (sites) service: logs, temp files, certs (local CA)
   logs\          service logs and installer.log
+  mariadb\ mysql\ postgres\ redis\   database files, one folder per service (svc_...)
+  code\ codium\  VS Code / VSCodium settings and extensions
+  notepadpp\     Notepad++ settings
+  heidisql\ dbeaver\   database tool settings and workspace
 ```
+
+Settings of the editors and database tools never go into `bin`. Only tools Zero2Dev installed use these folders; a program you registered by path keeps its usual settings.
 
 - **Move or copy** the whole folder (exe, `bin` and `data`) to another drive or a USB stick. Stop Zero2Dev first.
 - **Back up** by copying `data\` while Zero2Dev is stopped. `bin\` only holds downloads that can be installed again.

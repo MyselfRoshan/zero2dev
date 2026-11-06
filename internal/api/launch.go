@@ -45,16 +45,11 @@ func (s *Server) launchRuntime(w http.ResponseWriter, r *http.Request) error {
 		return apperr.Conflict("%s is missing at %s", rt.Name, rt.Binary)
 	}
 
-	var args []string
-	dir := filepath.Dir(rt.Binary)
-	if rt.Kind == "dbeaver" {
-		// Keep DBeaver's workspace (connections, scripts) inside the data folder.
-		ws := filepath.Join(s.Cfg.Home, "tools", "dbeaver-workspace")
-		if err := os.MkdirAll(ws, 0o755); err != nil {
-			return apperr.Internal("cannot create the DBeaver workspace: %v", err)
-		}
-		args = append(args, "-data", ws)
+	args, env, err := toolDataArgs(*rt, s.Cfg.Home)
+	if err != nil {
+		return apperr.Internal("cannot prepare the data folder of %s: %v", rt.Name, err)
 	}
+	dir := filepath.Dir(rt.Binary)
 	switch {
 	case in.ServiceID != "":
 		if model.KindCategory[rt.Kind] != model.CatDBTool {
@@ -95,9 +90,50 @@ func (s *Server) launchRuntime(w http.ResponseWriter, r *http.Request) error {
 		}
 		args = append(args, p)
 	}
-	if err := s.Launch(rt.Binary, args, dir); err != nil {
+	if err := s.Launch(rt.Binary, args, dir, env); err != nil {
 		return apperr.Internal("%v", err)
 	}
 	w.WriteHeader(http.StatusNoContent)
 	return nil
+}
+
+// toolDataArgs keeps the settings, extensions and workspaces of a tool that
+// Zero2Dev installed in <home>/<name> (data\code, data\codium, ...), so the
+// bin folder only holds programs. Each tool has its own switch for it. Tools
+// registered by path are the user's own installs and keep their usual
+// settings, so they get nothing.
+func toolDataArgs(rt model.Runtime, home string) (args, env []string, err error) {
+	name := model.DataDirName(rt.Kind)
+	if rt.Source != "installed" || name == "" {
+		return nil, nil, nil
+	}
+	dir := filepath.Join(home, name)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, nil, err
+	}
+	switch rt.Kind {
+	case "vscode", "vscodium":
+		// Portable mode with the data outside the program folder: VS Code and
+		// VSCodium keep user-data and extensions in $VSCODE_PORTABLE.
+		return nil, []string{"VSCODE_PORTABLE=" + dir}, nil
+	case "notepadpp":
+		return []string{"-settingsDir=" + dir}, nil, nil
+	case "heidisql":
+		// The portable build writes portable_settings.txt next to heidisql.exe
+		// unless told otherwise; the file is created so the setting is used.
+		f := filepath.Join(dir, "portable_settings.txt")
+		if _, err := os.Stat(f); os.IsNotExist(err) {
+			if err := os.WriteFile(f, nil, 0o644); err != nil {
+				return nil, nil, err
+			}
+		}
+		return []string{"--psettings=" + f}, nil, nil
+	case "dbeaver":
+		ws := filepath.Join(dir, "workspace")
+		if err := os.MkdirAll(ws, 0o755); err != nil {
+			return nil, nil, err
+		}
+		return []string{"-data", ws}, nil, nil
+	}
+	return nil, nil, nil
 }

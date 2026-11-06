@@ -116,7 +116,7 @@ func TestDefaultDBArgsAndPlan(t *testing.T) {
 	s := New(t.TempDir(), nil, nil)
 	bin := fakeMariaDB(t)
 	p := s.planDB(model.Service{ID: "svc_1", Kind: "mariadb", Port: 3307}, bin, false)
-	if p.data != filepath.Join(s.home, "databases", "svc_1") || filepath.Base(p.initBin) == "" || !strings.HasPrefix(filepath.Base(p.initBin), "mariadb-install-db") {
+	if p.data != filepath.Join(s.home, "mariadb", "svc_1") || filepath.Base(p.initBin) == "" || !strings.HasPrefix(filepath.Base(p.initBin), "mariadb-install-db") {
 		t.Fatalf("plan %+v", p)
 	}
 	if !strings.HasPrefix(filepath.Base(p.stopBin), "mariadb-admin") || !strings.Contains(strings.Join(p.stopArgs, " "), "--port=3307 --protocol=tcp shutdown") {
@@ -162,7 +162,7 @@ func dbSetup(t *testing.T) (*Supervisor, *store.Store, string, int) {
 
 func TestDatabaseFirstStartAndCleanStop(t *testing.T) {
 	s, _, home, _ := dbSetup(t)
-	data := filepath.Join(home, "databases", "svc_db")
+	data := filepath.Join(home, "mariadb", "svc_db")
 
 	if err := s.Start("svc_db"); err != nil {
 		t.Fatal(err)
@@ -208,7 +208,7 @@ func TestDatabaseFailedSetupCleansUp(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "creating the database files failed") {
 		t.Fatalf("got %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(home, "databases", "svc_db")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(home, "mariadb", "svc_db")); !os.IsNotExist(err) {
 		t.Fatal("a failed setup must not leave a half-made data folder")
 	}
 	if !strings.Contains(joinLogs(s.Logs("svc_db", 50)), "cannot create the system tables") {

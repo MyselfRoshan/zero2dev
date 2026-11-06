@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
   caRootPath,
+  DATA_DIR_NAMES,
+  dbDataPath,
   isAntivirusError,
   isNetworkError,
   joinPath,
@@ -62,5 +64,14 @@ describe("paths and notes", () => {
   it("tails lines", () => {
     expect(tailLines(["a", "b", "c"], 2)).toEqual(["b", "c"]);
     expect(tailLines(["a"], 2)).toEqual(["a"]);
+  });
+});
+
+describe("tool data folders", () => {
+  it("names one folder per tool inside the data folder", () => {
+    expect(dbDataPath("D:\\z\\data", "postgres", "svc_1")).toBe("D:\\z\\data\\postgres\\svc_1");
+    expect(dbDataPath("/z/data", "mariadb", "svc_2")).toBe("/z/data/mariadb/svc_2");
+    expect(DATA_DIR_NAMES.vscode).toBe("code");
+    expect(DATA_DIR_NAMES.vscodium).toBe("codium");
   });
 });

@@ -79,7 +79,7 @@
 {#if deleting}
   <ConfirmDialog
     title="Delete {deleting.name}?"
-    message={deleteServiceMessage(deleting, isActive(deleting), dbDataPath(app.status?.homeDir ?? "<data folder>", deleting.id))}
+    message={deleteServiceMessage(deleting, isActive(deleting), dbDataPath(app.status?.homeDir ?? "<data folder>", deleting.kind, deleting.id))}
     confirmLabel="Delete service"
     {busy}
     onconfirm={confirmDelete}

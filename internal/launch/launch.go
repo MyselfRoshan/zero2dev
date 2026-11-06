@@ -7,6 +7,7 @@ package launch
 import (
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
@@ -15,9 +16,13 @@ import (
 )
 
 // Start runs bin with args in dir and returns once the program was started.
-func Start(bin string, args []string, dir string) error {
+// env holds extra "NAME=value" entries added to the daemon's environment.
+func Start(bin string, args []string, dir string, env []string) error {
 	cmd := exec.Command(bin, args...) // never a shell
 	cmd.Dir = dir
+	if len(env) > 0 {
+		cmd.Env = append(os.Environ(), env...)
+	}
 	detach(cmd)
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("cannot start %s: %w", filepath.Base(bin), err)

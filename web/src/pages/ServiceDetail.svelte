@@ -48,7 +48,7 @@
   const url = $derived(service ? serviceUrl(service) : null);
   const editors = $derived(editorsFor(lists.runtimes));
   const conn = $derived(service ? connectionInfo(service) : null);
-  const dataDir = $derived(service ? dbDataPath(app.status?.homeDir ?? "<data folder>", service.id) : "");
+  const dataDir = $derived(service ? dbDataPath(app.status?.homeDir ?? "<data folder>", service.kind, service.id) : "");
   async function copy(text: string) {
     try {
       await navigator.clipboard.writeText(text);

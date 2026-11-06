@@ -456,11 +456,11 @@ The browser's own directory picker never reveals an absolute path, which service
 | notepadpp | 0 | `notepad++.exe` |
 | heidisql | 0 | `heidisql.exe` |
 
-**Portable mode:** after extraction, `vscode` and `vscodium` get an empty `data/` folder next to the binary, which switches them to portable mode.
+**Bin holds programs only.** Tool data goes to `<home>/<model.DataDirName(kind)>`: `code`, `codium`, `notepadpp`, `heidisql`, `dbeaver`, and for databases `mariadb`, `mysql`, `postgres`, `redis`. Nothing is created inside `bin`.
 
 ### Database services
 
-**Data folder:** `<home>/databases/<serviceId>`, computed at each start so it follows a moved folder.
+**Data folder:** `<home>/<kind>/<serviceId>` (e.g. `<home>/postgres/svc_1a2b3c4d`), computed at each start so it follows a moved folder.
 
 **Default args** (used when `args` is empty):
 
@@ -514,7 +514,16 @@ Opens an `editor` or `dbtool` runtime. The program is detached: not in the super
 
 **Editors:** `args = [path]`, working dir = `path`, or its folder when `path` is a file.
 
-**DBeaver:** always `-data <home>/tools/dbeaver-workspace`. This moves only DBeaver's workspace; DBeaver still writes some files to its default location.
+**Tool data** (only for runtimes with `source: "installed"`; registered programs are the user's own installs and get nothing):
+
+| Kind | Redirect | Folder |
+| --- | --- | --- |
+| vscode, vscodium | env `VSCODE_PORTABLE=<dir>` (portable mode with the data outside the program folder) | `<home>/code`, `<home>/codium` (`user-data`, `extensions`) |
+| notepadpp | `-settingsDir=<dir>` | `<home>/notepadpp` |
+| heidisql | `--psettings=<dir>/portable_settings.txt`, created empty if missing | `<home>/heidisql` |
+| dbeaver | `-data <dir>/workspace`. This moves only DBeaver's workspace; DBeaver still writes some files to its default location. | `<home>/dbeaver` |
+
+These options come before the path or connection arguments.
 
 **Database tools with `serviceId`:**
 - HeidiSQL: `--nettype=0` (MariaDB/MySQL) or `8` (PostgreSQL, plus `--databases=postgres`), `--description=<name> --host=127.0.0.1 --port=P --user=<root|postgres>`. The long options take `=` in every version.
