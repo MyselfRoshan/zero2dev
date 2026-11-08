@@ -44,7 +44,7 @@ type Deps struct {
 	// not available. Replaced in tests.
 	PickFolder func(title, start string) (path string, ok bool, err error)
 	// Launch opens an editor or database tool (launch.Start); nil disables it. Replaced in tests.
-	Launch func(bin string, args []string, dir string) error
+	Launch func(bin string, args []string, dir string, env []string) error
 }
 
 // Server is the http.Handler for the whole daemon.

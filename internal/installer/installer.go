@@ -421,9 +421,6 @@ func (in *Installer) process(j *job, e model.CatalogEntry, archive, want, got st
 		return "", stepErr("Extracting", fmt.Errorf("archive does not contain %s", e.BinaryRelPath))
 	}
 	_ = os.Chmod(filepath.Join(stage, rel), 0o755)
-	if err := postInstall(e, stage, rel); err != nil {
-		return "", stepErr("Extracting", err)
-	}
 
 	in.progress(j, 95, "Registering")
 	runtimesDir := in.Bin
@@ -597,16 +594,4 @@ func (p *progressWriter) Write(b []byte) (int, error) {
 		}
 	}
 	return len(b), nil
-}
-
-// postInstall prepares a freshly extracted tool before it is moved into place.
-// VS Code and VSCodium switch to portable mode when a "data" folder sits next
-// to the program: settings, extensions and caches then stay inside the
-// runtime's own folder instead of %APPDATA% and %USERPROFILE%\.vscode.
-func postInstall(e model.CatalogEntry, stage, binRel string) error {
-	switch e.Kind {
-	case "vscode", "vscodium":
-		return os.MkdirAll(filepath.Join(stage, filepath.Dir(binRel), "data"), 0o755)
-	}
-	return nil
 }

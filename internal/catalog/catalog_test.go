@@ -112,3 +112,31 @@ func TestMD5Checksum(t *testing.T) {
 		t.Fatal("md5 must be 32 hex chars")
 	}
 }
+
+func TestMergeRemoteBackfillsLineAndChannel(t *testing.T) {
+	base := model.CatalogEntry{
+		ID: "nginx-1.27.0-windows-amd64", Kind: "nginx", Version: "1.27.0", Name: "builtin",
+		URL: "https://nginx.org/download/nginx-1.27.0.zip", Checksum: model.Checksum{Type: "none"}, Unverified: true,
+		BinaryRelPath: "nginx.exe", StripComponents: 1, OS: "windows", Arch: "amd64", Source: "builtin",
+	}
+	remote := base
+	remote.Name, remote.Line, remote.Channel = "remote", "1.27", "mainline"
+	bad := remote
+	bad.URL = "http://example.com/x.zip" // invalid: must not backfill
+	bad.Line = "wrong"
+
+	got := mergeRemote([]model.CatalogEntry{base}, []model.CatalogEntry{bad, remote})
+	if len(got) != 1 {
+		t.Fatalf("want 1 entry, got %d", len(got))
+	}
+	e := got[0]
+	if e.Name != "builtin" || e.Source != "builtin" || e.Line != "1.27" || e.Channel != "mainline" {
+		t.Fatalf("unexpected merge result: %+v", e)
+	}
+
+	set := base
+	set.Line, set.Channel = "keep", "keep"
+	if e := mergeRemote([]model.CatalogEntry{set}, []model.CatalogEntry{remote})[0]; e.Line != "keep" || e.Channel != "keep" {
+		t.Fatalf("existing line/channel overwritten: %+v", e)
+	}
+}

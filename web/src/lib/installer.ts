@@ -44,9 +44,22 @@ export function joinPath(home: string, ...parts: string[]): string {
   return [home.replace(/[\\/]+$/, ""), ...parts].join(sep);
 }
 
-/** Where a database service keeps its files (supervisor DataDir). */
-export function dbDataPath(homeDir: string, serviceId: string): string {
-  return joinPath(homeDir, "databases", serviceId);
+/** The folder of each tool inside the data folder (model.DataDirName): data/code, data/postgres ... */
+export const DATA_DIR_NAMES: Record<string, string> = {
+  vscode: "code",
+  vscodium: "codium",
+  notepadpp: "notepadpp",
+  heidisql: "heidisql",
+  dbeaver: "dbeaver",
+  mariadb: "mariadb",
+  mysql: "mysql",
+  postgres: "postgres",
+  redis: "redis",
+};
+
+/** Where a database service keeps its files (supervisor DataDir): <data>/<kind>/<service id>. */
+export function dbDataPath(homeDir: string, kind: string, serviceId: string): string {
+  return joinPath(homeDir, DATA_DIR_NAMES[kind] ?? kind, serviceId);
 }
 
 export function caRootPath(homeDir: string): string {

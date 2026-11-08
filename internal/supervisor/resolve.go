@@ -70,7 +70,7 @@ func (s *Supervisor) resolve(svc model.Service, d store.Data) (*resolved, error)
 		case "node", "java":
 			return nil, apperr.BadRequest("args required for %s services", svc.Kind)
 		case "mariadb", "mysql", "postgres", "redis":
-			args = defaultDBArgs(svc.Kind, s.DataDir(svc.ID))
+			args = defaultDBArgs(svc.Kind, s.DataDir(svc.Kind, svc.ID))
 		}
 	}
 	port := strconv.Itoa(svc.Port)
