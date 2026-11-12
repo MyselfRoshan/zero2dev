@@ -179,9 +179,10 @@
 
   function toggleCustomArgs(on: boolean) {
     customArgs = on;
-    if (on && args.length === 0 && preview) {
+    if (on && preview) {
       // Start from the generated arguments, so writing your own is an edit.
       args = preview.args.map((v) => ({ id: nextId++, v }));
+      if (!command.trim() && preview.program !== runtime?.binary) command = preview.program;
     } else if (!on) {
       args = [];
       command = "";

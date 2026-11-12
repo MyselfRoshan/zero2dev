@@ -196,6 +196,10 @@ func (s *Supervisor) Start(id string) error {
 		return apperr.Conflict("%v", err)
 	}
 	if st, err := os.Stat(r.workdir); err != nil || !st.IsDir() {
+		if svc.Cwd != "" {
+			revert()
+			return apperr.Conflict("service folder %s does not exist or is not a directory", svc.Cwd)
+		}
 		r.workdir = filepath.Dir(r.bin) // e.g. a database with its own args: no data folder of Zero2Dev's
 	}
 

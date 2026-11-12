@@ -178,7 +178,9 @@
   {#if guided}
     <ConfirmDialog
       title="Use the settings for {service.name}?"
-      message={`Its own command line is replaced by the one its settings make: ${commandText(guided.program, guided.args)}. Check the settings with Edit afterwards.`}
+      message={guided.warnings.length
+        ? `${guided.warnings.join(" ")} Use Edit to complete the settings before switching.`
+        : `Its own command line is replaced by the one its settings make: ${commandText(guided.program, guided.args)}. Check the settings with Edit afterwards.`}
       confirmLabel="Use the settings"
       danger={false}
       {busy}

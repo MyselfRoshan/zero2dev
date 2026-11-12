@@ -19,7 +19,8 @@
   let loadError = $state("");
   let filter = $state("");
   let jobId = $state("");
-  const job = $derived(jobId ? jobs[jobId] : undefined);
+  let jobRuntimeId = $state("");
+  const job = $derived(jobId && jobRuntimeId === runtimeId ? jobs[jobId] : undefined);
 
   async function load(id: string) {
     loadError = "";
@@ -28,8 +29,11 @@
       return;
     }
     try {
-      info = await api.phpExtensions(id);
+      const result = await api.phpExtensions(id);
+      if (id !== runtimeId) return;
+      info = result;
     } catch (e) {
+      if (id !== runtimeId) return;
       info = null;
       loadError = errMessage(e);
     }
@@ -40,8 +44,11 @@
   // Reload once Xdebug is in place, and tick it.
   $effect(() => {
     if (job?.state === "done" && runtimeId) {
+      const id = runtimeId;
       jobId = "";
-      void load(runtimeId).then(() => set("xdebug", true));
+      void load(id).then(() => {
+        if (id === runtimeId) set("xdebug", true);
+      });
     }
   });
 
@@ -59,8 +66,12 @@
   }
 
   async function downloadXdebug() {
-    const id = await installXdebug(runtimeId);
-    if (id) jobId = id;
+    const requestedRuntimeId = runtimeId;
+    const id = await installXdebug(requestedRuntimeId);
+    if (id) {
+      jobRuntimeId = requestedRuntimeId;
+      jobId = id;
+    }
   }
 </script>
 

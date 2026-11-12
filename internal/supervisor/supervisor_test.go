@@ -424,3 +424,43 @@ func blockForever() {
 		time.Sleep(time.Hour)
 	}
 }
+
+func TestStartRejectsInvalidConfiguredFolder(t *testing.T) {
+	for _, folderType := range []string{"missing", "file"} {
+		for _, hasPrevious := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/previous=%v", folderType, hasPrevious), func(t *testing.T) {
+				sup, st, _, id := setup(t, "sleep", 0)
+				folder := filepath.Join(t.TempDir(), "project")
+				if folderType == "file" {
+					if err := os.WriteFile(folder, []byte("file"), 0o600); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if err := st.Update(func(d *store.Data) error { d.Services[0].Cwd = folder; return nil }); err != nil {
+					t.Fatal(err)
+				}
+				var previous *proc
+				if hasPrevious {
+					previous = &proc{state: model.StateFailed, lastErr: "previous failure"}
+					sup.procs[id] = previous
+				}
+				if err := sup.Start(id); err == nil || !strings.Contains(err.Error(), "service folder") {
+					t.Fatalf("Start error = %v", err)
+				}
+				if sup.procs[id] != previous {
+					t.Fatal("previous process state was not restored")
+				}
+			})
+		}
+	}
+}
+
+func TestStartWithoutConfiguredFolder(t *testing.T) {
+	sup, st, _, id := setup(t, "sleep", 0)
+	if err := st.Update(func(d *store.Data) error { d.Services[0].Cwd = ""; return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if err := sup.Start(id); err != nil {
+		t.Fatal(err)
+	}
+}
