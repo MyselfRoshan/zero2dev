@@ -20,6 +20,8 @@ const svc = (o: Partial<ServiceInput> = {}): ServiceInput => ({
   kind: "node",
   command: "",
   args: ["server.js"],
+  settings: {},
+  customArgs: false,
   cwd: "C:\\work\\api",
   env: {},
   port: 3000,
@@ -72,14 +74,20 @@ describe("validateService", () => {
     expect(validateService(svc({ kind: "custom", command: "app.exe", args: [] }))).toEqual({});
     expect(validateService(svc({ kind: "php", args: [] }))).toEqual({});
   });
-  it("requires args for node and java (no defaults)", () => {
-    expect(validateService(svc({ args: [] })).args).toBeTruthy();
-    expect(validateService(svc({ kind: "java", args: [" "] })).args).toBeTruthy();
-    expect(validateService(svc({ kind: "go", args: [] })).args).toBeUndefined();
+  it("leaves required settings (such as Node's script) to the settings", () => {
+    expect(validateService(svc({ args: [] })).args).toBeUndefined();
   });
-  it("requires an absolute cwd", () => {
+  it("requires an absolute folder where the type has one", () => {
+    const db = { folderRequired: false, portRequired: true };
     expect(validateService(svc({ cwd: "" })).cwd).toBeTruthy();
     expect(validateService(svc({ cwd: "relative\\dir" })).cwd).toBeTruthy();
+    expect(validateService(svc({ kind: "mariadb", cwd: "" }), db).cwd).toBeUndefined();
+    expect(validateService(svc({ kind: "mariadb", cwd: "rel" }), db).cwd).toBeTruthy();
+  });
+  it("requires a port where the type needs one", () => {
+    const db = { folderRequired: false, portRequired: true };
+    expect(validateService(svc({ kind: "mariadb", cwd: "", port: 0 }), db).port).toBeTruthy();
+    expect(validateService(svc({ kind: "mariadb", cwd: "", port: 3306 }), db)).toEqual({});
   });
   it("bounds the port", () => {
     expect(validateService(svc({ port: 0 })).port).toBeUndefined();

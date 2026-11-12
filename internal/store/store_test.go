@@ -111,3 +111,36 @@ func TestRebaseRuntimesOnlyTouchesMissingInstalled(t *testing.T) {
 		t.Fatalf("%+v", rs)
 	}
 }
+
+func TestMigrateServicesFromBeforeSettings(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "state.json")
+	old := `{"services":[
+		{"id":"svc_a","name":"API","kind":"node","args":["server.js"],"cwd":"/w","env":{}},
+		{"id":"svc_b","name":"DB","kind":"mariadb","args":[],"cwd":"/w","env":{}},
+		{"id":"svc_c","name":"Tool","kind":"custom","command":"x","args":["-v"],"cwd":"/w","env":{}},
+		{"id":"svc_d","name":"New","kind":"node","args":["--x"],"settings":{"script":"a.js"},"cwd":"/w","env":{}}
+	],"runtimes":[],"sites":[],"settings":{}}`
+	if err := os.WriteFile(p, []byte(old), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]model.Service{}
+	for _, sv := range s.Snapshot().Services {
+		got[sv.ID] = sv
+	}
+	if !got["svc_a"].CustomArgs {
+		t.Error("a service with args and no settings keeps its args as the whole command line")
+	}
+	if got["svc_b"].CustomArgs || got["svc_b"].Settings == nil {
+		t.Errorf("no args: guided settings with defaults, got %+v", got["svc_b"])
+	}
+	if got["svc_c"].CustomArgs {
+		t.Error("custom commands never use customArgs")
+	}
+	if got["svc_d"].CustomArgs {
+		t.Error("a service that has settings is not migrated")
+	}
+}

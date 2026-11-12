@@ -83,19 +83,21 @@ Good to know:
 A *service* is a command Zero2Dev starts, stops and watches for you, with its output in one place.
 
 1. Open **Services** and click **New service**.
-2. Fill in the form:
+2. Fill in the form. It only asks for what the chosen **Type** uses:
 
    | Field | What to enter |
    | --- | --- |
    | **Name** | Anything, e.g. `My API` |
-   | **Type** | Node.js, PHP, Go, Java, Caddy, nginx, or *Custom command* for any other program |
-   | **Project folder** | The folder your app lives in, e.g. `C:\work\my-api`. Click **Browse...** to pick it in the Windows folder dialog, or type the path |
+   | **Type** | Node.js, PHP, Go, Java, a database (MariaDB, MySQL, PostgreSQL, Redis), or *Custom command* for any other program. Caddy and nginx are not in the list: Zero2Dev creates their services itself when you install them |
+   | **Project folder** | Your app's **code**, e.g. `C:\work\my-api`. Zero2Dev starts the program in this folder; it never stores its own data there. Click **Browse...** to pick it in the Windows folder dialog, or type the path. Databases have no project folder: their form shows the **data folder** Zero2Dev keeps their files in instead. For *Custom command* it is called **Working folder** |
    | **Program** | Only for *Custom command*: the program to run, e.g. `python` |
-   | **Arguments** | One per row (click **Add argument**). `{port}` is replaced with the port you set. The hint under the field says what happens when you leave it empty |
-   | **Port** | Optional: the port your app listens on. Your app also gets it as `PORT` |
+   | **Port** | The port your app listens on (your app also gets it as `PORT`). Databases and PHP start with their usual port |
    | **Version** | Which installed version to use. Leave on *Default (...)* to follow the default of that type |
+   | **Settings** | What this type can be told, each with its default already filled in, the argument or php.ini line it writes (e.g. `--max-connections`, `php.ini memory_limit`) and a sentence on what it does, so you do not need the program's documentation. See [Settings by type](#settings-by-type) |
+   | **Always added** | Folded away: the arguments Zero2Dev always adds for this type, each with the reason (e.g. `--bind-address=127.0.0.1`: only this PC can connect) |
    | **Start automatically…** | Tick to start it whenever Zero2Dev starts |
-   | **Advanced** | Rarely needed, folded away: a different **Program** (e.g. `npm.cmd`), a **Health check path** such as `/health` (otherwise Zero2Dev waits until the port accepts connections), and **Environment variables** |
+   | **Advanced** | Rarely needed: **arguments for your app** (added after the generated ones), a **Health check path** such as `/health` where the type has one, **Environment variables** (yours win over the settings), and **Write my own command line instead of the settings** |
+   | **Command line** | At the bottom, always up to date: exactly what will run, the variables Zero2Dev adds, and the files it writes (PHP's php.ini) |
 
    ![New service form filled in for a Python static server](screenshots/04-service-form.png)
 
@@ -107,14 +109,33 @@ A *service* is a command Zero2Dev starts, stops and watches for you, with its ou
 
 Typical examples:
 
-- **Node app**: Type *Node.js*, Arguments `server.js`, Project folder = your project.
-- **PHP**: Type *PHP*. Leave Arguments empty to use PHP's built-in server on your port.
-- **Go app**: Type *Go*, leave Arguments empty to run `go run .` in your project.
+- **Node app**: Type *Node.js*, Script `server.js` (or Run: *An npm script*, `dev`), Project folder = your project.
+- **PHP**: Type *PHP*, Project folder = your site, Document root `public` for Laravel or Symfony. Tick the extensions you need.
+- **Go app**: Type *Go*. Package `.` runs `go run .` in your project; `./cmd/api` runs a subfolder.
+- **A database**: Type *MariaDB*, *MySQL*, *PostgreSQL* or *Redis*. Nothing else is needed.
 - **Anything else**: Type *Custom command*, Program = the program, Arguments = its options.
 
 Click a service's name to open its page: the exact command it runs (e.g. `node.exe server.js --port 3000`), folder, process id, start time, address and live output.
 
 ![Service page showing running state, port link and live log lines](screenshots/06-service-running-logs.png)
+
+---
+
+### Settings by type
+
+| Type | Settings (defaults in brackets) | Kept in the data folder |
+| --- | --- | --- |
+| Node.js | Run a **script** or an **npm script** (names from your package.json are suggested); **Restart when a file changes** `--watch` (Node 18.11+); **.env file** `--env-file` (Node 20.6+); **debugger** `--inspect` [9229]; **NODE_ENV** [development] | npm's download cache: `data\node\npm-cache` |
+| PHP | **Document root**; **Router script**; php.ini **start from** development or production; **Extensions** (tick boxes for everything in that PHP's `ext` folder) [curl, fileinfo, mbstring, openssl, mysqli, pdo_mysql, pdo_sqlite, sqlite3, zip, intl]; **memory_limit** [256M], **upload_max_filesize** / **post_max_size** [64M], **max_execution_time** [60], **display_errors** [on], **date.timezone** [UTC]; **More php.ini lines**; **Xdebug** mode, start and editor port [9003] | The service's own `php.ini`, sessions, uploads and Xdebug output: `data\php\<service id>` |
+| Go | **Package** [.]; **Build tags**; **Keep Go's downloads and build cache in the data folder** [on] | `data\go` (GOPATH, GOCACHE, GOENV) |
+| Java | Run a **JAR** or a **main class** with a class path; **Max memory** `-Xmx`; **Pass the port as server.port** (Spring Boot); **debugger** [5005] | none |
+| MariaDB, MySQL | **Character set** [utf8mb4], **Collation**, **SQL mode** (server default, strict, permissive for old apps), **Max connections** [151], **InnoDB buffer pool** [128M], **Max packet size** [64M], **Log every query**, **Log slow queries** [after 2 s] | The database files: `data\mariadb\<service id>`, `data\mysql\...` |
+| PostgreSQL | **Max connections** [100], **Shared buffers** [128MB], **Log statements** [none], **Log statements slower than** [off], **Time zone** | `data\postgres\<service id>` |
+| Redis | **Keep the data**: snapshots (Redis default), after every write, or not at all; **Memory limit** and what to do **when the limit is reached**; **Databases** [16] | `data\redis\<service id>` |
+
+**PHP extensions and Xdebug.** The extension list is read from the selected PHP version's `ext` folder, so it always matches that version. Zero2Dev writes the service's own php.ini on every start (in its data folder) from the version's `php.ini-development` or `php.ini-production` plus your settings; PHP's own folder is never changed. When the version has no Xdebug, **Download Xdebug** fetches the matching build from xdebug.org, checks it against the SHA-256 xdebug.org lists, and puts it into that version's `ext` folder (it is program code, so it goes to `bin`). Tick **xdebug** afterwards; its mode, start and editor port settings then appear. Xdebug downloads are for PHP 8.0 and newer.
+
+**Your own command line.** Under **Advanced**, **Write my own command line instead of the settings** turns the settings off and lets you write every argument yourself, starting from the generated ones. Services created before 0.0.3 that had arguments open this way and keep running exactly as before; their page offers **use the settings instead**, which shows the new command line before switching.
 
 ---
 

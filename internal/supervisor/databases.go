@@ -55,28 +55,6 @@ func sibling(bin string, names ...string) string {
 	return ""
 }
 
-// defaultDBArgs are the server arguments used when a database service has none:
-// its own data folder, the service port, and 127.0.0.1 only.
-func defaultDBArgs(kind, data string) []string {
-	switch kind {
-	case "mariadb", "mysql":
-		a := []string{"--no-defaults", "--datadir=" + data, "--port={port}", "--bind-address=127.0.0.1"}
-		if runtime.GOOS == "windows" {
-			a = append(a, "--console") // log to stdout/stderr instead of a file in the data folder
-		}
-		if kind == "mysql" {
-			a = append(a, "--mysqlx=OFF") // no second (X protocol) port
-		}
-		return a
-	case "postgres":
-		return []string{"-D", data, "-p", "{port}", "-c", "listen_addresses=127.0.0.1"}
-	case "redis":
-		// Redis for Windows is an MSYS2 build: forward slashes are the safe path form.
-		return []string{"--port", "{port}", "--bind", "127.0.0.1", "--dir", filepath.ToSlash(data)}
-	}
-	return nil
-}
-
 // planDB returns how to set up and stop a database service. custom is true
 // when the user gave their own args: then Zero2Dev does not know the data
 // folder and leaves setup to them, but still stops the server cleanly where

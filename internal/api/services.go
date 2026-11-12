@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"zero2dev/internal/apperr"
+	"zero2dev/internal/kinds"
 	"zero2dev/internal/model"
 	"zero2dev/internal/store"
 )
@@ -179,7 +180,18 @@ func validateService(in model.ServiceInput, d store.Data) (model.Service, error)
 		Name: strings.TrimSpace(in.Name), Kind: in.Kind, Command: strings.TrimSpace(in.Command),
 		Args: append([]string{}, in.Args...), Env: map[string]string{}, Port: in.Port,
 		HealthPath: strings.TrimSpace(in.HealthPath), RuntimeID: in.RuntimeID, Autostart: in.Autostart,
-		State: model.StateStopped,
+		State: model.StateStopped, Settings: map[string]string{}, CustomArgs: in.CustomArgs,
+	}
+	for k, v := range in.Settings {
+		sv.Settings[k] = v
+	}
+	// A client that predates settings sends args but no settings: its args
+	// are the whole command line, as before.
+	if in.Settings == nil && len(in.Args) > 0 && in.Kind != "custom" {
+		sv.CustomArgs = true
+	}
+	if sv.Kind == "custom" {
+		sv.CustomArgs = false // a custom command's args always are the whole list
 	}
 	if n := len([]rune(sv.Name)); n < 1 || n > 64 {
 		return sv, apperr.BadRequest("name must be 1-64 characters")
@@ -213,12 +225,21 @@ func validateService(in model.ServiceInput, d store.Data) (model.Service, error)
 	if sv.HealthPath != "" && !strings.HasPrefix(sv.HealthPath, "/") {
 		return sv, apperr.BadRequest("healthPath must start with /")
 	}
-	if !filepath.IsAbs(in.Cwd) {
-		return sv, apperr.BadRequest("cwd must be an absolute path")
+	if !sv.CustomArgs {
+		if err := kinds.Validate(sv.Kind, sv.Settings); err != nil {
+			return sv, apperr.BadRequest("%v", err)
+		}
 	}
-	sv.Cwd = filepath.Clean(in.Cwd)
-	if st, err := os.Stat(sv.Cwd); err != nil || !st.IsDir() {
-		return sv, apperr.BadRequest("cwd %s is not an existing directory", sv.Cwd)
+	// Databases and the web servers have no project folder: the folder is
+	// optional for them (their data lives in the data folder).
+	if cwd := strings.TrimSpace(in.Cwd); cwd != "" || kinds.FolderRequired(sv.Kind) {
+		if !filepath.IsAbs(cwd) {
+			return sv, apperr.BadRequest("cwd must be an absolute path")
+		}
+		sv.Cwd = filepath.Clean(cwd)
+		if st, err := os.Stat(sv.Cwd); err != nil || !st.IsDir() {
+			return sv, apperr.BadRequest("cwd %s is not an existing directory", sv.Cwd)
+		}
 	}
 	if sv.RuntimeID != "" {
 		found := false

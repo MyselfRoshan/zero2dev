@@ -93,18 +93,18 @@ func TestNonCaddyServiceEnvUntouched(t *testing.T) {
 	}
 }
 
-func TestFindRuntimeBinaryUsesDefaultThenExplicit(t *testing.T) {
+func TestFindRuntimeUsesDefaultThenExplicit(t *testing.T) {
 	d := store.Data{Runtimes: []model.Runtime{
 		{ID: "rt_old", Kind: "php", Binary: "/r/php71/php", Version: "7.1.33"},
 		{ID: "rt_new", Kind: "php", Binary: "/r/php84/php", Version: "8.4.1", Default: true},
 		{ID: "rt_node", Kind: "node", Binary: "/r/node/node", Default: true},
 	}}
 	pick := func(svc model.Service) string {
-		bin, _, err := findRuntimeBinary(svc, d)
+		rt, _, err := findRuntime(svc, d)
 		if err != nil {
 			t.Fatal(err)
 		}
-		return bin
+		return rt.Binary
 	}
 	if got := pick(model.Service{Kind: "php"}); got != "/r/php84/php" {
 		t.Fatalf("no runtime named: the default of the kind, got %s", got)
@@ -116,7 +116,7 @@ func TestFindRuntimeBinaryUsesDefaultThenExplicit(t *testing.T) {
 	if got := pick(model.Service{Kind: "php"}); got != "/r/php71/php" {
 		t.Fatalf("fallback to the first runtime, got %s", got)
 	}
-	if _, _, err := findRuntimeBinary(model.Service{Kind: "php", RuntimeID: "rt_gone"}, d); err == nil {
+	if _, _, err := findRuntime(model.Service{Kind: "php", RuntimeID: "rt_gone"}, d); err == nil {
 		t.Fatal("an unknown runtime id must fail")
 	}
 }

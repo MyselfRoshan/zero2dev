@@ -95,24 +95,7 @@ func fakeMariaDB(t *testing.T) string {
 	return filepath.Join(dir, "mariadbd"+ext)
 }
 
-func TestDefaultDBArgsAndPlan(t *testing.T) {
-	maria := defaultDBArgs("mariadb", `C:\z\databases\svc_1`)
-	if maria[0] != "--no-defaults" || maria[1] != `--datadir=C:\z\databases\svc_1` || maria[2] != "--port={port}" || maria[3] != "--bind-address=127.0.0.1" {
-		t.Fatalf("mariadb %v", maria)
-	}
-	if my := defaultDBArgs("mysql", "D"); my[len(my)-1] != "--mysqlx=OFF" {
-		t.Fatalf("mysql %v", my)
-	}
-	if pg := strings.Join(defaultDBArgs("postgres", "D"), " "); pg != "-D D -p {port} -c listen_addresses=127.0.0.1" {
-		t.Fatal(pg)
-	}
-	if rd := strings.Join(defaultDBArgs("redis", `C:\a\b`), " "); rd != "--port {port} --bind 127.0.0.1 --dir C:/a/b" && runtime.GOOS == "windows" {
-		t.Fatal(rd)
-	}
-	if defaultDBArgs("node", "D") != nil {
-		t.Fatal("not a database")
-	}
-
+func TestDBPlan(t *testing.T) {
 	s := New(t.TempDir(), nil, nil)
 	bin := fakeMariaDB(t)
 	p := s.planDB(model.Service{ID: "svc_1", Kind: "mariadb", Port: 3307}, bin, false)

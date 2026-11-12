@@ -304,12 +304,26 @@ await step("create a service (validation first, then success)", async () => {
   await page.getByRole("button", { name: "Add your first service" }).click();
   await page.getByRole("button", { name: "Create service" }).click();
   await page.getByText("Enter a name.").waitFor();
-  await page.getByText(/no default arguments/).waitFor();
+  await page.getByText("Script is required").waitFor();
   await page.getByLabel("Name", { exact: true }).fill("Demo API");
-  await page.getByRole("button", { name: "Add argument" }).click();
-  await page.getByLabel("Argument 1", { exact: true }).fill("server.js");
+  // every setting explains itself and shows its default
+  await page.locator('[data-option="watch"]').getByText("--watch").waitFor();
+  await page.getByLabel("Script", { exact: true }).fill("server.js");
   await page.getByLabel("Project folder", { exact: true }).fill("C:\\work\\demo");
+  await page.getByText(/Your app's code \(the folder with package.json\)/).waitFor();
   await page.getByLabel("Port").fill("3100");
+  await page
+    .getByTestId("preview-command")
+    .getByText(/node\.exe server\.js/)
+    .waitFor();
+  // an npm script runs npm from the same Node folder
+  await page.getByLabel("Run", { exact: true }).selectOption("npm");
+  await page
+    .getByTestId("preview-command")
+    .getByText(/npm\.cmd run dev/)
+    .waitFor();
+  await shot(page, "04c-service-form-settings");
+  await page.getByLabel("Run", { exact: true }).selectOption("script");
   // health check and environment live under "Advanced"
   await page.getByText("Advanced:").click();
   await page.getByLabel("Health check path").fill("/health");
@@ -328,14 +342,14 @@ await step("changing from custom clears the program override", async () => {
   await page.goto(BASE + "/#/services");
   await page.getByRole("button", { name: "New service" }).click();
   await page.getByLabel("Name", { exact: true }).fill("Changed type");
-  await page.getByLabel("Project folder", { exact: true }).fill("C:\\work\\changed");
   await page.getByLabel("Type").selectOption("custom");
+  await page.getByLabel("Working folder", { exact: true }).fill("C:\\work\\changed");
   await page.getByLabel("Program").fill("custom.exe");
   await page.getByLabel("Type").selectOption("node");
-  await page.getByRole("button", { name: "Add argument" }).click();
-  await page.getByLabel("Argument 1").fill("server.js");
+  await page.getByLabel("Project folder", { exact: true }).fill("C:\\work\\changed");
+  await page.getByLabel("Script", { exact: true }).fill("server.js");
   await page.getByText("Advanced:").click();
-  assert.equal(await page.getByLabel("Program").inputValue(), "");
+  assert.equal(await page.getByLabel("Program").count(), 0, "no program override without your own command line");
   await page.getByText("Advanced:").click();
   const request = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith("/api/services"));
   await page.getByRole("button", { name: "Create service" }).click();
@@ -419,7 +433,7 @@ await step("port conflict shows a clear message", async () => {
   await page.getByLabel("Name", { exact: true }).fill("Second");
   await page.getByLabel("Type").selectOption("custom");
   await page.getByLabel("Program").fill("C:\\tools\\x.exe");
-  await page.getByLabel("Project folder", { exact: true }).fill("C:\\work\\second");
+  await page.getByLabel("Working folder", { exact: true }).fill("C:\\work\\second");
   await page.getByLabel("Port").fill("3100");
   await page.getByRole("button", { name: "Create service" }).click();
   await page.locator('tr[data-service="Second"]').waitFor();
@@ -673,15 +687,32 @@ await step("databases, code editors and database tools", async () => {
   await page.getByLabel("Name", { exact: true }).fill("Shop DB");
   await page.getByLabel("Type").selectOption("postgres");
   assert.equal(await page.getByLabel(/^Port/).inputValue(), "5432", "databases get their usual port");
-  await page.getByLabel("Project folder", { exact: true }).fill("C:\\work\\shop");
+  assert.equal(await page.getByLabel("Project folder", { exact: true }).count(), 0, "a database has no project folder");
+  await page
+    .getByTestId("data-folder")
+    .getByText(/postgres\\svc_new/)
+    .waitFor();
+  await page.getByLabel("Max connections").fill("50");
+  await page
+    .getByTestId("preview-command")
+    .getByText(/-c max_connections=50/)
+    .waitFor();
+  await page.getByTestId("always-added").getByText("Always added").click();
+  await page.getByTestId("always-added").getByText("listen_addresses=127.0.0.1").waitFor();
+  await shot(page, "19-database-settings");
   await page.getByRole("button", { name: "Create service" }).click();
   const row = page.locator('tr[data-service="Shop DB"]');
   await row.waitFor();
   await row.getByRole("link", { name: "Shop DB", exact: true }).click();
   assert.equal(await page.getByTestId("connection-url").textContent(), "postgresql://postgres@127.0.0.1:5432/postgres");
-  const toEditor = page.waitForRequest((r) => r.url().includes("/launch") && r.method() === "POST");
-  await page.getByRole("button", { name: "Open Shop DB folder in VS Code" }).click();
-  assert.deepEqual(JSON.parse((await toEditor).postData()), { path: "C:\\work\\shop" });
+  await page
+    .getByTestId("command-line")
+    .getByText(/max_connections=50/)
+    .waitFor();
+  await page
+    .getByTestId("data-dir")
+    .getByText(/\\postgres\\svc_/)
+    .waitFor();
   const toTool = page.waitForRequest((r) => r.url().includes("/launch") && r.method() === "POST");
   await page.getByRole("button", { name: "Open Shop DB in HeidiSQL" }).click();
   const body = JSON.parse((await toTool).postData());
@@ -690,6 +721,78 @@ await step("databases, code editors and database tools", async () => {
   await page.emulateMedia({ colorScheme: "dark" });
   await shot(page, "18b-database-service-dark");
   await page.emulateMedia({ colorScheme: "light" });
+});
+
+await step("php settings: extensions, Xdebug download, php.ini, open in editor", async () => {
+  await page.goto(BASE + "/#/services");
+  await page.getByRole("button", { name: "New service" }).click();
+  await page.getByLabel("Name", { exact: true }).fill("Shop site");
+  await page.getByLabel("Type").selectOption("php");
+  assert.equal(await page.getByLabel(/^Port/).inputValue(), "8000");
+  await page.getByLabel("Project folder", { exact: true }).fill("C:\\work\\shop");
+  const exts = page.getByRole("group", { name: "PHP extensions" });
+  await exts.getByLabel("pdo_mysql").waitFor();
+  assert.equal(await exts.getByLabel("pdo_mysql").isChecked(), true, "common extensions start ticked");
+  assert.equal(await exts.getByLabel("pdo_pgsql").isChecked(), false);
+  await exts.getByLabel("pdo_pgsql").check();
+  await page.getByLabel("Memory limit").fill("512M");
+  await page
+    .getByTestId("preview-command")
+    .getByText(/-c .*php\\svc_new\\php\.ini -S 127\.0\.0\.1:8000/)
+    .waitFor();
+  await page.getByText(/Writes .*php\.ini before each start/).waitFor();
+  // Xdebug is downloaded on demand, then ticked, and its settings appear
+  await page.getByRole("button", { name: "Download Xdebug" }).click();
+  await exts.getByLabel("xdebug").waitFor({ timeout: 10000 });
+  assert.equal(await exts.getByLabel("xdebug").isChecked(), true);
+  await page.getByLabel("Editor port").waitFor();
+  await shot(page, "20-php-settings");
+  const created = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith("/api/services"));
+  await page.getByRole("button", { name: "Create service" }).click();
+  const sent = (await created).postDataJSON();
+  assert.ok(
+    sent.settings.extensions.split(",").includes("pdo_pgsql") && sent.settings.extensions.includes("xdebug"),
+    sent.settings.extensions,
+  );
+  assert.equal(sent.settings.memoryLimit, "512M");
+  assert.equal(sent.customArgs, false);
+  const row = page.locator('tr[data-service="Shop site"]');
+  await row.waitFor();
+  await row.getByRole("link", { name: "Shop site", exact: true }).click();
+  const toEditor = page.waitForRequest((r) => r.url().includes("/launch") && r.method() === "POST");
+  await page.getByRole("button", { name: "Open Shop site folder in VS Code" }).click();
+  assert.deepEqual(JSON.parse((await toEditor).postData()), { path: "C:\\work\\shop" });
+});
+
+await step("a service from before settings keeps its own command line", async () => {
+  await page.evaluate(async () => {
+    const h = { Authorization: "Bearer devtoken", "Content-Type": "application/json" };
+    const body = {
+      name: "Old app",
+      kind: "node",
+      command: "",
+      args: ["old.js", "--port", "{port}"],
+      cwd: "C:\\work\\old",
+      env: {},
+      port: 3200,
+      healthPath: "",
+      runtimeId: "",
+      autostart: false,
+    };
+    await fetch("/api/services", { method: "POST", headers: h, body: JSON.stringify(body) });
+  });
+  await page.goto(BASE + "/#/services");
+  const row = page.locator('tr[data-service="Old app"]');
+  await row.getByRole("link", { name: "Old app", exact: true }).click();
+  await page
+    .getByTestId("command-line")
+    .getByText(/old\.js --port 3200/)
+    .waitFor();
+  await page.getByRole("button", { name: "use the settings instead" }).waitFor();
+  await page.getByRole("button", { name: "Edit" }).click();
+  assert.equal(await page.getByTestId("custom-args").isChecked(), true);
+  await page.getByText(/The settings are off/).waitFor();
+  await page.getByRole("button", { name: "Cancel" }).click();
 });
 
 await step("no external network requests", async () => {

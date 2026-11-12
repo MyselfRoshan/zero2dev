@@ -462,7 +462,7 @@ The browser's own directory picker never reveals an absolute path, which service
 
 **Data folder:** `<home>/<kind>/<serviceId>` (e.g. `<home>/postgres/svc_1a2b3c4d`), computed at each start so it follows a moved folder.
 
-**Default args** (used when `args` is empty):
+**Fixed args** (always added unless `customArgs`; the settings follow them, see "Amendment: settings for each service type"):
 
 | Kind | Args |
 | --- | --- |
@@ -482,7 +482,7 @@ The browser's own directory picker never reveals an absolute path, which service
 
 - Each command is the sibling of the server binary. It runs with a 2-minute timeout, and its output goes to the service log as `system` lines.
 - If it fails, `start` answers `409`, the half-made folder is removed and nothing is started.
-- With custom `args` there is no setup: the user manages the data folder.
+- With `customArgs` there is no setup: the user manages the data folder.
 
 **Stop:** a database first gets its own shutdown command.
 
@@ -528,3 +528,183 @@ These options come before the path or connection arguments.
 **Database tools with `serviceId`:**
 - HeidiSQL: `--nettype=0` (MariaDB/MySQL) or `8` (PostgreSQL, plus `--databases=postgres`), `--description=<name> --host=127.0.0.1 --port=P --user=<root|postgres>`. The long options take `=` in every version.
 - DBeaver: `-con "driver=<MariaDB|MySQL|PostgreSQL>|host=127.0.0.1|port=P|user=<user>|name=<service name>|connect=true"` (+ `|database=postgres`).
+
+## Amendment: settings for each service type (0.0.3)
+
+Each service type now says which fields it uses and which settings it has. The descriptions are in `internal/kinds/profiles.json`. Three parts read that one file:
+- The daemon embeds it and builds command lines from it.
+- The UI draws the service form from it.
+- The mock daemon reads it too.
+
+### `GET /api/kinds` -> 200 `KindProfile[]`
+
+One profile per service kind:
+
+```jsonc
+{
+  "kind": "mariadb", "label": "MariaDB",
+  "managed": false,                       // true for caddy/nginx: created by Zero2Dev, not offered for new services
+  "note": "",                             // shown at the top of the form
+  "folder": { "use": "hidden" },          // or { "use": "required", "label": "Project folder", "hint": "..." }
+  "port": { "use": "required", "default": 3306, "hint": "..." },   // use: required | optional | hidden
+  "health": false,                        // whether a health check path applies
+  "dataDir": "service",                   // service = <home>/<kind>/<id>; shared = <home>/<kind>; none
+  "extraArgs": "Extra arguments", "extraArgsHint": "...",
+  "fixed": [ { "args": ["--datadir={data}"], "help": "...", "windows": false } ],   // always added
+  "env": [ { "name": "npm_config_cache", "value": "{home}/node/npm-cache", "help": "..." } ],
+  "options": [ /* KindOption */ ]
+}
+```
+
+`KindOption`:
+
+| Field | Meaning |
+| --- | --- |
+| `key`, `label`, `group`, `help`, `placeholder` | What the form shows |
+| `type` | `text`, `number`, `bool` (`"true"`/`"false"`), `select`, `multi` (comma-separated), `size`, `lines` (several lines) |
+| `default` | The value when the service has none |
+| `choices` | `{value, label, args?}` for `select`/`multi`. `args`, when present, is what that choice writes; an empty list writes nothing |
+| `choicesFrom` | `phpExtensions`: the choices come from `GET /api/runtimes/{id}/php-extensions` |
+| `suggest` | `npmScripts`: suggestions from `GET /api/project/scripts` |
+| `min`, `max`, `pattern`, `required` | Checks |
+| `show` | `{otherKey: value}` conditions for when the option is visible. `"*"` means set (not empty, not false). For a `multi` option the condition means "contains" |
+| `minVersion` | The oldest runtime version the option works with. Older versions leave it out, with a warning |
+| `at` | `"end"`: written after the other options (the script, the JAR, the package) |
+| `emit` | What the option writes (see below) |
+
+`emit` fields:
+
+| Field | Writes |
+| --- | --- |
+| `arg` | Argument templates, written when the value is set or the bool is true |
+| `argOff` | Arguments written when a bool is false |
+| `ini` | A php.ini key |
+| `env` | An environment variable set to the value |
+| `envSet` | For a bool: variables set when it is true |
+| `program` | `{value: "npm"}`: run that program from the runtime's folder instead of the runtime binary |
+| `special` | Handled in code: `phpExtensions`, `phpIniBase`, `phpIniLines` |
+
+**Placeholders:**
+
+| Placeholder | Replaced by |
+| --- | --- |
+| `{v}` | The option's value |
+| `{s.<key>}` | Another setting's value |
+| `{port}` | The service port |
+| `{home}` | The data folder, with forward slashes |
+| `{data}` | The service's data folder; also works in custom args |
+| `{dataSlash}` | The service's data folder, with forward slashes |
+| `{cwd}` | The project folder |
+| `{binDir}` | The program's folder, with forward slashes |
+| `{ini}`, `{docroot}` | PHP only: the php.ini path and the document root |
+
+### Service fields
+
+| Field | Meaning |
+| --- | --- |
+| `settings` | `Record<string,string>` of option values. Missing keys use their defaults, so options added later never break a saved service. A bad value is `400`, and the message names the setting's label (see below) |
+| `customArgs` | `true`: `args` are the whole argument list, and the settings are not used. `false`: `args` are extra arguments, written after the generated ones; for an npm script, `--` goes before them |
+| `cwd` | Required only for kinds whose `folder.use` is `required`. Databases and the web servers run in their data folder, or the program's folder |
+
+These `settings` values are refused with `400`:
+- unknown keys
+- values of the wrong type
+- values outside the choices or range
+- line breaks (except in `lines` options)
+- NUL characters
+
+**Command line, in order:**
+1. The fixed arguments.
+2. The visible options, in profile order; those with `at: "end"` go last.
+3. `args`.
+
+**Environment, in order** (later entries win):
+1. Zero2Dev's variables from the settings.
+2. The service's own `env`.
+3. `PORT`.
+
+**Compatibility:**
+- A request with `args` and no `settings` key comes from a client older than settings. It gets `customArgs: true`, so its args stay the whole command line.
+- Services saved before settings existed are migrated the same way when the state file is loaded.
+- The managed "Nginx (sites)" service has `customArgs: true`.
+- A custom command never has `customArgs`.
+
+### `POST /api/services/preview` body `ServiceInput` (+ optional `id`) -> 200 `CommandPreview`
+### `GET /api/services/{id}/command` -> 200 `CommandPreview`
+
+Both return the exact command line, without starting anything or writing any file:
+
+```json
+{ "program": "C:\\...\\php.exe", "args": ["-c", "...\\php\\svc_1\\php.ini", "-S", "127.0.0.1:8000", "-t", "C:\\work\\shop\\public"],
+  "env": ["PORT=8000"], "workdir": "C:\\work\\shop", "dataDir": "...\\php\\svc_1",
+  "files": ["...\\php\\svc_1\\php.ini"], "warnings": [] }
+```
+
+- `env` lists only the variables Zero2Dev adds.
+- `files` are written before each start.
+- Without `id`, the data folder uses `svc_new`.
+
+In the preview, these problems become `warnings` instead of errors:
+- no runtime installed
+- a missing program
+- an invalid setting
+- an option that needs a newer runtime version
+- a PHP extension that is not in the ext folder
+
+### PHP: the service's own php.ini
+
+A PHP service runs:
+
+```
+php -c <data>/php.ini -S 127.0.0.1:{port} -t <project folder>/<document root> [router]
+```
+
+The php.ini is written on every start, in this order. Later lines win.
+
+1. The runtime's own `php.ini-development` or `php.ini-production`, chosen by the `iniBase` setting. `none` skips it.
+2. A `[PHP]` section with:
+   - `extension_dir`: the absolute `ext` folder next to php.exe. PHP's Windows default, `C:\php\ext`, is wrong for Zero2Dev's layout.
+   - `session.save_path`: `<data>/sessions`.
+   - `upload_tmp_dir` and `sys_temp_dir`: `<data>/tmp`.
+3. The settings with `emit.ini`: `memory_limit`, `upload_max_filesize`, `post_max_size`, `max_execution_time`, `display_errors`, `date.timezone`, and the Xdebug settings when Xdebug is ticked.
+4. One line per ticked extension:
+   - `extension = php_<name>.dll`, or `zend_extension` for OPcache and Xdebug.
+   - OPcache also gets `opcache.enable = 1` and `opcache.enable_cli = 1`.
+   - Xdebug also gets `xdebug.output_dir = <data>/xdebug`.
+5. The `iniLines` setting. Each line must be `name = value` or a `;` comment.
+
+### `GET /api/runtimes/{id}/php-extensions` -> 200
+
+```
+{ runtimeId, version, extDir, managed, extensions: [{name, file, zend}], xdebug }
+```
+
+- `managed` is false when there is no `ext` folder next to php (a system PHP). That PHP's own php.ini then decides the extensions.
+- `400` for a runtime that is not PHP.
+
+### `POST /api/runtimes/{id}/xdebug` (no body) -> 202 Job
+
+Downloads Xdebug for a PHP runtime. The job has `type: "xdebug"`, and its `runtimeId` is the PHP runtime.
+
+1. Read `https://xdebug.org/download`. Each link carries its SHA-256 in its title: `title="SHA256:&nbsp;<hex>"`.
+2. Pick the newest stable DLL (no alpha, beta or RC) that is non-thread-safe, x86_64, and built for the PHP version's `major.minor`. Only links to xdebug.org that carry a SHA-256 count.
+3. Download it and check the SHA-256. A mismatch fails at `Verifying` and installs nothing.
+4. Put it into the runtime's `ext` folder as `php_xdebug.dll`, retrying while antivirus holds the file.
+
+**Errors:**
+
+| Status | When |
+| --- | --- |
+| `400` | The runtime is not PHP, has no `ext` folder, is older than PHP 8.0, or is not a Windows build |
+| `409` | Xdebug is already downloading for the same runtime |
+
+### `GET /api/project/scripts?dir=<absolute path>` -> 200
+
+Returns the script names in `<dir>/package.json`, sorted:
+
+```json
+{ "scripts": ["build", "dev", "start"] }
+```
+
+- The list is empty when there is no readable package.json.
+- `400` for a relative `dir`.

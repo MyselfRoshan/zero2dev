@@ -15,6 +15,7 @@ Goal: install and run the rest of a typical local stack from the same place, wit
 | 4 | **Open** editors and database tools (on a project folder or a database) | done |
 | 5 | Databases as services: data folder, first-start setup, safe stop, connection details | done |
 | 6 | Mock daemon, docs and end-to-end tests | done |
+| 7 | **Settings for each service type**: the form shows only what the type uses, every setting with its default and an explanation, a live command line; PHP extensions, php.ini and Xdebug | done |
 
 ### What ships
 
@@ -53,6 +54,9 @@ data\
   notepadpp\  Notepad++ settings
   heidisql\   HeidiSQL settings (portable_settings.txt)
   dbeaver\    DBeaver workspace
+  php\<service id>\      php.ini, sessions, uploads, Xdebug output of a PHP service
+  node\npm-cache\        npm's download cache
+  go\                    GOPATH, GOCACHE and GOENV for Go services
   mariadb\<service id>\   mysql\...   postgres\...   redis\...   database files
   nginx\  caddy\          web server files
 ```

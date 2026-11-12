@@ -55,6 +55,8 @@ type Installer struct {
 	StallTimeout   time.Duration
 	RetryDelays    []time.Duration
 	HashTimeout    time.Duration
+	// XdebugPage lists the Xdebug downloads (catalog.XdebugPage; tests override it).
+	XdebugPage string
 
 	mu   sync.Mutex
 	jobs map[string]*job
@@ -82,8 +84,8 @@ func New(home string, st *store.Store, rt *runtimes.Manager, em Emitter) *Instal
 		Catalog: func() ([]model.CatalogEntry, error) { return catalog.Load(home) },
 		Rename:  os.Rename, Sleep: time.Sleep, RenameAttempts: 20,
 		StallTimeout: 60 * time.Second, RetryDelays: []time.Duration{time.Second, 3 * time.Second},
-		HashTimeout: 10 * time.Second,
-		jobs:        map[string]*job{},
+		HashTimeout: 10 * time.Second, XdebugPage: catalog.XdebugPage,
+		jobs: map[string]*job{},
 	}
 }
 

@@ -185,14 +185,26 @@ func (s *Supervisor) Start(id string) error {
 		revert()
 		return apperr.Conflict("port %d is already in use", svc.Port)
 	}
+	if err := s.prepare(id, r); err != nil {
+		s.logLine(id, "system", err.Error())
+		revert()
+		return apperr.Conflict("%v", err)
+	}
 	if err := s.initDB(id, r.db, r.env); err != nil {
 		s.logLine(id, "system", err.Error())
 		revert()
 		return apperr.Conflict("%v", err)
 	}
+	if st, err := os.Stat(r.workdir); err != nil || !st.IsDir() {
+		if svc.Cwd != "" {
+			revert()
+			return apperr.Conflict("service folder %s does not exist or is not a directory", svc.Cwd)
+		}
+		r.workdir = filepath.Dir(r.bin) // e.g. a database with its own args: no data folder of Zero2Dev's
+	}
 
 	cmd := exec.Command(r.bin, r.args...) // never a shell
-	cmd.Dir = svc.Cwd
+	cmd.Dir = r.workdir
 	cmd.Env = r.env
 	outW := &lineWriter{emit: func(t string) { s.logLine(id, "stdout", t) }}
 	errW := &lineWriter{emit: func(t string) { s.logLine(id, "stderr", t) }}

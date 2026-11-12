@@ -27,7 +27,7 @@ func TestKindCategories(t *testing.T) {
 }
 
 func TestDataDirNames(t *testing.T) {
-	want := map[string]string{"vscode": "code", "vscodium": "codium", "notepadpp": "notepadpp", "postgres": "postgres", "node": ""}
+	want := map[string]string{"vscode": "code", "vscodium": "codium", "notepadpp": "notepadpp", "postgres": "postgres", "node": "node", "php": "php", "java": ""}
 	for k, v := range want {
 		if DataDirName(k) != v {
 			t.Errorf("%s: %q, want %q", k, DataDirName(k), v)
