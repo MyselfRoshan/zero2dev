@@ -6,6 +6,8 @@ start and stop them with live logs, and map local domains such as `myapp.localho
 
 No Electron. No Docker. One Go binary with the Svelte UI embedded.
 
+The dashboard follows Ant Design's look, in light or dark, with an accent colour you choose (Settings → Appearance). [DESIGN.md](DESIGN.md) describes it.
+
 **New here? Read the [step-by-step guide with screenshots](docs/USAGE.md).**
 
 ## Portable by design
@@ -44,7 +46,7 @@ Build prerequisites: [Go 1.24+](https://go.dev/dl/), [Node.js 22.18+](https://no
 ```powershell
 cd D:\zero2dev
 .\build.ps1                 # builds the web UI, then dist\zero2dev.exe
-.\dist\zero2dev.exe         # data goes to dist\data, runtimes to dist\bin
+.\dist\zero2dev.exe         # data goes to dist\data, runtimes to dist\bin; no console window: it lives in the tray
 ```
 
 The first run prints a URL like `http://127.0.0.1:7000/#token=...` and opens it. The page stores the token and removes it from the address bar.

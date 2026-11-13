@@ -32,5 +32,7 @@ export default defineConfig({
   test: {
     include: ["src/**/*.test.ts"],
     environment: "node",
+    // theme-css.test.ts reads app.css with ?raw; without this, CSS imports are empty in tests.
+    css: { include: [/\/app\.css/] },
   },
 });

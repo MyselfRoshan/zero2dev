@@ -2,15 +2,16 @@
   {
     "kind": "node",
     "label": "Node.js",
+    "summary": "Runs a JavaScript app or an npm script.",
     "folder": {
       "use": "required",
       "label": "Project folder",
-      "hint": "Your app's code (the folder with package.json). Zero2Dev starts Node in this folder and never stores its own data here."
+      "hint": "Your app's code, with package.json. Node starts here; Zero2Dev keeps none of its own data in it."
     },
     "port": {
       "use": "optional",
       "default": 3000,
-      "hint": "The port your app listens on. Your app gets it as the PORT environment variable."
+      "hint": "Your app also gets it as the PORT variable."
     },
     "health": true,
     "dataDir": "shared",
@@ -28,6 +29,7 @@
         "key": "run",
         "group": "Run",
         "label": "Run",
+        "common": true,
         "type": "select",
         "default": "script",
         "choices": [
@@ -51,6 +53,7 @@
         "key": "script",
         "group": "Run",
         "label": "Script",
+        "common": true,
         "type": "text",
         "default": "",
         "placeholder": "server.js",
@@ -71,6 +74,7 @@
         "key": "npmScript",
         "group": "Run",
         "label": "npm script",
+        "common": true,
         "type": "text",
         "default": "dev",
         "placeholder": "dev",
@@ -93,6 +97,7 @@
         "key": "watch",
         "group": "Run",
         "label": "Restart when a file changes",
+        "common": true,
         "type": "bool",
         "default": "false",
         "minVersion": "18.11",
@@ -185,15 +190,16 @@
   {
     "kind": "php",
     "label": "PHP",
+    "summary": "Serves a PHP site with PHP's built-in web server.",
     "folder": {
       "use": "required",
       "label": "Project folder",
-      "hint": "Your site's code. PHP's built-in web server serves files from here (or from the document root below). Zero2Dev never stores its own data here."
+      "hint": "Your site's code. PHP serves it from here (or from the document root below)."
     },
     "port": {
       "use": "required",
       "default": 8000,
-      "hint": "The port the PHP web server listens on."
+      "hint": "PHP's built-in web server listens on it."
     },
     "health": true,
     "dataDir": "service",
@@ -227,6 +233,7 @@
         "key": "docroot",
         "group": "Web server",
         "label": "Document root",
+        "common": true,
         "type": "text",
         "default": "",
         "placeholder": "public",
@@ -278,6 +285,7 @@
         "key": "extensions",
         "group": "Extensions",
         "label": "Extensions",
+        "common": true,
         "type": "multi",
         "default": "curl,fileinfo,mbstring,openssl,mysqli,pdo_mysql,pdo_sqlite,sqlite3,zip,intl",
         "choicesFrom": "phpExtensions",
@@ -285,12 +293,13 @@
         "emit": {
           "special": "phpExtensions"
         },
-        "help": "The extensions in this PHP version's ext folder. Ticked ones are loaded with extension= (zend_extension= for OPcache and Xdebug)."
+        "help": "Each one is loaded by a line in this service's php.ini (zend_extension for OPcache and Xdebug)."
       },
       {
         "key": "memoryLimit",
         "group": "php.ini",
         "label": "Memory limit",
+        "common": true,
         "type": "size",
         "default": "256M",
         "pattern": "^(-1|[0-9]+[KMG]?)$",
@@ -340,6 +349,7 @@
         "key": "displayErrors",
         "group": "php.ini",
         "label": "Show errors in the page",
+        "common": true,
         "type": "bool",
         "default": "true",
         "emit": {
@@ -364,6 +374,7 @@
         "key": "xdebugMode",
         "group": "Xdebug",
         "label": "Xdebug mode",
+        "common": true,
         "type": "multi",
         "default": "debug",
         "choices": [
@@ -400,6 +411,7 @@
         "key": "xdebugStart",
         "group": "Xdebug",
         "label": "Start debugging",
+        "common": true,
         "type": "select",
         "default": "trigger",
         "choices": [
@@ -453,15 +465,16 @@
   {
     "kind": "go",
     "label": "Go",
+    "summary": "Builds and runs a Go program.",
     "folder": {
       "use": "required",
       "label": "Project folder",
-      "hint": "Your app's code (the folder with go.mod). Zero2Dev runs go in this folder and never stores its own data here."
+      "hint": "Your app's code, with go.mod. Go runs here; Zero2Dev keeps none of its own data in it."
     },
     "port": {
       "use": "optional",
       "default": 8080,
-      "hint": "The port your app listens on. Your app gets it as the PORT environment variable."
+      "hint": "Your app also gets it as the PORT variable."
     },
     "health": true,
     "dataDir": "shared",
@@ -480,6 +493,7 @@
         "key": "package",
         "group": "Run",
         "label": "Package",
+        "common": true,
         "type": "text",
         "default": ".",
         "placeholder": ".",
@@ -528,15 +542,16 @@
   {
     "kind": "java",
     "label": "Java",
+    "summary": "Runs a JAR or a Java main class.",
     "folder": {
       "use": "required",
       "label": "Project folder",
-      "hint": "Your app's folder. Zero2Dev starts Java in this folder, so relative paths such as target\\app.jar start here."
+      "hint": "Your app's folder. Java starts here, so relative paths like target\u0007pp.jar begin here."
     },
     "port": {
       "use": "optional",
       "default": 8080,
-      "hint": "The port your app listens on. Your app gets it as the PORT environment variable."
+      "hint": "Your app also gets it as the PORT variable."
     },
     "health": true,
     "dataDir": "none",
@@ -547,6 +562,7 @@
         "key": "run",
         "group": "Run",
         "label": "Run",
+        "common": true,
         "type": "select",
         "default": "jar",
         "choices": [
@@ -565,6 +581,7 @@
         "key": "jar",
         "group": "Run",
         "label": "JAR file",
+        "common": true,
         "type": "text",
         "default": "",
         "placeholder": "target\\app.jar",
@@ -606,6 +623,7 @@
         "key": "mainClass",
         "group": "Run",
         "label": "Main class",
+        "common": true,
         "type": "text",
         "default": "",
         "placeholder": "com.example.App",
@@ -681,6 +699,7 @@
   {
     "kind": "caddy",
     "label": "Caddy",
+    "summary": "Serves your sites. Zero2Dev manages it.",
     "managed": true,
     "note": "Serves your sites. Zero2Dev writes its configuration from the Sites page; ports and HTTPS are in Settings > Sites and proxy.",
     "folder": {
@@ -722,6 +741,7 @@
   {
     "kind": "nginx",
     "label": "nginx",
+    "summary": "Serves your sites when nginx is the site server.",
     "managed": true,
     "note": "Serves your sites when Settings > Sites and proxy > Site server is nginx. Zero2Dev writes its configuration.",
     "folder": {
@@ -748,13 +768,14 @@
   {
     "kind": "mariadb",
     "label": "MariaDB",
+    "summary": "A MySQL-compatible database server.",
     "folder": {
       "use": "hidden"
     },
     "port": {
       "use": "required",
       "default": 3306,
-      "hint": "The port clients connect to. 3306 is the usual MariaDB and MySQL port."
+      "hint": "Clients connect here. 3306 is the usual one."
     },
     "health": false,
     "dataDir": "service",
@@ -798,6 +819,7 @@
         "key": "charset",
         "group": "Text",
         "label": "Character set",
+        "common": true,
         "type": "select",
         "default": "utf8mb4",
         "choices": [
@@ -844,6 +866,7 @@
         "key": "sqlMode",
         "group": "Behaviour",
         "label": "SQL mode",
+        "common": true,
         "type": "select",
         "default": "",
         "choices": [
@@ -873,6 +896,7 @@
         "key": "maxConnections",
         "group": "Performance",
         "label": "Max connections",
+        "common": true,
         "type": "number",
         "default": "151",
         "min": 1,
@@ -959,13 +983,14 @@
   {
     "kind": "mysql",
     "label": "MySQL",
+    "summary": "Oracle's MySQL database server.",
     "folder": {
       "use": "hidden"
     },
     "port": {
       "use": "required",
       "default": 3306,
-      "hint": "The port clients connect to. 3306 is the usual MySQL port."
+      "hint": "Clients connect here. 3306 is the usual one."
     },
     "health": false,
     "dataDir": "service",
@@ -1015,6 +1040,7 @@
         "key": "charset",
         "group": "Text",
         "label": "Character set",
+        "common": true,
         "type": "select",
         "default": "utf8mb4",
         "choices": [
@@ -1057,6 +1083,7 @@
         "key": "sqlMode",
         "group": "Behaviour",
         "label": "SQL mode",
+        "common": true,
         "type": "select",
         "default": "",
         "choices": [
@@ -1079,6 +1106,7 @@
         "key": "maxConnections",
         "group": "Performance",
         "label": "Max connections",
+        "common": true,
         "type": "number",
         "default": "151",
         "min": 1,
@@ -1165,13 +1193,14 @@
   {
     "kind": "postgres",
     "label": "PostgreSQL",
+    "summary": "The PostgreSQL database server.",
     "folder": {
       "use": "hidden"
     },
     "port": {
       "use": "required",
       "default": 5432,
-      "hint": "The port clients connect to. 5432 is the usual PostgreSQL port."
+      "hint": "Clients connect here. 5432 is the usual one."
     },
     "health": false,
     "dataDir": "service",
@@ -1205,6 +1234,7 @@
         "key": "maxConnections",
         "group": "Performance",
         "label": "Max connections",
+        "common": true,
         "type": "number",
         "default": "100",
         "min": 1,
@@ -1236,6 +1266,7 @@
         "key": "logStatement",
         "group": "Logging",
         "label": "Log statements",
+        "common": true,
         "type": "select",
         "default": "none",
         "choices": [
@@ -1301,13 +1332,14 @@
   {
     "kind": "redis",
     "label": "Redis",
+    "summary": "An in-memory store for caches and queues.",
     "folder": {
       "use": "hidden"
     },
     "port": {
       "use": "required",
       "default": 6379,
-      "hint": "The port clients connect to. 6379 is the usual Redis port."
+      "hint": "Clients connect here. 6379 is the usual one."
     },
     "health": false,
     "dataDir": "service",
@@ -1341,6 +1373,7 @@
         "key": "persistence",
         "group": "Data",
         "label": "Keep the data",
+        "common": true,
         "type": "select",
         "default": "snapshot",
         "choices": [
@@ -1374,6 +1407,7 @@
         "key": "maxMemory",
         "group": "Memory",
         "label": "Memory limit",
+        "common": true,
         "type": "size",
         "default": "",
         "placeholder": "256mb",
@@ -1390,6 +1424,7 @@
         "key": "maxMemoryPolicy",
         "group": "Memory",
         "label": "When the limit is reached",
+        "common": true,
         "type": "select",
         "default": "noeviction",
         "choices": [
@@ -1442,6 +1477,7 @@
   {
     "kind": "custom",
     "label": "Custom command",
+    "summary": "Any other program, by its path.",
     "folder": {
       "use": "required",
       "label": "Working folder",
@@ -1450,7 +1486,7 @@
     "port": {
       "use": "optional",
       "default": 0,
-      "hint": "The port the program listens on, if any. It gets it as the PORT environment variable."
+      "hint": "The program also gets it as the PORT variable."
     },
     "health": true,
     "dataDir": "none",

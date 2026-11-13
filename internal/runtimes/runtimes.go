@@ -79,22 +79,19 @@ var tools = []struct {
 	{"mysqld", "mysql", []string{"--version"}},
 	{"postgres", "postgres", []string{"--version"}},
 	{"redis-server", "redis", []string{"--version"}},
-	// "code" / "codium" on PATH are the .cmd command-line wrappers: they print the
-	// version and exit without opening a window.
-	{"code", "vscode", []string{"--version"}},
-	{"codium", "vscodium", []string{"--version"}},
+	// VS Code / VSCodium are never run: their version is read from package.json (editors.go).
+	{"code", "vscode", nil},
+	{"codium", "vscodium", nil},
+	{"VSCodium", "vscodium", nil}, // an install folder on PATH has VSCodium.exe, not codium
 }
 
 // noProbe reports whether running the binary to read its version must be
-// avoided: desktop programs would open a window. The command-line wrappers of
-// VS Code / VSCodium (code.cmd, codium.cmd) are safe; their .exe is not.
+// avoided: desktop programs would open a window. That covers the editors too,
+// whose version is read from their files instead (editors.go).
 func noProbe(kind, binary string) bool {
 	switch kind {
-	case "notepadpp", "heidisql", "dbeaver":
+	case "notepadpp", "heidisql", "dbeaver", "vscode", "vscodium":
 		return true
-	case "vscode", "vscodium":
-		ext := strings.ToLower(filepath.Ext(binary))
-		return ext != ".cmd" && ext != ".bat" && ext != ""
 	}
 	return false
 }
@@ -128,6 +125,7 @@ func argsFor(kind, binary string) []string {
 // Detect looks for known tools on PATH.
 func (m *Manager) Detect() []Detected {
 	res := []Detected{}
+	seen := map[string]bool{}
 	for _, t := range tools {
 		p, err := exec.LookPath(t.prog)
 		if err != nil {
@@ -136,11 +134,21 @@ func (m *Manager) Detect() []Detected {
 		if abs, err := filepath.Abs(p); err == nil {
 			p = abs
 		}
-		d := Detected{Kind: t.kind, Binary: p, Version: probe(p, t.args)}
+		d := Detected{Kind: t.kind, Binary: p}
+		switch {
+		case isEditor(t.kind):
+			d.Binary = editorBinary(t.kind, p)
+			d.Version = editorVersion(p)
+		case !noProbe(t.kind, p):
+			d.Version = probe(p, t.args)
+		}
 		if d.Version == "" {
 			d.Version = "unknown"
 		}
-		res = append(res, d)
+		if key := t.kind + "|" + strings.ToLower(d.Binary); !seen[key] {
+			seen[key] = true
+			res = append(res, d)
+		}
 	}
 	return res
 }
@@ -187,6 +195,9 @@ func (m *Manager) Register(kind, binary, version string) (model.Runtime, error) 
 	version = strings.TrimSpace(version)
 	if len(version) > 40 || strings.ContainsAny(version, "\r\n") {
 		return model.Runtime{}, apperr.BadRequest("version is invalid")
+	}
+	if version == "" && isEditor(kind) {
+		version = editorVersion(binary)
 	}
 	if version == "" {
 		if args := argsFor(kind, binary); args != nil {

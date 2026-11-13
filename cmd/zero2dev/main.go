@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -29,6 +30,7 @@ import (
 	"zero2dev/internal/sites"
 	"zero2dev/internal/store"
 	"zero2dev/internal/supervisor"
+	"zero2dev/internal/tray"
 	"zero2dev/internal/webui"
 	"zero2dev/internal/winpick"
 )
@@ -37,38 +39,68 @@ import (
 var version = "0.0.3"
 
 func main() {
+	setupOutput()
 	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
 	if *showVersion {
-		fmt.Println("zero2dev", version)
+		say("zero2dev %s", version)
 		return
 	}
 	if err := run(); err != nil {
-		fmt.Fprintln(os.Stderr, "zero2dev:", err)
+		fail(err)
 		os.Exit(1)
 	}
 }
 
 func run() error {
-	cfg, err := config.FromEnv(os.Getenv)
+	cfg, err := config.ResolveEnv(os.Getenv)
 	if err != nil {
 		return err
 	}
+	// Bind before any shared writes; the listener owns this port until shutdown.
+	url := fmt.Sprintf("http://127.0.0.1:%d/#token=", cfg.Port)
+	ln, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(cfg.Port)))
+	if err != nil {
+		b, readErr := os.ReadFile(filepath.Join(cfg.Home, "token"))
+		token := strings.TrimSpace(string(b))
+		if readErr == nil && alreadyRunning(cfg.Port, token, &http.Client{Timeout: 3 * time.Second}) {
+			say("Zero2Dev is already running; opening the dashboard.")
+			if !cfg.NoBrowser {
+				openBrowser(url + token)
+			}
+			return nil
+		}
+		return fmt.Errorf("port %d on 127.0.0.1 is used by another program, so Zero2Dev cannot start. "+
+			"Close that program, or set the ZERO2DEV_PORT environment variable to another port: %w", cfg.Port, err)
+	}
+	defer ln.Close()
+	release, err := lockHome(cfg.Home)
+	if err != nil {
+		return err
+	}
+	defer release()
+	if err := cfg.Initialize(); err != nil {
+		return err
+	}
+	url += cfg.Token
 	// Everything the daemon (and children that inherit its env) writes to
 	// temp goes below <home>/tmp, never the system temp folder.
 	cfg.ApplyTempEnv()
+	if !interactive {
+		logToFile(cfg.Home)
+	}
 	st, err := store.Open(filepath.Join(cfg.Home, "state.json"))
 	if err != nil {
 		return err
 	}
 	if n := migrateLegacyRuntimes(cfg.Home, cfg.BinDir); n > 0 {
-		fmt.Printf("Moved %d installed runtime(s) from data\\runtimes to %s\n", n, cfg.BinDir)
+		say("Moved %d installed runtime(s) from data\\runtimes to %s", n, cfg.BinDir)
 	}
 	// Relocatable: re-point installed runtimes if the folder was moved.
 	if n, err := st.RebaseRuntimes(cfg.BinDir); err != nil {
 		return err
 	} else if n > 0 {
-		fmt.Printf("Data folder moved: re-pointed %d installed runtime(s)\n", n)
+		say("Data folder moved: re-pointed %d installed runtime(s)", n)
 	}
 	clearDir(cfg.TmpDir()) // leftovers of an interrupted install
 	hub := events.New()
@@ -100,36 +132,61 @@ func run() error {
 		GoURL: os.Getenv("ZERO2DEV_GO_URL"), GoBase: os.Getenv("ZERO2DEV_GO_BASE_URL"),
 		CaddyURL: os.Getenv("ZERO2DEV_CADDY_URL"), PHPArchiveURL: os.Getenv("ZERO2DEV_PHP_ARCHIVE_URL"),
 	}
+	// One way to stop for all: Ctrl+C, the tray's Quit, and POST /api/shutdown.
+	quitCtx, quit := context.WithCancel(context.Background())
+	defer quit()
+	shutdownDone := make(chan struct{})
+	removeConsoleQuit := consoleQuit(quit, shutdownDone)
+	defer removeConsoleQuit()
+	defer close(shutdownDone)
 	srv := api.New(api.Deps{
 		Cfg: cfg, Store: st, Hub: hub, Sup: sup, Runtimes: rt, Installer: inst, Sites: site,
 		Catalog: func() ([]model.CatalogEntry, error) { return catalog.Load(cfg.Home) }, Remote: remote,
 		UI: webui.FS(), Version: version, Started: time.Now(),
 		PickFolder: folderPicker(),
 		Launch:     launch.Start,
+		Quit:       quit,
 	})
 
-	// Bind loopback only; never 0.0.0.0.
-	ln, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(cfg.Port)))
-	if err != nil {
-		return fmt.Errorf("cannot listen on 127.0.0.1:%d (is Zero2Dev already running?): %w", cfg.Port, err)
-	}
 	httpSrv := &http.Server{Handler: srv, ReadHeaderTimeout: 10 * time.Second}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(quitCtx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	errc := make(chan error, 1)
 	go func() { errc <- httpSrv.Serve(ln) }()
 
-	url := fmt.Sprintf("http://127.0.0.1:%d/#token=%s", cfg.Port, cfg.Token)
-	fmt.Printf("Zero2Dev %s listening on 127.0.0.1:%d\n%s\nOpen: %s\n", version, cfg.Port, cfg.Describe(), url)
-	if !cfg.NoBrowser && st.Snapshot().Settings.OpenBrowserOnStart {
+	say("Zero2Dev %s listening on 127.0.0.1:%d", version, cfg.Port)
+	say("%s", cfg.Describe())
+	say("Open: %s", url)
+	openOnStart := !cfg.NoBrowser && st.Snapshot().Settings.OpenBrowserOnStart
+
+	// The tray icon is how Zero2Dev is found and stopped without a console window.
+	ti, terr := tray.Start(tray.Menu{
+		Tooltip:  "Zero2Dev",
+		OnOpen:   func() { openBrowser(url) },
+		OnFolder: func() { openFolder(cfg.Home) },
+		OnQuit:   quit,
+	})
+	if terr == nil {
+		defer ti.Close()
+		go trayTooltip(ctx, ti, st, sup)
+		if !openOnStart {
+			ti.Notify("Zero2Dev is running", "Click here or the Zero2Dev icon to open the dashboard.")
+		}
+	} else if !errors.Is(terr, tray.ErrUnsupported) {
+		say("tray icon unavailable: %v", terr)
+	}
+	if openOnStart {
 		openBrowser(url)
 	}
 	go sup.AutostartAll()
 
 	select {
 	case <-ctx.Done():
-		fmt.Println("shutting down...")
+		say("shutting down...")
+		if ti != nil {
+			ti.SetTooltip("Zero2Dev: stopping services...")
+		}
 	case err := <-errc:
 		if !errors.Is(err, http.ErrServerClosed) {
 			sup.StopAll(context.Background())
@@ -160,10 +217,53 @@ func openBrowser(url string) {
 		cmd = exec.Command("xdg-open", url)
 	}
 	if err := cmd.Start(); err != nil {
-		fmt.Println("could not open the browser automatically; open the URL above manually")
+		say("could not open the browser automatically; open %s manually", url)
 		return
 	}
 	go func() { _ = cmd.Wait() }()
+}
+
+// openFolder shows dir in the file manager.
+func openFolder(dir string) {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "windows":
+		cmd = exec.Command("explorer", dir)
+	case "darwin":
+		cmd = exec.Command("open", dir)
+	default:
+		cmd = exec.Command("xdg-open", dir)
+	}
+	if cmd.Start() == nil {
+		go func() { _ = cmd.Wait() }()
+	}
+}
+
+// trayTooltip keeps the tray's hover text on the number of running services.
+func trayTooltip(ctx context.Context, ti tray.Icon, st *store.Store, sup *supervisor.Supervisor) {
+	t := time.NewTicker(3 * time.Second)
+	defer t.Stop()
+	for {
+		n := 0
+		for _, sv := range st.Snapshot().Services {
+			if sup.State(sv.ID) == model.StateRunning {
+				n++
+			}
+		}
+		switch n {
+		case 0:
+			ti.SetTooltip("Zero2Dev: no services running")
+		case 1:
+			ti.SetTooltip("Zero2Dev: 1 service running")
+		default:
+			ti.SetTooltip(fmt.Sprintf("Zero2Dev: %d services running", n))
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+	}
 }
 
 // clearDir removes the contents of dir (not dir itself).

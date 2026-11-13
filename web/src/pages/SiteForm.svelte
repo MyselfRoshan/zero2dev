@@ -110,7 +110,7 @@
       </div>
     </div>
 
-    <div class="field" role="radiogroup" aria-labelledby="target-l">
+    <div class="field" role="radiogroup" aria-labelledby="target-l" data-tour="site-target">
       <span class="label" id="target-l">Points to</span>
       <div class="seg">
         {#each ["service", "port", "folder"] as const as t (t)}
@@ -149,6 +149,6 @@
   </form>
   {#snippet footer()}
     <button class="btn" type="button" onclick={oncancel}>Cancel</button>
-    <button class="btn primary" type="submit" form="site-form" disabled={saving}>{site ? "Save changes" : "Create site"}</button>
+    <button class="btn primary" type="submit" form="site-form" disabled={saving} data-tour="save-site">{site ? "Save changes" : "Create site"}</button>
   {/snippet}
 </Modal>

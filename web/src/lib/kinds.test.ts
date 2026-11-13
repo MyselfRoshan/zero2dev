@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 // The same file the daemon embeds and serves at GET /api/kinds.
 import profilesJson from "../../../internal/kinds/profiles.json";
 import {
+  changedKeys,
   checkOption,
   commandText,
   creatableKinds,
@@ -9,10 +10,14 @@ import {
   effective,
   friendlyArgs,
   groupedOptions,
+  isChanged,
   isVisible,
+  panelNotes,
   profileFor,
+  resetKeys,
   settingErrors,
   settingsForSave,
+  splitCommon,
   versionAtLeast,
   writesLabel,
   type KindProfile,
@@ -122,5 +127,63 @@ describe("labels", () => {
     expect(commandText("C:\\Program Files\\php\\php.exe", ["-t", "C:\\my site", ""])).toBe(
       '"C:\\Program Files\\php\\php.exe" -t "C:\\my site" ""',
     );
+  });
+});
+
+describe("common settings", () => {
+  it("every type with settings has some up front and a summary", () => {
+    for (const p of profiles) {
+      expect(p.summary, p.kind).toBeTruthy();
+      if (p.options.length)
+        expect(
+          p.options.some((o) => o.common),
+          p.kind,
+        ).toBe(true);
+    }
+  });
+  it("keeps the rest under More settings, grouped", () => {
+    const { common, more } = splitCommon(get("mariadb"), {});
+    expect(common.map((o) => o.key)).toEqual(["charset", "sqlMode", "maxConnections"]);
+    expect(more.map((g) => g.name)).toEqual(["Text", "Performance", "Logging"]);
+  });
+  it("brings changed and failing settings up front", () => {
+    const p = get("mariadb");
+    expect(splitCommon(p, { bufferPool: "1G" }).common.map((o) => o.key)).toContain("bufferPool");
+    expect(splitCommon(p, {}, { collation: "bad" }).common.map((o) => o.key)).toContain("collation");
+    // a setting saved with its default value is not "changed"
+    expect(splitCommon(p, { bufferPool: "128M" }).common.map((o) => o.key)).not.toContain("bufferPool");
+  });
+  it("finds changed settings and resets them", () => {
+    const p = get("php");
+    const s = {
+      memoryLimit: "512M",
+      extensions: "zip,intl,curl,fileinfo,mbstring,openssl,mysqli,pdo_mysql,pdo_sqlite,sqlite3",
+    };
+    expect(changedKeys(p, s)).toEqual(["memoryLimit"]); // same extensions in another order
+    expect(resetKeys(s, ["memoryLimit"])).toEqual({ extensions: s.extensions });
+    expect(
+      isChanged(
+        p.options.find((o) => o.key === "displayErrors")!,
+        "false",
+      ),
+    ).toBe(true);
+  });
+});
+
+describe("panel notes", () => {
+  it("says what to do in plain words", () => {
+    const label = (k: string) => ({ mariadb: "MariaDB" })[k] ?? k;
+    expect(panelNotes(["Script is required"], label)).toEqual([
+      { level: "todo", text: "Fill in Script to complete the command line." },
+    ]);
+    expect(panelNotes(["no mariadb runtime registered and none found on PATH"], label)[0]).toMatchObject({
+      level: "warn",
+      text: expect.stringContaining("No MariaDB is installed yet"),
+    });
+    expect(panelNotes(["program x not found"], label)[0].text).toBe("Program x not found");
+    expect(panelNotes(["no program set"], label)[0]).toMatchObject({
+      level: "todo",
+      text: expect.stringContaining("Program"),
+    });
   });
 });

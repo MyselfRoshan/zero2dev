@@ -24,3 +24,16 @@ export function since(ts: string | null, now = Date.now()): string {
   const s = Math.max(0, Math.floor((now - new Date(ts).getTime()) / 1000));
   return fmtUptime(s);
 }
+
+/** "just now", "5 minutes ago", "today at 09:30", or the date and time for older moments. */
+export function ago(ts: string | null, now = Date.now()): string {
+  if (!ts) return "";
+  const t = new Date(ts).getTime();
+  const min = Math.floor((now - t) / 60000);
+  if (min < 1) return "just now";
+  if (min < 60) return `${min} minute${min === 1 ? "" : "s"} ago`;
+  const d = new Date(t);
+  if (d.toDateString() === new Date(now).toDateString())
+    return `today at ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+  return fmtDateTime(ts);
+}

@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"zero2dev/internal/model"
 	"zero2dev/internal/store"
@@ -240,4 +241,26 @@ func TestPHPExtensionsAndXdebug(t *testing.T) {
 func sha256sum(b []byte) []byte {
 	h := sha256.Sum256(b)
 	return h[:]
+}
+
+func TestShutdownEndpoint(t *testing.T) {
+	e := newEnv(t)
+	if c := e.errCode("POST", "/api/shutdown", nil, 501); c != "not_supported" {
+		t.Fatal(c)
+	}
+	quit := make(chan struct{})
+	e.srv.Quit = func() { close(quit) }
+	if resp := e.do("POST", "/api/shutdown", nil, nil); resp.StatusCode != 202 {
+		t.Fatalf("status %d", resp.StatusCode)
+	}
+	select {
+	case <-quit:
+	case <-time.After(3 * time.Second):
+		t.Fatal("Quit was not called")
+	}
+	// Without the token the endpoint is closed like every other.
+	resp, _ := e.raw("POST", "/api/shutdown", nil)
+	if resp.StatusCode != 401 {
+		t.Fatalf("no token: %d", resp.StatusCode)
+	}
 }

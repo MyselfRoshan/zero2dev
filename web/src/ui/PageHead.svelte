@@ -14,15 +14,21 @@
 <style>
   .page-head {
     display: flex;
+    flex-wrap: wrap;
     align-items: flex-end;
-    gap: 16px;
-    margin-bottom: 14px;
+    gap: 8px 16px;
+    margin-bottom: 16px;
+  }
+  .page-head .grow {
+    flex: 1 1 260px;
+    min-width: 0;
   }
   .lede {
     color: var(--muted);
     font-size: 14px;
   }
   .page-title {
-    font-size: 15px;
+    font-size: 20px;
+    line-height: 28px;
   }
 </style>

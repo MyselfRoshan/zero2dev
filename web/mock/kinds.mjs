@@ -92,7 +92,8 @@ export function preview(svc, { home, runtimes }) {
   const rt = svc.runtimeId
     ? runtimes.find((r) => r.id === svc.runtimeId)
     : (runtimes.find((r) => r.kind === svc.kind && r.default) ?? runtimes.find((r) => r.kind === svc.kind));
-  let program = svc.command || (rt ? rt.binary : PROG[svc.kind] || svc.kind);
+  let program = svc.command || (svc.kind === "custom" ? "" : rt ? rt.binary : PROG[svc.kind] || svc.kind);
+  if (svc.kind === "custom" && !svc.command) warnings.push("no program set");
   if (svc.kind !== "custom" && !svc.command && !rt)
     warnings.push(`no ${svc.kind} runtime registered and none found on PATH`);
   let dataDir = "";

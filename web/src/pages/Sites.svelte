@@ -62,7 +62,7 @@
 </script>
 
 <PageHead sub="Friendly addresses like shop.localhost for your services, ports or folders.">
-  <button class="btn primary" onclick={() => (editing = "new")}><Icon name="plus" /> New site</button>
+  <button class="btn primary" onclick={() => (editing = "new")} data-tour="new-site"><Icon name="plus" /> New site</button>
 </PageHead>
 
 {#if app.loaded.runtimes && !hasServerRuntime}
@@ -93,7 +93,7 @@
   <div class="card empty">
     <h2>No sites yet</h2>
     <p>A site gives a folder or service a friendly address such as <code>shop.{app.settings?.domainSuffix?.split(/[\s,]+/)[0] ?? "localhost"}</code>. Browsers resolve <code>.localhost</code> names with no hosts-file edit.</p>
-    <button class="btn primary" onclick={() => (editing = "new")}><Icon name="plus" /> Create a site</button>
+    <button class="btn primary" onclick={() => (editing = "new")} data-tour="new-site"><Icon name="plus" /> Create a site</button>
   </div>
 {:else}
   <div class="card t-wrap">

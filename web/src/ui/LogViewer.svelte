@@ -161,7 +161,7 @@
     overflow: auto;
     padding: 8px 0;
     color: var(--log-text);
-    font-size: 12.5px;
+    font-size: 12px;
     line-height: 1.55;
   }
   .ln {

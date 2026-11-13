@@ -125,3 +125,41 @@ describe("databases", () => {
     expect(deleteServiceMessage({ kind: "node", id: "svc_1" }, true, "x")).toMatch(/running.*cannot be undone/);
   });
 });
+
+describe("runtime view preference", () => {
+  it("handles a throwing localStorage getter", async () => {
+    const { getRuntimeView, setRuntimeView } = await import("./ux");
+    const original = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      get() {
+        throw new Error("blocked");
+      },
+    });
+    try {
+      expect(getRuntimeView()).toBe("list");
+      expect(() => setRuntimeView("grid")).not.toThrow();
+    } finally {
+      if (original) Object.defineProperty(globalThis, "localStorage", original);
+      else Reflect.deleteProperty(globalThis, "localStorage");
+    }
+  });
+  it("remembers list or grid, defaulting to list", async () => {
+    const { getRuntimeView, setRuntimeView } = await import("./ux");
+    const mem = new Map<string, string>();
+    const st = { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => void mem.set(k, v) };
+    expect(getRuntimeView(st)).toBe("list");
+    setRuntimeView("grid", st);
+    expect(getRuntimeView(st)).toBe("grid");
+    const broken = {
+      getItem: () => {
+        throw new Error("blocked");
+      },
+      setItem: () => {
+        throw new Error("blocked");
+      },
+    };
+    expect(getRuntimeView(broken)).toBe("list");
+    expect(() => setRuntimeView("grid", broken)).not.toThrow();
+  });
+});

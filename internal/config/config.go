@@ -63,6 +63,11 @@ func FromEnv(getenv func(string) string) (*Config, error) {
 	return fromEnv(getenv, os.Executable, os.Getwd)
 }
 
+// ResolveEnv resolves configuration without writing shared files.
+func ResolveEnv(getenv func(string) string) (*Config, error) {
+	return resolveEnv(getenv, os.Executable, os.Getwd)
+}
+
 // resolveHome picks the home dir: ZERO2DEV_HOME, else ./data when the binary
 // is a `go run` temp build, else <exe dir>/data.
 func resolveHome(getenv func(string) string, exeFn func() (string, error), cwdFn func() (string, error)) (home, source, exeDir string, err error) {
@@ -91,6 +96,17 @@ func resolveHome(getenv func(string) string, exeFn func() (string, error), cwdFn
 }
 
 func fromEnv(getenv func(string) string, exeFn func() (string, error), cwdFn func() (string, error)) (*Config, error) {
+	c, err := resolveEnv(getenv, exeFn, cwdFn)
+	if err != nil {
+		return nil, err
+	}
+	if err := c.Initialize(); err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
+func resolveEnv(getenv func(string) string, exeFn func() (string, error), cwdFn func() (string, error)) (*Config, error) {
 	c := &Config{Port: 7000, DevOrigin: strings.TrimRight(strings.TrimSpace(getenv("ZERO2DEV_DEV_ORIGIN")), "/")}
 	if p := strings.TrimSpace(getenv("ZERO2DEV_PORT")); p != "" {
 		n, err := strconv.Atoi(p)
@@ -105,18 +121,25 @@ func fromEnv(getenv func(string) string, exeFn func() (string, error), cwdFn fun
 		return nil, fmt.Errorf("cannot determine data folder: %w", err)
 	}
 	c.BinDir = resolveBin(getenv, c)
+	return c, nil
+}
+
+// Initialize creates the layout and token after acquiring instance ownership.
+func (c *Config) Initialize() error {
 	if err := os.MkdirAll(c.BinDir, 0o755); err != nil {
-		return nil, fmt.Errorf("cannot create runtimes folder %s: %w", c.BinDir, err)
+		return fmt.Errorf("cannot create runtimes folder %s: %w", c.BinDir, err)
 	}
 	for _, d := range []string{"", "config", "logs", "tmp", filepath.Join("caddy", "data"), filepath.Join("caddy", "config")} {
 		if err := os.MkdirAll(filepath.Join(c.Home, d), 0o755); err != nil {
-			return nil, fmt.Errorf("cannot create data folder %s: %w", c.Home, err)
+			return fmt.Errorf("cannot create data folder %s: %w", c.Home, err)
 		}
 	}
-	if c.Token, err = LoadOrCreateToken(c.Home); err != nil {
-		return nil, err
+	token, err := LoadOrCreateToken(c.Home)
+	if err != nil {
+		return err
 	}
-	return c, nil
+	c.Token = token
+	return nil
 }
 
 // resolveBin picks the runtimes folder: ZERO2DEV_BIN, else <exe dir>/bin next to the

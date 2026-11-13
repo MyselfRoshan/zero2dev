@@ -31,7 +31,8 @@ type Store struct {
 func defaults() Data {
 	return Data{
 		Services: []model.Service{}, Runtimes: []model.Runtime{}, Sites: []model.Site{},
-		Settings: model.Settings{DomainSuffix: "localhost", ProxyHTTPPort: 8080, ProxyHTTPSPort: 8443, OpenBrowserOnStart: true, SiteServer: "caddy"},
+		Settings: model.Settings{DomainSuffix: "localhost", ProxyHTTPPort: 8080, ProxyHTTPSPort: 8443, OpenBrowserOnStart: true, SiteServer: "caddy",
+			Theme: model.DefaultTheme, Accent: model.DefaultAccent},
 	}
 }
 
@@ -75,6 +76,13 @@ func (s *Store) normalize(d *Data) {
 	}
 	if d.Sites == nil {
 		d.Sites = []model.Site{}
+	}
+	// state written before appearance settings existed
+	if d.Settings.Theme == "" {
+		d.Settings.Theme = model.DefaultTheme
+	}
+	if d.Settings.Accent == "" {
+		d.Settings.Accent = model.DefaultAccent
 	}
 	for i := range d.Services {
 		sv := &d.Services[i]

@@ -15,6 +15,8 @@ export interface KindOption {
   key: string;
   group: string;
   label: string;
+  /** Shown up front; the others are under "More settings". */
+  common?: boolean;
   type: OptionType;
   default: string;
   help: string;
@@ -43,6 +45,8 @@ export interface KindOption {
 export interface KindProfile {
   kind: string;
   label: string;
+  /** One line on what the type is (type picker). */
+  summary?: string;
   managed?: boolean;
   note?: string;
   folder: { use: FieldUse; label?: string; hint?: string };
@@ -253,4 +257,79 @@ export function creatableKinds(profiles: KindProfile[]): string[] {
 export function commandText(program: string, args: string[]): string {
   const q = (a: string) => (a === "" ? '""' : /[\s"]/.test(a) ? `"${a.replaceAll('"', '\\"')}"` : a);
   return [program, ...args].map(q).join(" ");
+}
+
+/** Whether an option's value differs from its default (multi values compare as sets). */
+export function isChanged(o: KindOption, value: string | undefined): boolean {
+  const v = value ?? o.default;
+  if (o.type === "multi") {
+    const a = splitList(v).sort().join(","),
+      b = splitList(o.default).sort().join(",");
+    return a !== b;
+  }
+  return v !== o.default;
+}
+
+/** Keys of the visible options whose value differs from the default. */
+export function changedKeys(p: KindProfile | undefined, s: Settings): string[] {
+  if (!p) return [];
+  const eff = effective(p, s);
+  return p.options.filter((o) => isVisible(p, o, eff) && isChanged(o, eff[o.key])).map((o) => o.key);
+}
+
+/**
+ * Splits the visible options into those shown up front and those under "More settings".
+ * An option that is changed from its default or has an error is always shown up front,
+ * so nothing that matters is folded away.
+ */
+export function splitCommon(
+  p: KindProfile,
+  s: Settings,
+  errors: Record<string, string> = {},
+): { common: KindOption[]; more: OptionGroup[] } {
+  const eff = effective(p, s);
+  const common: KindOption[] = [];
+  const more: OptionGroup[] = [];
+  for (const o of p.options) {
+    if (!isVisible(p, o, eff)) continue;
+    if (o.common || errors[o.key] || isChanged(o, eff[o.key])) {
+      common.push(o);
+      continue;
+    }
+    let g = more.find((x) => x.name === o.group);
+    if (!g) more.push((g = { name: o.group, options: [] }));
+    g.options.push(o);
+  }
+  return { common, more };
+}
+
+/** Settings with the given keys put back to their defaults (by removing them). */
+export function resetKeys(s: Settings, keys: string[]): Settings {
+  const out = { ...s };
+  for (const k of keys) delete out[k];
+  return out;
+}
+
+export interface PanelNote {
+  /** "todo": something the user still has to fill in; "warn": a real problem. */
+  level: "todo" | "warn";
+  text: string;
+}
+
+/** Turns the daemon's preview warnings into short messages for the "What will run" panel. */
+export function panelNotes(warnings: string[], labelOf: (kind: string) => string): PanelNote[] {
+  return warnings.map((w) => {
+    if (w === "no program set") return { level: "todo", text: "Fill in Program to complete the command line." };
+    const req = /^(.+) is required$/.exec(w);
+    if (req) return { level: "todo", text: `Fill in ${req[1]} to complete the command line.` };
+    const rt = /^no (\w+) runtime registered and none found on PATH$/.exec(w);
+    if (rt)
+      return {
+        level: "warn",
+        text: `No ${labelOf(rt[1])} is installed yet. Install one on the Runtimes page before starting this service.`,
+      };
+    const nf = /^runtime (\S+) not found$/.exec(w);
+    if (nf) return { level: "warn", text: "The chosen version was removed. Pick another version." };
+    return { level: "warn", text: w.charAt(0).toUpperCase() + w.slice(1) };
+  });
 }

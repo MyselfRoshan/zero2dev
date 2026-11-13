@@ -543,6 +543,7 @@ One profile per service kind:
 ```jsonc
 {
   "kind": "mariadb", "label": "MariaDB",
+  "summary": "A MySQL-compatible database server.",   // one line for the type picker
   "managed": false,                       // true for caddy/nginx: created by Zero2Dev, not offered for new services
   "note": "",                             // shown at the top of the form
   "folder": { "use": "hidden" },          // or { "use": "required", "label": "Project folder", "hint": "..." }
@@ -561,6 +562,7 @@ One profile per service kind:
 | Field | Meaning |
 | --- | --- |
 | `key`, `label`, `group`, `help`, `placeholder` | What the form shows |
+| `common` | Shown up front; the others are under "More settings" (a changed or invalid one is always shown) |
 | `type` | `text`, `number`, `bool` (`"true"`/`"false"`), `select`, `multi` (comma-separated), `size`, `lines` (several lines) |
 | `default` | The value when the service has none |
 | `choices` | `{value, label, args?}` for `select`/`multi`. `args`, when present, is what that choice writes; an empty list writes nothing |
@@ -708,3 +710,30 @@ Returns the script names in `<dir>/package.json`, sorted:
 
 - The list is empty when there is no readable package.json.
 - `400` for a relative `dir`.
+
+## Amendment: theme and accent (0.0.3)
+
+`Settings` gains two fields for the dashboard's look. `PUT /api/settings` accepts them alone, as a partial body, and changing them restarts nothing.
+
+```json
+{ "theme": "system", "accent": "#1677ff" }
+```
+
+| Field | Values | Default |
+| --- | --- | --- |
+| `theme` | `"system"` (follow the OS), `"light"` or `"dark"` | `"system"` (also for an empty value in older state files) |
+| `accent` | A `#rrggbb` colour, the seed the UI builds its palette from | `"#1677ff"` |
+
+These are refused with `400 bad_request`:
+- a `theme` other than the three values: `theme must be system, light or dark`;
+- an `accent` that is not `#` and six hex digits: `accent must be a colour like #1677ff`.
+
+The UI keeps a copy of the built theme in `localStorage` (`zero2dev.theme`) only to avoid a flash before the settings load. The daemon's value wins.
+
+## Amendment: quitting from the UI (0.0.3)
+
+### `POST /api/shutdown` (no body) -> 202 `{ "stopping": true }`
+
+Stops every running service (databases cleanly, as on Ctrl+C) and exits the daemon. The answer is sent first; the daemon quits about 200 ms later. Behind the token like every route; `501` when the daemon was built without a quit handler. The tray icon's **Quit Zero2Dev** and Ctrl+C take the same path.
+
+A second launch acquires neither the home lock nor the listening port and does not modify shared files. It verifies the running instance using `GET /.well-known/zero2dev-instance?challenge=<64 hex characters>`. This Host-checked public endpoint returns hex HMAC-SHA256 of `zero2dev-instance:<challenge>` keyed by the token. The second launch verifies this proof locally without sending the token, then opens the dashboard and exits with code 0.

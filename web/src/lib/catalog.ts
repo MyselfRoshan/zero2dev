@@ -241,3 +241,33 @@ export function serviceRuntimeLabel(runtimeId: string | undefined, runtimes: Run
   const r = runtimes.find((x) => x.id === runtimeId);
   return r ? runtimeTitle(r) : "";
 }
+
+/** One line on what each runtime is, for the Runtimes page. */
+export const KIND_SUMMARY: Record<string, string> = {
+  node: "JavaScript runtime, with npm",
+  php: "PHP and its built-in web server",
+  go: "The Go compiler and tools",
+  java: "Eclipse Temurin JDK",
+  caddy: "Web server with automatic local HTTPS",
+  nginx: "Fast web server and reverse proxy",
+  mariadb: "MySQL-compatible database server",
+  mysql: "Oracle's MySQL database server",
+  postgres: "PostgreSQL database server",
+  redis: "In-memory store for caches and queues",
+  vscode: "Microsoft's code editor",
+  vscodium: "VS Code without Microsoft's telemetry",
+  notepadpp: "Lightweight text editor",
+  heidisql: "Client for MariaDB, MySQL and PostgreSQL",
+  dbeaver: "Client for almost any database",
+  other: "Programs you registered by path",
+};
+
+/** The Runtimes page filters: everything, what is installed, or one group. */
+export type RuntimeFilter = "all" | "installed" | RuntimeGroup["id"];
+
+/** Kinds to show for a filter, in page order (kinds with nothing installed drop out of "installed"). */
+export function filterKinds(filter: RuntimeFilter, runtimes: Runtime[]): RuntimeKind[] {
+  if (filter === "all") return CARD_KINDS;
+  if (filter === "installed") return CARD_KINDS.filter((k) => runtimes.some((r) => r.kind === k));
+  return RUNTIME_GROUPS.find((g) => g.id === filter)?.kinds ?? [];
+}

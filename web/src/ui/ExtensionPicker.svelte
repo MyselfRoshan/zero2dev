@@ -1,6 +1,7 @@
 <script lang="ts">
-  // Tick-box list of the PHP extensions in the selected PHP version's ext folder, plus a
-  // one-click Xdebug download when that version has none.
+  // The PHP extensions a service loads, read from the selected PHP version's ext folder:
+  // the loaded ones as chips with an "Add" box, the full tick-box list one click away, and
+  // an Xdebug row (download it, then load it).
   import { api } from "../lib/api";
   import { splitList } from "../lib/kinds";
   import { errMessage, installXdebug, jobs } from "../lib/store.svelte";
@@ -18,6 +19,8 @@
   let info = $state<PHPExtensions | null>(null);
   let loadError = $state("");
   let filter = $state("");
+  let showAll = $state(false);
+  let adding = $state("");
   let jobId = $state("");
   let jobRuntimeId = $state("");
   const job = $derived(jobId && jobRuntimeId === runtimeId ? jobs[jobId] : undefined);
@@ -59,6 +62,15 @@
     (info?.extensions ?? []).filter((e) => !filter.trim() || e.name.includes(filter.trim().toLowerCase())),
   );
 
+  const available = $derived((info?.extensions ?? []).filter((e) => !selected.includes(e.name) && e.name !== "xdebug"));
+  function addTyped() {
+    const n = adding.trim().toLowerCase();
+    if (n && names.includes(n)) {
+      set(n, true);
+      adding = "";
+    }
+  }
+
   function set(name: string, on: boolean) {
     const cur = splitList(value).filter((n) => n !== name);
     value = (on ? [...cur, name] : cur).join(",");
@@ -76,9 +88,12 @@
 </script>
 
 <fieldset class="exts" aria-describedby="ext-help">
-  <legend class="label">Extensions <code class="writes">php.ini extension=</code></legend>
+  <legend class="head"><span class="name">Extensions</span>{#if !showAll && info?.managed}<span class="muted small">{selected.length} loaded</span>{/if}</legend>
   {#if !runtimeId}
-    <span class="hint">Install PHP on the Runtimes page to pick its extensions. Selected: {selected.join(", ") || "none"}.</span>
+    <div class="chips" role="list" aria-label="Chosen PHP extensions">
+      {#each selected as n (n)}<span class="chip" role="listitem"><span class="mono">{n}</span><button type="button" class="x" onclick={() => set(n, false)} aria-label="Remove {n}">×</button></span>{/each}
+    </div>
+    <span class="hint">These load once PHP is installed. <a href="#/runtimes">Install PHP</a> to add others from its ext folder.</span>
   {:else if loadError}
     <span class="err">{loadError}</span>
   {:else if !info}
@@ -86,34 +101,53 @@
   {:else if !info.managed}
     <span class="hint">This PHP has no ext folder next to it (a system PHP), so its own php.ini decides the extensions.</span>
   {:else}
-    {#if info.extensions.length > 12}
-      <input type="search" class="filter" placeholder="Filter extensions" aria-label="Filter extensions" bind:value={filter} />
-    {/if}
-    <div class="grid" role="group" aria-label="PHP extensions">
-      {#each shown as e (e.name)}
-        <label class="check" title={e.file}>
-          <input type="checkbox" checked={selected.includes(e.name)} onchange={(ev) => set(e.name, ev.currentTarget.checked)} />
-          <span class="mono">{e.name}</span>{#if e.zend}<span class="muted small"> zend</span>{/if}
-        </label>
-      {/each}
-    </div>
-    {#if missing.length}
-      <span class="hint">Not in this PHP, left out: {#each missing as m (m)}<button type="button" class="linkish chip" onclick={() => set(m, false)} aria-label="Remove {m}">{m} ×</button>{/each}</span>
-    {/if}
-    {#if !info.xdebug}
-      <div class="xdebug">
-        {#if job && job.state === "running"}
-          <span class="hint" role="status">Downloading Xdebug... {job.percent}%</span>
-          <div class="progress"><span style="width: {job.percent}%"></span></div>
+    {#if showAll}
+      <div class="row wrap tools">
+        <input type="search" class="filter" placeholder="Filter extensions" aria-label="Filter extensions" bind:value={filter} />
+        <button type="button" class="btn sm ghost" onclick={() => (showAll = false)}>Show only the loaded ones</button>
+      </div>
+      <div class="grid" role="group" aria-label="PHP extensions">
+        {#each shown as e (e.name)}
+          <label class="check" title={e.file}>
+            <input type="checkbox" checked={selected.includes(e.name)} onchange={(ev) => set(e.name, ev.currentTarget.checked)} />
+            <span class="mono">{e.name}</span>{#if e.zend}<span class="muted small"> zend</span>{/if}
+          </label>
+        {/each}
+      </div>
+    {:else}
+      <div class="chips" role="list" aria-label="Loaded PHP extensions">
+        {#each selected.filter((n) => names.includes(n)) as n (n)}
+          <span class="chip" role="listitem"><span class="mono">{n}</span><button type="button" class="x" onclick={() => set(n, false)} aria-label="Remove {n}">×</button></span>
         {:else}
-          <button type="button" class="btn sm" onclick={downloadXdebug}>Download Xdebug</button>
-          <span class="hint">The step debugger, from xdebug.org, checked against its SHA-256. It goes into this PHP version's ext folder.</span>
-          {#if job?.state === "failed"}<span class="err">{job.error}</span>{/if}
-        {/if}
+          <span class="muted small">None. PHP runs with only its built-in extensions.</span>
+        {/each}
+      </div>
+      <div class="row wrap tools">
+        <input type="text" class="mono add" list="ext-avail" placeholder="Add an extension, e.g. gd" aria-label="Add a PHP extension" spellcheck="false"
+          bind:value={adding} onchange={addTyped} onkeydown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTyped(); } }} />
+        <datalist id="ext-avail">{#each available as e (e.name)}<option value={e.name}></option>{/each}</datalist>
+        <button type="button" class="btn sm ghost" onclick={() => (showAll = true)}>Show all {info.extensions.length}</button>
       </div>
     {/if}
+    {#if missing.length}
+      <span class="hint">Not in this PHP version, left out: {#each missing as m (m)}<button type="button" class="linkish gap" onclick={() => set(m, false)} aria-label="Remove {m}">{m} ×</button>{/each}</span>
+    {/if}
+    <div class="xdebug" data-testid="xdebug-row">
+      <span class="name">Xdebug</span>
+      {#if info.xdebug}
+        <span class="muted small grow">Installed in this PHP version.</span>
+        <label class="check"><input type="checkbox" checked={selected.includes("xdebug")} onchange={(ev) => set("xdebug", ev.currentTarget.checked)} aria-label="Load Xdebug" /> <span>Load it</span></label>
+      {:else if job && job.state === "running"}
+        <span class="hint grow" role="status">Downloading... {job.percent}%</span>
+        <div class="progress bar"><span style="width: {job.percent}%"></span></div>
+      {:else}
+        <span class="muted small grow">The step debugger. Downloaded from xdebug.org and checked against its SHA-256.</span>
+        <button type="button" class="btn sm" onclick={downloadXdebug}>Download Xdebug</button>
+      {/if}
+    </div>
+    {#if job?.state === "failed"}<span class="err">{job.error}</span>{/if}
   {/if}
-  <span class="hint" id="ext-help">{help}</span>
+  <span class="hint" id="ext-help">{help} <code class="chip-code">php.ini extension=</code></span>
 </fieldset>
 
 <style>
@@ -122,34 +156,81 @@
     margin: 0;
     padding: 0;
     display: grid;
+    gap: 8px;
+    min-width: 0;
+  }
+  .head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0;
+    width: 100%;
+  }
+  .name {
+    font-weight: 600;
+    font-size: 14px;
+  }
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
     gap: 6px;
   }
-  .exts legend {
-    padding: 0;
-    margin-bottom: 4px;
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 0 4px 0 7px;
+    line-height: 20px;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    font-size: 12px;
+  }
+  .chip .x {
+    border: 0;
+    background: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    padding: 0 5px;
+    border-radius: 50%;
+  }
+  .chip .x:hover {
+    color: var(--bad);
+  }
+  .tools {
+    gap: 8px;
+  }
+  .add,
+  .filter {
+    max-width: 260px;
+    flex: 1 1 200px;
   }
   .grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
     gap: 2px 12px;
-    max-height: 220px;
+    max-height: 240px;
     overflow: auto;
   }
-  .writes {
-    font-size: 11px;
-    font-weight: 400;
-    color: var(--muted, #6b7280);
-    margin-left: 6px;
-  }
-  .filter {
-    max-width: 240px;
-  }
-  .chip {
+  .gap {
     margin-left: 6px;
   }
   .xdebug {
-    display: grid;
-    gap: 4px;
-    justify-items: start;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface-2);
+  }
+  .xdebug .grow {
+    flex: 1 1 200px;
+  }
+  .bar {
+    flex: 1 1 100%;
   }
 </style>

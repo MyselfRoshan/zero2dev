@@ -17,12 +17,10 @@
   import LogViewer from "../ui/LogViewer.svelte";
   import ServiceControls from "../ui/ServiceControls.svelte";
   import StateBadge from "../ui/StateBadge.svelte";
-  import ServiceForm from "./ServiceForm.svelte";
 
   let { id }: { id: string } = $props();
   const service = $derived(lists.services.find((s) => s.id === id));
   let missing = $state(false);
-  let editing = $state(false);
   let deleting = $state(false);
   let busy = $state(false);
 
@@ -126,7 +124,7 @@
       {#if serviceRuntimeLabel(service.runtimeId, lists.runtimes)}<span class="badge plain" data-testid="svc-runtime">{serviceRuntimeLabel(service.runtimeId, lists.runtimes)}</span>{/if}
       <span class="spacer"></span>
       <ServiceControls {service} showRestart />
-      <button class="btn sm" disabled={isActive(service)} onclick={() => (editing = true)} title={isActive(service) ? "Stop the service to edit it" : ""}><Icon name="edit" size={14} /> Edit</button>
+      <button class="btn sm" disabled={isActive(service)} onclick={() => navigate(`#/services/${encodeURIComponent(service.id)}/edit`)} title={isActive(service) ? "Stop the service to edit it" : ""}><Icon name="edit" size={14} /> Edit</button>
       <button class="btn sm danger" onclick={() => (deleting = true)}><Icon name="trash" size={14} /> Delete</button>
     </div>
     {#if editors.length || dbTools.length}
@@ -188,9 +186,6 @@
       oncancel={() => (guided = null)}
     />
   {/if}
-  {#if editing}
-    <ServiceForm {service} onsaved={() => (editing = false)} oncancel={() => (editing = false)} />
-  {/if}
   {#if deleting}
     <ConfirmDialog
       title="Delete {service.name}?"
@@ -220,7 +215,7 @@
     gap: 12px;
   }
   .nm {
-    font-size: 17px;
+    font-size: 16px;
   }
   dl {
     display: grid;
@@ -246,7 +241,7 @@
     align-items: center;
   }
   dt {
-    font-size: 12.5px;
+    font-size: 12px;
     color: var(--muted);
     font-weight: 600;
   }

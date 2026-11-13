@@ -6,6 +6,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light dark" />
     <title>Zero2Dev</title>
+    <script>
+      // The last theme and accent (saved by src/lib/store.svelte.ts), applied before the
+      // page paints so it never flashes the default colours. Missing or broken: defaults.
+      (function () {
+        try {
+          var c = JSON.parse(localStorage.getItem("zero2dev.theme") || "null");
+          if (!c || !c.light || !c.dark) return;
+          var mode = c.mode === "light" || c.mode === "dark" ? c.mode : "system";
+          var scheme =
+            mode === "system" ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : mode;
+          var vars = c[scheme],
+            root = document.documentElement;
+          for (var k in vars)
+            if (/^[a-z0-9-]+$/.test(k) && typeof vars[k] === "string") root.style.setProperty("--" + k, vars[k]);
+          root.style.colorScheme = scheme;
+          root.dataset.theme = scheme;
+          root.dataset.themeMode = mode;
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="app"></div>

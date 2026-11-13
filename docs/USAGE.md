@@ -11,18 +11,42 @@ Contents: [1. Start](#1-start-zero2dev) · [2. Install Caddy](#2-install-a-runti
 ## 1. Start Zero2Dev
 
 1. Put `zero2dev.exe` in a folder you own, for example `D:\zero2dev\`. (Download it from the GitHub release, or build it with `build.ps1`.)
-2. Double-click it, or run it from PowerShell: `.\zero2dev.exe`. Keep that window open; closing it stops Zero2Dev and everything it started.
-3. The first run creates a `data` folder next to the exe and opens your browser at a link like `http://127.0.0.1:7000/#token=...`. The token is your password; the page saves it and removes it from the address bar.
+2. Double-click it. No window opens: Zero2Dev starts in the background, puts its icon in the notification area (next to the clock) and opens your browser at a link like `http://127.0.0.1:7000/#token=...`. The token is your password; the page saves it and removes it from the address bar.
+3. The first run creates a `data` folder next to the exe. Messages go to `data\logs\zero2dev.log` (started from PowerShell, `.\zero2dev.exe` prints them in the terminal instead).
 
-**If your browser shows this page instead**, it has no token yet. Open the full link printed in the terminal window, or paste the token from `data\token`:
+**Getting back to it and stopping it.**
+
+| To | Do |
+| --- | --- |
+| Open the dashboard again | Click the Zero2Dev icon in the notification area, or double-click `zero2dev.exe` again (a second start just opens the dashboard of the one already running) |
+| Open the data folder | Right-click the icon > **Open data folder** |
+| Quit | Right-click the icon > **Quit Zero2Dev**, or **Quit Zero2Dev** at the bottom of the sidebar. Your running services are stopped cleanly first (the dialog lists them) |
+
+If Zero2Dev cannot start (another program uses its port, or the data folder is damaged), a message box says why.
+
+**If your browser shows this page instead**, it has no token yet. Open the link again from the tray icon, or paste the token from `data\token`:
 
 ![First run page asking for the access token](screenshots/01-first-run.png)
 
-You land on the **Dashboard**. It shows how many services, runtimes and sites you have, and offers the three things you will do first:
+You land on the **Dashboard**:
+- **On a fresh install:** a welcome card with a one-minute tour, and the **Get started** checklist. Each step has **Show me**, which starts the matching tutorial.
+- **Later, the state of everything at a glance:**
+  - A status line, such as "2 of 3 services running · sites served by Caddy (running)".
+  - Four tiles: Services, Sites, Runtimes and Databases. Each opens its page, already filtered.
+  - A live card per service, with its uptime, latest output line, Start, Stop and Restart, and links to its logs and address. **Start all** and **Stop all** are above the cards.
+  - Your sites, each with an on/off switch.
+  - **Recent activity**: the latest output across all services.
 
 ![Empty dashboard with Create a service, Install a runtime and Create a site](screenshots/02-dashboard-empty.png)
 
-The left menu has five areas: **Dashboard**, **Services**, **Runtimes**, **Sites**, **Logs**, plus **Settings**. The green *Connected* box at the bottom left means the page is talking to the program.
+The left menu has **Dashboard**, **Services**, **Runtimes**, **Sites**, **Logs**, **Settings** and **Help**.
+
+**Help** has interactive tutorials:
+- The tutorials are **Install a runtime**, **Create a service**, **Give it a local domain**, **Add a database**, **Open a project in your editor** and **A quick look around**.
+- Starting one opens a small guide next to what to press, with an arrow pointing at it and the rest of the page dimmed (you can still click anywhere). It takes you to the right page and moves on by itself when it sees the step happen (the runtime finished installing, the service runs).
+- **Back**, **Skip** and the × always work. A reload continues where you were.
+
+The Help page also explains how runtimes, services, sites and the data folder fit together, and has fixes for the usual problems. The green *Connected* box at the bottom left means the page is talking to the program.
 
 ---
 
@@ -30,28 +54,28 @@ The left menu has five areas: **Dashboard**, **Services**, **Runtimes**, **Sites
 
 A *runtime* is a program Zero2Dev can run for you. **Caddy** is the web server that gives your apps local domains; Node and Go run your code.
 
-1. Open **Runtimes**.
-2. In the **Catalog**, find your platform (`windows/amd64`) and click **Install** next to **Caddy**.
-3. Zero2Dev downloads it, checks the download against the published checksum, and unpacks it into the `bin` folder next to `zero2dev.exe`. When it finishes, Caddy shows as installed on its card and a **Caddy** service is created for you.
+1. Open **Runtimes**. **List** and **Grid** (top right) switch between rows and tiles; the choice is remembered. In the grid, a tile's **Manage** or **Install…** opens its details in a dialog. In the list, every runtime is one row: its name, what it is, the versions you have (the default is marked *default*) and one button. Use the filters at the top (**All**, **Installed**, **Languages**, **Web servers**, **Databases**, **Code editors**, **Database tools**) to shorten the list.
+2. Press **Install…** on the **Caddy** row. The row opens with the newest version already picked and a line on how the download is checked; press **Install**.
+3. Zero2Dev downloads it, checks the download against the published checksum, and unpacks it into the `bin` folder next to `zero2dev.exe`. While it works, the row shows the progress, even when you close it. When it finishes, the version appears in the row and a **Caddy** service is created for you.
 
-![Runtimes page: installed runtimes on top, catalog with Install buttons below](screenshots/03-runtimes.png)
+![Runtimes page: one row per runtime, grouped, with filters on top](screenshots/03-runtimes.png)
 
 Other ways to get a runtime:
 
 | Button | Use it when |
 | --- | --- |
-| **Detect on this PC** | Node, PHP, Go or Java is already installed. Zero2Dev finds it on your PATH and lists it. |
+| **Detect on this PC** | A program is already installed. Zero2Dev lists what it finds on your PATH; press **Register** on a line, or **Register all**. Registering only remembers the path. |
 | **Register by path** | The program lives somewhere unusual, e.g. `C:\php\php.exe`. |
-| **Import file** (in the catalog row) | Downloads are blocked on your network. Save the archive in your browser from the row's *Download page* link, then import it. Zero2Dev still verifies it. |
+| **Import it** (in an open row, under the version list) | Downloads are blocked on your network. Save the archive in your browser, then import it. Zero2Dev still verifies it. |
 
 Nothing is installed system-wide: runtimes stay in the `bin` folder next to `zero2dev.exe`, and you can delete one by removing it from the list.
 
 ### Install runtimes and keep several versions side by side
 
-Every runtime (Node.js, Go, Caddy, PHP, Java, nginx) has its own card on the **Runtimes** page. You can install **as many versions as you like at the same time**, for example PHP 7.1 for an old project and PHP 8.4 for a new one.
+Every runtime has its own row on the **Runtimes** page; **Manage** opens it. You can install **as many versions as you like at the same time**, for example PHP 7.1 for an old project and PHP 8.4 for a new one.
 
-1. Open **Runtimes**. Press **Check for new versions** to ask the publishers (nodejs.org, go.dev, GitHub for Caddy, windows.php.net, Adoptium, nginx.org) which versions exist. It tells you how many new ones it found; a site that cannot be reached is named in a red line and the other cards still work. The page asks once automatically the first time.
-2. In a card, pick a version from the list and press **Install**. Tags: *latest* (newest of that version line), *LTS* / *stable* / *mainline*, *installed*, *unverified*.
+1. Open **Runtimes**. Press **Check for new versions** to ask the publishers (nodejs.org, go.dev, GitHub for Caddy, windows.php.net, Adoptium, nginx.org) which versions exist. It tells you how many new ones it found. A site that cannot be reached is named in a notice; that runtime keeps the versions known before, and the others still work. The page asks once automatically the first time.
+2. In an open row, pick a version from the list and press **Install**. Tags: *latest* (newest of that version line), *LTS* / *stable* / *mainline*, *installed*, *unverified*.
 
    ![Runtimes page with one card per runtime, each with a version list](screenshots/12-runtimes-versions.png)
 
@@ -61,7 +85,7 @@ Every runtime (Node.js, Go, Caddy, PHP, Java, nginx) has its own card on the **R
 
    ![Confirmation for an old PHP line without a published checksum](screenshots/14-php-old-unverified.png)
 
-4. Install a second version the same way. Both appear in the card. The first version you install becomes the **Default**; press **Make default** on another one to change it. **Remove** deletes one version only; if you remove the default, another installed version becomes the default.
+4. Install a second version the same way. Both appear in the row. A newer version of a line you have shows as **Update** in the row, with **Select** to pick it. The first version you install becomes the **Default**; press **Make default** on another one to change it. **Remove** deletes one version only; if you remove the default, another installed version becomes the default.
 
    ![PHP card with two versions installed](screenshots/15-php-two-versions.png)
 
@@ -82,30 +106,38 @@ Good to know:
 
 A *service* is a command Zero2Dev starts, stops and watches for you, with its output in one place.
 
-1. Open **Services** and click **New service**.
-2. Fill in the form. It only asks for what the chosen **Type** uses:
+1. Open **Services** and click **New service**. The editor opens as its own page.
+2. **What do you want to run?** Pick a card: Node.js, PHP, Go, Java, a database (MariaDB, MySQL, PostgreSQL, Redis), or *Custom command* for any other program. Each card says in one line what the type is. Caddy and nginx are not offered: Zero2Dev creates their services itself when you install them. The type then shows at the top of the form with a **Change type** button.
+3. Fill in the form. It only asks for what the chosen type uses:
 
-   | Field | What to enter |
+   | Part | What to enter |
    | --- | --- |
    | **Name** | Anything, e.g. `My API` |
-   | **Type** | Node.js, PHP, Go, Java, a database (MariaDB, MySQL, PostgreSQL, Redis), or *Custom command* for any other program. Caddy and nginx are not in the list: Zero2Dev creates their services itself when you install them |
    | **Project folder** | Your app's **code**, e.g. `C:\work\my-api`. Zero2Dev starts the program in this folder; it never stores its own data there. Click **Browse...** to pick it in the Windows folder dialog, or type the path. Databases have no project folder: their form shows the **data folder** Zero2Dev keeps their files in instead. For *Custom command* it is called **Working folder** |
    | **Program** | Only for *Custom command*: the program to run, e.g. `python` |
    | **Port** | The port your app listens on (your app also gets it as `PORT`). Databases and PHP start with their usual port |
    | **Version** | Which installed version to use. Leave on *Default (...)* to follow the default of that type |
-   | **Settings** | What this type can be told, each with its default already filled in, the argument or php.ini line it writes (e.g. `--max-connections`, `php.ini memory_limit`) and a sentence on what it does, so you do not need the program's documentation. See [Settings by type](#settings-by-type) |
-   | **Always added** | Folded away: the arguments Zero2Dev always adds for this type, each with the reason (e.g. `--bind-address=127.0.0.1`: only this PC can connect) |
-   | **Start automatically…** | Tick to start it whenever Zero2Dev starts |
-   | **Advanced** | Rarely needed: **arguments for your app** (added after the generated ones), a **Health check path** such as `/health` where the type has one, **Environment variables** (yours win over the settings), and **Write my own command line instead of the settings** |
-   | **Command line** | At the bottom, always up to date: exactly what will run, the variables Zero2Dev adds, and the files it writes (PHP's php.ini) |
+   | **Start automatically when Zero2Dev starts** | A switch |
+   | **Settings** | The few settings most people change for this type, already set to values that work. **More settings (n)** shows the rest, grouped. Each setting says what it does and ends with what it writes (e.g. `--max-connections`, `php.ini memory_limit`). A changed setting is marked **Edited** with a **Reset** link, and it always stays visible, even when its group is folded. See [Settings by type](#settings-by-type) |
+   | **Advanced** | Rarely needed: **arguments for your app** (added after the generated ones), a **Health check path** such as `/health` where the type has one, **Environment variables** (yours win over the settings), and **Write my own command line** |
 
-   ![New service form filled in for a Python static server](screenshots/04-service-form.png)
+   Beside the form, **What will run** stays in view while you scroll:
+   - the exact command line (with **Copy**);
+   - the variables Zero2Dev adds;
+   - the files it writes before each start (PHP's php.ini);
+   - what is still missing ("Fill in Script to complete the command line") or wrong ("No MariaDB is installed yet");
+   - how many settings differ from the defaults, with **Reset all**;
+   - **Always added**: the arguments Zero2Dev always adds, each with the reason (e.g. `--bind-address=127.0.0.1`: only this PC can connect).
 
-3. Click **Create service**. It appears in the list, stopped:
+   On a narrow window the panel moves below the form, and **Create service** stays pinned at the bottom.
+
+   ![Service editor for a PHP site: settings with extension chips, and the What will run panel beside them](screenshots/04-service-form.png)
+
+4. Click **Create service**. It appears in the list, stopped:
 
    ![Services list with one stopped service](screenshots/05-services-list.png)
 
-4. Click **Start**. The state changes to *starting*, then *running* once the port answers. While it runs you get **Stop** and **Restart**. Stopping a service stops the whole process tree.
+5. Click **Start**. The state changes to *starting*, then *running* once the port answers. While it runs you get **Stop** and **Restart**. Stopping a service stops the whole process tree.
 
 Typical examples:
 
@@ -115,7 +147,7 @@ Typical examples:
 - **A database**: Type *MariaDB*, *MySQL*, *PostgreSQL* or *Redis*. Nothing else is needed.
 - **Anything else**: Type *Custom command*, Program = the program, Arguments = its options.
 
-Click a service's name to open its page: the exact command it runs (e.g. `node.exe server.js --port 3000`), folder, process id, start time, address and live output.
+Click a service's name to open its page: **Edit** opens the same editor, and Cancel or Save brings you back. The page shows the exact command it runs (e.g. `node.exe server.js --port 3000`), folder, process id, start time, address and live output.
 
 ![Service page showing running state, port link and live log lines](screenshots/06-service-running-logs.png)
 
@@ -133,9 +165,9 @@ Click a service's name to open its page: the exact command it runs (e.g. `node.e
 | PostgreSQL | **Max connections** [100], **Shared buffers** [128MB], **Log statements** [none], **Log statements slower than** [off], **Time zone** | `data\postgres\<service id>` |
 | Redis | **Keep the data**: snapshots (Redis default), after every write, or not at all; **Memory limit** and what to do **when the limit is reached**; **Databases** [16] | `data\redis\<service id>` |
 
-**PHP extensions and Xdebug.** The extension list is read from the selected PHP version's `ext` folder, so it always matches that version. Zero2Dev writes the service's own php.ini on every start (in its data folder) from the version's `php.ini-development` or `php.ini-production` plus your settings; PHP's own folder is never changed. When the version has no Xdebug, **Download Xdebug** fetches the matching build from xdebug.org, checks it against the SHA-256 xdebug.org lists, and puts it into that version's `ext` folder (it is program code, so it goes to `bin`). Tick **xdebug** afterwards; its mode, start and editor port settings then appear. Xdebug downloads are for PHP 8.0 and newer.
+**PHP extensions and Xdebug.** The loaded extensions show as chips: remove one with its ×, add one by typing its name in **Add an extension**, or open the full tick-box list with **Show all**. The list is read from the selected PHP version's `ext` folder, so it always matches that version. Zero2Dev writes the service's own php.ini on every start (in its data folder) from the version's `php.ini-development` or `php.ini-production` plus your settings; PHP's own folder is never changed. The **Xdebug** row below the extensions shows whether that version has it. When it has none, **Download Xdebug** fetches the matching build from xdebug.org, checks it against the SHA-256 xdebug.org lists, and puts it into that version's `ext` folder (it is program code, so it goes to `bin`). It is loaded right after the download (the row then has a **Load it** switch), and its settings appear. Xdebug downloads are for PHP 8.0 and newer.
 
-**Your own command line.** Under **Advanced**, **Write my own command line instead of the settings** turns the settings off and lets you write every argument yourself, starting from the generated ones. Services created before 0.0.3 that had arguments open this way and keep running exactly as before; their page offers **use the settings instead**, which shows the new command line before switching.
+**Your own command line.** Under **Advanced**, **Write my own command line** turns the settings off and lets you write every argument yourself, starting from the generated ones. Services created before 0.0.3 that had arguments open this way and keep running exactly as before; their page offers **use the settings instead**, which shows the new command line before switching.
 
 ---
 
@@ -207,15 +239,32 @@ Good to know:
 
 ## 6. Settings
 
-![Settings page: domain suffix, proxy ports, HTTPS certificate, download proxy](screenshots/10-settings.png)
+The Settings page is split into sections, listed on the left (tabs on a narrow window): **Appearance**, **Sites**, **HTTPS**, **Downloads**, **Startup**, **This PC** and **Access**. As soon as you change something, an **Unsaved changes** bar appears at the bottom with **Discard** and **Save settings**; leaving the page with unsaved changes asks first.
 
-| Setting | What it does |
-| --- | --- |
-| **Site server** | **Caddy** (default) or **nginx** serves your sites. Switching stops the running one and starts the other; both use the same ports |
-| **Domain suffix** | The ending your site domains must use. `localhost` works everywhere with no setup |
-| **HTTP / HTTPS proxy port** | Ports the site server listens on (`8080` / `8443`). Change them if something else uses those ports; a running Caddy or nginx restarts for you |
-| **Let Caddy trust its local certificate authority** | Caddy only, for `https://` sites. With nginx, Zero2Dev makes its own CA at `data\nginx\certs\ca.crt`; trust that file yourself to remove the browser warning. For Caddy: **Off by default**: Zero2Dev then changes nothing outside its folder, and your browser shows a certificate warning for HTTPS sites. Turning it on makes Caddy add its certificate to Windows (you may get a security prompt) |
-| **Download proxy** | Used when installing runtimes on a company network, e.g. `http://proxy.company.com:8080`. Zero2Dev does not read the Windows proxy setting |
+![Settings page with its sections and the unsaved changes bar](screenshots/10-settings.png)
+
+| Section | Setting | What it does |
+| --- | --- | --- |
+| Appearance | **Theme**, **Accent colour** | How the dashboard looks; saved at once (see below) |
+| Sites | **Site server** | **Caddy** (default) or **nginx** serves your sites. Switching stops the running one and starts the other; both use the same ports |
+| | **Domain suffix** | The ending your site domains must use. `localhost` works everywhere with no setup |
+| | **HTTP / HTTPS proxy port** | Ports the site server listens on (`8080` / `8443`). The line below shows the resulting address. A running Caddy or nginx restarts for you |
+| HTTPS | **Let Caddy trust its local certificate authority** | Caddy only. **Off by default**: nothing outside the Zero2Dev folder changes, and browsers warn about `https://` sites; **How to trust it yourself** shows the certificate file to import. Switched on, a notice explains that Caddy will add its certificate to Windows on save (you may get a security prompt). With nginx, Zero2Dev makes its own CA at `data\nginx\certs\ca.crt` |
+| Downloads | **Download proxy** | Used when installing runtimes on a company network, e.g. `http://proxy.company.com:8080`. Zero2Dev does not read the Windows proxy setting |
+| Startup | **Open this dashboard when Zero2Dev starts** | A switch |
+| This PC | | The data folder (with **Copy**), whether the install is portable, the version, the API port and the program folder |
+| Access | | **Copy access token**, and **Sign out** of this browser in a separate box |
+
+### Appearance
+
+**Appearance** is the first section of Settings. Changes apply at once and are saved straight away; there is nothing to Save, and the toast that confirms it has **Undo**.
+
+- **Theme**: **System** (follows Windows, and switches when Windows does), **Light** or **Dark**. The sun/moon button in the top bar switches between them from any page.
+- **Accent colour**: Blue (the default), Geek blue, Purple, Magenta, Volcano, Orange, Green or Cyan, or **Custom…** for any colour (the colour picker or a `#rrggbb` code). Buttons, links, the selected menu item, switches and progress bars all take the new colour, in light and dark. A preview shows them before you leave the page.
+- Very light or bright colours stay readable: Zero2Dev uses a deeper shade or dark text where white text would be hard to read.
+- The choice is kept by Zero2Dev itself, so another browser shows the same theme.
+
+The look follows Ant Design; [DESIGN.md](../DESIGN.md) describes it for anyone changing the UI.
 
 ---
 

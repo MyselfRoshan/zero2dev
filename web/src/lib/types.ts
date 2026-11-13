@@ -225,6 +225,10 @@ export interface Settings {
   downloadProxy: string;
   /** Which program serves the sites. Missing (older daemon) means caddy. */
   siteServer?: SiteServer;
+  /** Dashboard colour scheme. Missing (older daemon) means system. */
+  theme?: "system" | "light" | "dark";
+  /** Dashboard accent colour, #rrggbb. Missing (older daemon) means #1677ff. */
+  accent?: string;
 }
 
 export type SiteServer = "caddy" | "nginx";

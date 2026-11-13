@@ -55,10 +55,10 @@
   .word {
     font-family: var(--mono);
     font-weight: 600;
-    font-size: 15px;
+    font-size: 16px;
   }
   .word b {
-    color: var(--accent);
+    color: var(--accent-text);
   }
   ol {
     margin: 0;
