@@ -38,9 +38,6 @@ import (
 // version is overridden with -ldflags "-X main.version=...".
 var version = "0.0.3"
 
-var consoleContext, consoleQuit = context.WithCancel(context.Background())
-var consoleStopped = make(chan struct{})
-
 func main() {
 	setupOutput()
 	showVersion := flag.Bool("version", false, "print version and exit")
@@ -56,31 +53,20 @@ func main() {
 }
 
 func run() error {
-	defer close(consoleStopped)
 	cfg, err := config.ResolveEnv(os.Getenv)
 	if err != nil {
 		return err
 	}
-	ownership, err := acquireOwnership(cfg.Home)
-	if err != nil {
-		return err
-	}
-	if ownership != nil {
-		defer ownership.Close()
-	}
-	// Reserve the port before initializing or changing shared files.
-	// Bind loopback only; never 0.0.0.0.
-	url := fmt.Sprintf("http://127.0.0.1:%d/#token=%s", cfg.Port, cfg.Token)
+	// Bind before any shared writes; the listener owns this port until shutdown.
+	url := fmt.Sprintf("http://127.0.0.1:%d/#token=", cfg.Port)
 	ln, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(cfg.Port)))
 	if err != nil {
-		// Started again while running (a second double-click): open the dashboard of the
-		// running one instead of failing.
-		token, _ := os.ReadFile(filepath.Join(cfg.Home, "token"))
-		if alreadyRunning(cfg.Port, strings.TrimSpace(string(token)), &http.Client{Timeout: 3 * time.Second}) {
-			url = fmt.Sprintf("http://127.0.0.1:%d/#token=%s", cfg.Port, strings.TrimSpace(string(token)))
+		b, readErr := os.ReadFile(filepath.Join(cfg.Home, "token"))
+		token := strings.TrimSpace(string(b))
+		if readErr == nil && alreadyRunning(cfg.Port, token, &http.Client{Timeout: 3 * time.Second}) {
 			say("Zero2Dev is already running; opening the dashboard.")
 			if !cfg.NoBrowser {
-				openBrowser(url)
+				openBrowser(url + token)
 			}
 			return nil
 		}
@@ -88,13 +74,15 @@ func run() error {
 			"Close that program, or set the ZERO2DEV_PORT environment variable to another port: %w", cfg.Port, err)
 	}
 	defer ln.Close()
-	if ownership == nil {
-		return fmt.Errorf("Zero2Dev is already starting or running for %s", cfg.Home)
+	release, err := lockHome(cfg.Home)
+	if err != nil {
+		return err
 	}
+	defer release()
 	if err := cfg.Initialize(); err != nil {
 		return err
 	}
-	url = fmt.Sprintf("http://127.0.0.1:%d/#token=%s", cfg.Port, cfg.Token)
+	url += cfg.Token
 	// Everything the daemon (and children that inherit its env) writes to
 	// temp goes below <home>/tmp, never the system temp folder.
 	cfg.ApplyTempEnv()
@@ -145,8 +133,12 @@ func run() error {
 		CaddyURL: os.Getenv("ZERO2DEV_CADDY_URL"), PHPArchiveURL: os.Getenv("ZERO2DEV_PHP_ARCHIVE_URL"),
 	}
 	// One way to stop for all: Ctrl+C, the tray's Quit, and POST /api/shutdown.
-	quitCtx, quit := context.WithCancel(consoleContext)
+	quitCtx, quit := context.WithCancel(context.Background())
 	defer quit()
+	shutdownDone := make(chan struct{})
+	removeConsoleQuit := consoleQuit(quit, shutdownDone)
+	defer removeConsoleQuit()
+	defer close(shutdownDone)
 	srv := api.New(api.Deps{
 		Cfg: cfg, Store: st, Hub: hub, Sup: sup, Runtimes: rt, Installer: inst, Sites: site,
 		Catalog: func() ([]model.CatalogEntry, error) { return catalog.Load(cfg.Home) }, Remote: remote,

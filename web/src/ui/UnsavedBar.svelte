@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { beforeNavigate } from "../lib/router.svelte";
+  import { beforeNavigate, router } from "../lib/router.svelte";
 
   // A bar pinned to the bottom of the page while a form has unsaved changes: Discard or Save.
   type Props = { formId: string; saving: boolean; ondiscard: () => void; label?: string };
@@ -9,12 +9,12 @@
   $effect(() => {
     const warn = (e: BeforeUnloadEvent) => e.preventDefault();
     window.addEventListener("beforeunload", warn);
-    const removeGuard = beforeNavigate((next) =>
-      next.name === "settings" || window.confirm("Discard unsaved settings changes?"),
+    const unguard = beforeNavigate((to) =>
+      router.route.name !== "settings" || to.name === "settings" || window.confirm("Discard unsaved settings changes?"),
     );
     return () => {
+      unguard();
       window.removeEventListener("beforeunload", warn);
-      removeGuard();
     };
   });
 </script>

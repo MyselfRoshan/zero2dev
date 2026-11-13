@@ -5,6 +5,7 @@ package main
 import (
 	"os"
 	"syscall"
+	"time"
 	"unsafe"
 )
 
@@ -16,6 +17,8 @@ var (
 	pGetFileType           = kernel32.NewProc("GetFileType")
 	pMessageBoxW           = syscall.NewLazyDLL("user32.dll").NewProc("MessageBoxW")
 )
+
+var attachedConsole bool
 
 const attachParentProcess = ^uintptr(0) // (DWORD)-1
 
@@ -32,10 +35,8 @@ func setupOutput() {
 		return
 	}
 	if r, _, _ := pAttachConsole.Call(attachParentProcess); r != 0 {
-		// AttachConsole resets the handler table. Re-enable Ctrl+C and
-		// forward console events to the shared shutdown context.
-		pSetConsoleCtrlHandler.Call(0, 0)
-		pSetConsoleCtrlHandler.Call(syscall.NewCallback(consoleControl), 1)
+		attachedConsole = true
+		pSetConsoleCtrlHandler.Call(0, 0) // Undo inherited Ctrl+C ignore mode after attaching.
 		if f, err := os.OpenFile("CONOUT$", os.O_WRONLY, 0); err == nil {
 			os.Stdout, os.Stderr = f, f
 			outMu.Lock()
@@ -60,15 +61,25 @@ func alert(title, text string) {
 	pMessageBoxW.Call(0, uintptr(unsafe.Pointer(m)), uintptr(unsafe.Pointer(t)), mbIconError|mbSetForeground)
 }
 
-// Forward console events through the same cancellation path as tray/API quit.
-func consoleControl(event uint32) uintptr {
-	switch event {
-	case 0, 1, 2, 5, 6:
-		consoleQuit()
-		if event == 2 || event == 5 || event == 6 {
-			<-consoleStopped
-		}
-		return 1
+// AttachConsole resets the handler table, including Go's runtime handler.
+func consoleQuit(quit func(), done <-chan struct{}) func() {
+	if !attachedConsole {
+		return func() {}
 	}
-	return 0
+	callback := syscall.NewCallback(func(event uint32) uintptr {
+		switch event {
+		case 0, 1, 2, 5, 6: // Ctrl+C, Break, Close, Logoff, Shutdown
+			quit()
+			if event != 0 && event != 1 {
+				select {
+				case <-done:
+				case <-time.After(5 * time.Second):
+				}
+			}
+			return 1
+		}
+		return 0
+	})
+	pSetConsoleCtrlHandler.Call(callback, 1)
+	return func() { pSetConsoleCtrlHandler.Call(callback, 0) }
 }

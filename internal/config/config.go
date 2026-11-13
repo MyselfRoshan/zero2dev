@@ -60,14 +60,12 @@ func (c *Config) ApplyTempEnv() {
 // FromEnv builds a Config using getenv (os.Getenv in production). It creates
 // the home layout and the token file.
 func FromEnv(getenv func(string) string) (*Config, error) {
-	c, err := ResolveEnv(getenv)
-	if err != nil {
-		return nil, err
-	}
-	if err := c.Initialize(); err != nil {
-		return nil, err
-	}
-	return c, nil
+	return fromEnv(getenv, os.Executable, os.Getwd)
+}
+
+// ResolveEnv resolves configuration without writing shared files.
+func ResolveEnv(getenv func(string) string) (*Config, error) {
+	return resolveEnv(getenv, os.Executable, os.Getwd)
 }
 
 // resolveHome picks the home dir: ZERO2DEV_HOME, else ./data when the binary
@@ -108,11 +106,6 @@ func fromEnv(getenv func(string) string, exeFn func() (string, error), cwdFn fun
 	return c, nil
 }
 
-// ResolveEnv reads configuration without writing shared files.
-func ResolveEnv(getenv func(string) string) (*Config, error) {
-	return resolveEnv(getenv, os.Executable, os.Getwd)
-}
-
 func resolveEnv(getenv func(string) string, exeFn func() (string, error), cwdFn func() (string, error)) (*Config, error) {
 	c := &Config{Port: 7000, DevOrigin: strings.TrimRight(strings.TrimSpace(getenv("ZERO2DEV_DEV_ORIGIN")), "/")}
 	if p := strings.TrimSpace(getenv("ZERO2DEV_PORT")); p != "" {
@@ -131,7 +124,7 @@ func resolveEnv(getenv func(string) string, exeFn func() (string, error), cwdFn 
 	return c, nil
 }
 
-// Initialize creates the layout and loads the token after ownership is acquired.
+// Initialize creates the layout and token after acquiring instance ownership.
 func (c *Config) Initialize() error {
 	if err := os.MkdirAll(c.BinDir, 0o755); err != nil {
 		return fmt.Errorf("cannot create runtimes folder %s: %w", c.BinDir, err)
@@ -141,10 +134,11 @@ func (c *Config) Initialize() error {
 			return fmt.Errorf("cannot create data folder %s: %w", c.Home, err)
 		}
 	}
-	var err error
-	if c.Token, err = LoadOrCreateToken(c.Home); err != nil {
+	token, err := LoadOrCreateToken(c.Home)
+	if err != nil {
 		return err
 	}
+	c.Token = token
 	return nil
 }
 

@@ -63,24 +63,6 @@ func TestLogToFile(t *testing.T) {
 	}
 }
 
-func TestOwnership(t *testing.T) {
-	home := t.TempDir()
-	first, err := acquireOwnership(home)
-	if err != nil || first == nil {
-		t.Fatalf("first: %v", err)
-	}
-	second, err := acquireOwnership(home)
-	if err != nil || second != nil {
-		t.Fatalf("second acquired ownership: %v", err)
-	}
-	first.Close()
-	third, err := acquireOwnership(home)
-	if err != nil || third == nil {
-		t.Fatalf("reacquire: %v", err)
-	}
-	third.Close()
-}
-
 func TestAlreadyRunningUntrustedListener(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "" {
@@ -106,5 +88,18 @@ func TestAlreadyRunningActualServer(t *testing.T) {
 	}
 	if alreadyRunning(cfg.Port, "wrong-token", srv.Client()) {
 		t.Fatal("accepted wrong owner")
+	}
+}
+
+func TestAlreadyRunningDoesNotDiscloseToken(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "" || strings.Contains(r.URL.String(), "secret") {
+			t.Error("token disclosed")
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+	if alreadyRunning(srv.Listener.Addr().(*net.TCPAddr).Port, "secret", srv.Client()) {
+		t.Fatal("unverified listener accepted")
 	}
 }
