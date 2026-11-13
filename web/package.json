@@ -14,9 +14,10 @@
     "e2e": "node e2e/smoke.mjs"
   },
   "dependencies": {
-    "@iconify-icons/logos": "^2.0.6",
-    "@iconify-icons/lucide": "^2.0.27",
-    "@iconify-icons/simple-icons": "^2.0.8",
+    "@ant-design/colors": "^8.0.1",
+    "@iconify-icons/logos": "^2.0.7",
+    "@iconify-icons/lucide": "^2.0.30",
+    "@iconify-icons/simple-icons": "^2.0.9",
     "@iconify/svelte": "^5.2.4"
   },
   "devDependencies": {

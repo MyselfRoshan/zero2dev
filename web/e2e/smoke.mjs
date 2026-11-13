@@ -14,6 +14,9 @@ const BASE = `http://127.0.0.1:${PORT}`;
 const SHOTS =
   process.env.SHOTS_DIR || "/tmp/claude-0/-home-claude/b6d8e937-98d5-5283-884d-6cc8e920e246/scratchpad/shots";
 fs.mkdirSync(SHOTS, { recursive: true });
+// The service editor's type cards are radio buttons named after the type.
+const pickType = (label) => page.getByRole("radio", { name: label, exact: true }).click();
+const advanced = () => page.locator("summary", { hasText: "Advanced" }).click();
 const shot = (page, name) => page.screenshot({ path: path.join(SHOTS, name + ".png"), fullPage: false });
 
 const mock = spawn(process.execPath, [path.resolve(import.meta.dirname, "../mock/server.mjs")], {
@@ -68,6 +71,11 @@ await step("token in URL fragment is stored and removed", async () => {
   await shot(page, "01-dashboard-empty");
 });
 
+// Runtime rows are one line until opened; expand() opens one (Manage / Install...).
+const expand = async (kind) => {
+  const b = page.locator(`article[data-kind="${kind}"] button.toggle`);
+  if ((await b.getAttribute("aria-expanded")) !== "true") await b.click();
+};
 const card = (kind) => page.locator(`article[data-kind="${kind}"]`);
 const li = (kind, version) => card(kind).locator(`li[data-version="${version}"]`);
 const pickOptions = (kind) =>
@@ -99,6 +107,7 @@ await step("runtimes: a card per kind, first check, version list per kind", asyn
     "heidisql", "dbeaver", // database tools
   ]);
   for (const k of kinds) await card(k).getByTestId(`count-${k}`).getByText("Not installed").waitFor();
+  await expand("php");
   const opts = await pickOptions("php");
   assert.deepEqual(opts, [
     "8.4.1 (latest, stable)",
@@ -108,25 +117,31 @@ await step("runtimes: a card per kind, first check, version list per kind", asyn
     "7.4.33 (latest, stable, unverified)",
     "7.1.33 (latest, stable, unverified)",
   ]);
+  await expand("php");
   const groups = await card("php")
     .locator("optgroup")
     .evaluateAll((els) => els.map((e) => e.label));
   assert.deepEqual(groups, ["PHP 8.4", "PHP 8.3", "PHP 8.2", "PHP 7.4", "PHP 7.1"]);
   // the unsupported go build (windows/arm64 listed for this windows/amd64 PC) is not offered
+  await expand("go");
   assert.deepEqual(await pickOptions("go"), ["1.23.4 (latest, stable)", "1.23.3 (stable)"]);
+  await expand("java");
   assert.ok(!(await pickOptions("java")).some((o) => o.startsWith("21.0.5")));
   // manual check: spinner, then java appears
   await page.getByRole("button", { name: "Check for new versions" }).click();
   await page.getByText("Checking...").waitFor();
   await page.getByText("2 new versions found").waitFor();
   await page.getByText("Java: could not reach").waitFor({ state: "detached" });
+  await expand("java");
   assert.ok((await pickOptions("java")).includes("21.0.5 (latest, LTS)"));
   await page.getByRole("button", { name: "Check for new versions" }).click();
   await page.getByText("Already up to date").waitFor();
 });
 
 await step("install shows progress; a second version installs side by side; update hint", async () => {
+  await expand("node");
   const node = card("node");
+  await expand("node");
   await picker("node").selectOption("node-22.11.0");
   await node.getByRole("button", { name: "Install", exact: true }).click();
   const bar = node.getByRole("progressbar");
@@ -136,13 +151,16 @@ await step("install shows progress; a second version installs side by side; upda
   for (let i = 0; i < 40; i++) {
     const v = await bar.getAttribute("aria-valuenow", { timeout: 300 }).catch(() => null);
     if (v) seen.add(Number(v));
+    await expand("node");
     if (await li("node", "22.11.0").isVisible()) break;
     await page.waitForTimeout(100);
   }
+  await expand("node");
   await li("node", "22.11.0").waitFor();
   await page.getByText("Node.js 22.11.0 installed.").waitFor();
   assert.ok(seen.size >= 2, "progress advanced: " + [...seen]);
   // first runtime of a kind is the default; with one version there is no Make default
+  await expand("node");
   await li("node", "22.11.0").getByTestId("default-badge").waitFor();
   assert.equal(await node.getByRole("button", { name: /Make .* the default/ }).count(), 0);
   assert.ok(await node.getByRole("button", { name: "Installed", exact: true }).isDisabled());
@@ -150,14 +168,20 @@ await step("install shows progress; a second version installs side by side; upda
   await node.getByTestId("update-node").getByText("Update available:").waitFor();
   await node.getByTestId("update-node").locator("b", { hasText: "22.12.0" }).waitFor();
   await node.getByRole("button", { name: /^Select 22\.12\.0/ }).click();
+  await expand("node");
   assert.equal(await picker("node").inputValue(), "node-22.12.0");
   await node.getByRole("button", { name: "Install", exact: true }).click();
+  await expand("node");
   await li("node", "22.12.0").waitFor({ timeout: 15000 });
+  await expand("node");
   await li("node", "22.11.0").waitFor();
   assert.equal(await node.locator("li[data-runtime]").count(), 2);
   // newest first; the default (22.11.0) stays on top and 22.12.0 can be made default
+  await expand("node");
   assert.equal(await li("node", "22.11.0").getByTestId("default-badge").count(), 1);
+  await expand("node");
   assert.equal(await li("node", "22.12.0").getByTestId("default-badge").count(), 0);
+  await expand("node");
   await li("node", "22.12.0").getByRole("button", { name: "Make Node.js 22.12.0 the default" }).waitFor();
   assert.equal(await node.getByTestId("update-node").count(), 0);
   assert.ok(await node.getByRole("button", { name: "Installed", exact: true }).isDisabled());
@@ -167,8 +191,11 @@ await step("detect and register one-click, register by path validation", async (
   await page.getByRole("button", { name: "Detect on this PC" }).click();
   await page.getByText("Found on this PC").waitFor();
   await page.locator("tr", { hasText: "java" }).getByRole("button", { name: "Register" }).click();
+  await expand("java");
   await li("java", "21.0.4").waitFor();
+  await expand("java");
   await li("java", "21.0.4").getByText("registered by path").waitFor();
+  await expand("java");
   await li("java", "21.0.4").getByTestId("default-badge").waitFor();
   await page.getByRole("button", { name: "Register by path" }).click();
   await page.getByLabel("Path to the program").fill("php");
@@ -181,7 +208,9 @@ await step("detect and register one-click, register by path validation", async (
 await step("failed install shows full error, network hint and installer log", async () => {
   await page.goto(BASE + "/#/runtimes");
   await page.getByText(/Version lists checked/).waitFor();
+  await expand("node");
   const node = card("node");
+  await expand("node");
   await picker("node").selectOption("node-20.18.0");
   await node.getByRole("button", { name: "Install", exact: true }).click();
   const fail = page.locator('[data-failed="node-20.18.0"]');
@@ -212,6 +241,7 @@ await step("failed install shows full error, network hint and installer log", as
 });
 
 await step("import: validation, server errors, failure then success", async () => {
+  await expand("node");
   const node = card("node");
   await node.getByRole("button", { name: "Import file for Node.js 20.18.0" }).click();
   const dlg = page.getByRole("dialog");
@@ -248,20 +278,26 @@ await step("import: validation, server errors, failure then success", async () =
   await fail.getByText(/Antivirus software may be scanning/).waitFor();
   assert.equal(await fail.getByText(/looks like a network problem/).count(), 0);
   // successful import of go: Importing step visible, then listed
+  await expand("go");
   const go = card("go");
+  await expand("go");
   await picker("go").selectOption("go-1.23.3");
   await go.getByRole("button", { name: "Import file for Go 1.23.3" }).click();
   await dlg.getByLabel("Path of the downloaded file").fill("C:\\Users\\me\\Downloads\\go1.23.3.windows-amd64.zip");
   await dlg.getByRole("button", { name: "Import file" }).click();
   await go.getByText(/1\.23\.3: Importing/).waitFor();
+  await expand("go");
   await li("go", "1.23.3").waitFor({ timeout: 15000 });
   await go.getByTestId("update-go").locator("b", { hasText: "1.23.4" }).waitFor();
 });
 
 await step("unverified entries: confirm first, then acceptUnverified", async () => {
+  await expand("nginx");
   const nginx = card("nginx");
+  await expand("nginx");
   const nOpts = await pickOptions("nginx");
   assert.deepEqual(nOpts, ["1.27.2 (latest, mainline, unverified)", "1.26.2 (latest, stable, unverified)"]);
+  await expand("nginx");
   await picker("nginx").selectOption("nginx-1.26.2");
   await nginx.getByRole("button", { name: "Install", exact: true }).click();
   const dlg = page.getByRole("dialog");
@@ -272,6 +308,7 @@ await step("unverified entries: confirm first, then acceptUnverified", async () 
   assert.equal(await nginx.getByRole("progressbar").count(), 0);
   await nginx.getByRole("button", { name: "Install", exact: true }).click();
   await dlg.getByRole("button", { name: "Install anyway" }).click();
+  await expand("nginx");
   await li("nginx", "1.26.2").waitFor({ timeout: 15000 });
   assert.ok(await nginx.getByRole("button", { name: "Installed", exact: true }).isDisabled());
   // the contract is enforced by the daemon too: no acceptUnverified -> 400 unverified; same version again -> 409
@@ -302,6 +339,16 @@ await step("create a service (validation first, then success)", async () => {
   await page.goto(BASE + "/#/services");
   await page.getByText("No services yet").waitFor();
   await page.getByRole("button", { name: "Add your first service" }).click();
+  // the editor is a page; its first step is the type
+  await page.getByRole("heading", { name: "What do you want to run?" }).waitFor();
+  assert.equal(
+    await page.getByRole("button", { name: "Create service" }).count(),
+    0,
+    "nothing to create before a type is chosen",
+  );
+  await shot(page, "04a-service-type");
+  await pickType("Node.js");
+  await page.getByTestId("chosen-type").getByText("Node.js").waitFor();
   await page.getByRole("button", { name: "Create service" }).click();
   await page.getByText("Enter a name.").waitFor();
   await page.getByText("Script is required").waitFor();
@@ -310,7 +357,7 @@ await step("create a service (validation first, then success)", async () => {
   await page.locator('[data-option="watch"]').getByText("--watch").waitFor();
   await page.getByLabel("Script", { exact: true }).fill("server.js");
   await page.getByLabel("Project folder", { exact: true }).fill("C:\\work\\demo");
-  await page.getByText(/Your app's code \(the folder with package.json\)/).waitFor();
+  await page.getByText(/Your app's code, with package.json/).waitFor();
   await page.getByLabel("Port").fill("3100");
   await page
     .getByTestId("preview-command")
@@ -324,8 +371,32 @@ await step("create a service (validation first, then success)", async () => {
     .waitFor();
   await shot(page, "04c-service-form-settings");
   await page.getByLabel("Run", { exact: true }).selectOption("script");
+  // the rest of the settings are one click away; a changed one stays up front
+  assert.equal(await page.getByRole("textbox", { name: /^.env file/ }).count(), 0, "uncommon settings start folded");
+  await page.getByRole("button", { name: /More settings/ }).click();
+  await page.getByRole("textbox", { name: /^.env file/ }).fill(".env.local");
+  await page.locator('[data-option="envFile"]').getByText("Edited").waitFor();
+  await page.getByRole("button", { name: "Fewer settings" }).click();
+  await page.getByRole("textbox", { name: /^.env file/ }).waitFor(); // still shown: it was changed
+  await page
+    .getByTestId("changed-summary")
+    .getByText(/2 settings changed/) // the script and the .env file
+    .waitFor();
+  await page
+    .getByTestId("preview-command")
+    .getByText(/--env-file=\.env\.local/)
+    .waitFor();
+  await page.getByRole("button", { name: "Reset .env file to its default" }).click();
+  await page
+    .getByTestId("changed-summary")
+    .getByText(/1 setting changed/)
+    .waitFor();
+  assert.equal(await page.getByRole("textbox", { name: /^.env file/ }).count(), 0, "a reset setting folds away again");
+  // the command panel stays in view while the form scrolls
+  await page.evaluate(() => document.querySelector("#main")?.scrollTo(0, 2000));
+  assert.ok(await page.getByTestId("preview-command").isVisible(), "the command line stays visible");
   // health check and environment live under "Advanced"
-  await page.getByText("Advanced:").click();
+  await advanced();
   await page.getByLabel("Health check path").fill("/health");
   await page.getByRole("button", { name: "Add variable" }).click();
   await page.getByLabel("Variable name 1", { exact: true }).fill("NODE_ENV");
@@ -341,16 +412,17 @@ await step("create a service (validation first, then success)", async () => {
 await step("changing from custom clears the program override", async () => {
   await page.goto(BASE + "/#/services");
   await page.getByRole("button", { name: "New service" }).click();
+  await pickType("Custom command");
   await page.getByLabel("Name", { exact: true }).fill("Changed type");
-  await page.getByLabel("Type").selectOption("custom");
   await page.getByLabel("Working folder", { exact: true }).fill("C:\\work\\changed");
   await page.getByLabel("Program").fill("custom.exe");
-  await page.getByLabel("Type").selectOption("node");
+  await page.getByRole("button", { name: "Change type" }).click();
+  await pickType("Node.js");
   await page.getByLabel("Project folder", { exact: true }).fill("C:\\work\\changed");
   await page.getByLabel("Script", { exact: true }).fill("server.js");
-  await page.getByText("Advanced:").click();
+  await advanced();
   assert.equal(await page.getByLabel("Program").count(), 0, "no program override without your own command line");
-  await page.getByText("Advanced:").click();
+  await advanced();
   const request = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith("/api/services"));
   await page.getByRole("button", { name: "Create service" }).click();
   assert.equal((await request).postDataJSON().command, "");
@@ -364,6 +436,7 @@ await step("changing from custom clears the program override", async () => {
 await step("browse: native folder dialog fills the project folder", async () => {
   await page.goto(BASE + "/#/services");
   await page.getByRole("button", { name: "New service" }).click();
+  await pickType("Node.js");
   const field = page.getByLabel("Project folder", { exact: true });
   await field.fill("C:\\work\\demo");
   const browse = page.getByRole("button", { name: "Browse for Project folder" });
@@ -430,8 +503,8 @@ await step("start service -> running, live logs arrive", async () => {
 await step("port conflict shows a clear message", async () => {
   await page.goto(BASE + "/#/services");
   await page.getByRole("button", { name: "New service" }).click();
+  await pickType("Custom command");
   await page.getByLabel("Name", { exact: true }).fill("Second");
-  await page.getByLabel("Type").selectOption("custom");
   await page.getByLabel("Program").fill("C:\\tools\\x.exe");
   await page.getByLabel("Working folder", { exact: true }).fill("C:\\work\\second");
   await page.getByLabel("Port").fill("3100");
@@ -458,26 +531,39 @@ await step("stop service and delete with confirm", async () => {
 await step("php 8.4.1 and 7.1.33 side by side: default, per-service version, remove", async () => {
   await page.goto(BASE + "/#/runtimes");
   await page.getByText(/Version lists checked/).waitFor();
+  await expand("php");
   const php = card("php");
+  await expand("php");
   await picker("php").selectOption("php-8.4.1");
   await php.getByRole("button", { name: "Install", exact: true }).click();
+  await expand("php");
   await li("php", "8.4.1").waitFor({ timeout: 15000 });
+  await expand("php");
   await li("php", "8.4.1").getByTestId("default-badge").waitFor();
   // the old line is unverified: confirm, then install without removing 8.4.1
+  await expand("php");
   await picker("php").selectOption("php-7.1.33");
   await php.getByRole("button", { name: "Install", exact: true }).click();
   const dlg = page.getByRole("dialog");
   await dlg.getByRole("button", { name: "Install anyway" }).click();
+  await expand("php");
   await li("php", "7.1.33").waitFor({ timeout: 15000 });
+  await expand("php");
   await li("php", "8.4.1").waitFor();
   assert.equal(await php.locator("li[data-runtime]").count(), 2);
   assert.ok(await php.getByRole("button", { name: "Installed", exact: true }).isDisabled());
+  await expand("php");
   assert.equal(await li("php", "8.4.1").getByTestId("default-badge").count(), 1);
+  await expand("php");
   assert.equal(await li("php", "7.1.33").getByTestId("default-badge").count(), 0);
   // make the older one the default
+  await expand("php");
   await li("php", "7.1.33").getByRole("button", { name: "Make PHP 7.1.33 the default" }).click();
+  await expand("php");
   await li("php", "7.1.33").getByTestId("default-badge").waitFor();
+  await expand("php");
   assert.equal(await li("php", "8.4.1").getByTestId("default-badge").count(), 0);
+  await expand("php");
   await li("php", "8.4.1").getByRole("button", { name: "Make PHP 8.4.1 the default" }).waitFor();
   assert.equal(await php.getByTestId("default-badge").count(), 1, "exactly one default per kind");
   await shot(page, "16-two-php-versions");
@@ -487,8 +573,8 @@ await step("php 8.4.1 and 7.1.33 side by side: default, per-service version, rem
     .getByRole("button", { name: /New service|Add your first service/ })
     .first()
     .click();
+  await pickType("PHP");
   await page.getByLabel("Name", { exact: true }).fill("Legacy PHP");
-  await page.getByLabel("Type").selectOption("php");
   const ropts = await page.getByLabel("Version").locator("option").allTextContents();
   assert.deepEqual(ropts, ["Default (PHP 7.1.33)", "PHP 8.4.1", "PHP 7.1.33 (default)"]);
   await page.getByLabel("Version").selectOption({ label: "PHP 8.4.1" });
@@ -501,12 +587,14 @@ await step("php 8.4.1 and 7.1.33 side by side: default, per-service version, rem
   await page.getByTestId("svc-runtime").getByText("PHP 8.4.1").waitFor();
   // removing a runtime that a service uses shows the daemon's message naming the service
   await page.goto(BASE + "/#/runtimes");
+  await expand("php");
   await li("php", "8.4.1").getByRole("button", { name: "Remove PHP 8.4.1" }).click();
   await dlg.getByRole("button", { name: "Remove runtime" }).click();
   await page
     .getByRole("alert")
     .getByText(/used by service Legacy PHP/)
     .waitFor();
+  await expand("php");
   await li("php", "8.4.1").waitFor();
   // free it, remove the default 7.1.33: 8.4.1 is promoted
   await page.evaluate(async () => {
@@ -514,9 +602,12 @@ await step("php 8.4.1 and 7.1.33 side by side: default, per-service version, rem
     const svc = (await (await fetch("/api/services", { headers: h })).json()).find((s) => s.name === "Legacy PHP");
     await fetch(`/api/services/${svc.id}`, { method: "DELETE", headers: h });
   });
+  await expand("php");
   await li("php", "7.1.33").getByRole("button", { name: "Remove PHP 7.1.33" }).click();
   await dlg.getByRole("button", { name: "Remove runtime" }).click();
+  await expand("php");
   await li("php", "7.1.33").waitFor({ state: "detached" });
+  await expand("php");
   await li("php", "8.4.1").getByTestId("default-badge").waitFor();
   assert.equal(await php.locator("li[data-runtime]").count(), 1);
 });
@@ -545,8 +636,11 @@ await step("sites: caddy notice, create site, domain validation", async () => {
   // install caddy -> notice changes
   await page.goto(BASE + "/#/runtimes");
   await page.getByText(/Version lists checked/).waitFor();
+  await expand("caddy");
   await picker("caddy").selectOption("caddy-2.8.4");
+  await expand("caddy");
   await card("caddy").getByRole("button", { name: "Install", exact: true }).click();
+  await expand("caddy");
   await li("caddy", "2.8.4").waitFor({ timeout: 15000 });
   await page.goto(BASE + "/#/sites");
   await page.getByText(/Caddy is not running, so your sites cannot be opened/).waitFor();
@@ -557,6 +651,16 @@ await step("settings: change and persist", async () => {
   await page.goto(BASE + "/#/settings");
   await page.getByLabel("HTTP proxy port").waitFor();
   await page.waitForFunction(() => document.querySelector("input[inputmode=numeric]")?.value === "8080");
+  // Save only shows up with unsaved changes; Discard puts the saved values back
+  assert.equal(await page.getByRole("button", { name: "Save settings" }).count(), 0);
+  await page.getByLabel("HTTP proxy port").fill("9999");
+  await page.getByRole("region", { name: "Unsaved changes" }).waitFor();
+  await page.getByRole("button", { name: "Discard" }).click();
+  assert.equal(await page.getByLabel("HTTP proxy port").inputValue(), "8080");
+  await page.getByRole("region", { name: "Unsaved changes" }).waitFor({ state: "detached" });
+  // without trust, the certificate path is explained on request
+  await page.getByText("How to trust it yourself").click();
+  await page.getByText("D:\\zero2dev\\bin\\data\\caddy\\data\\caddy\\pki\\authorities\\local\\root.crt").waitFor();
   await page.getByLabel("HTTP proxy port").fill("8081");
   await page.getByLabel("HTTPS proxy port").fill("8081");
   await page.getByRole("button", { name: "Save settings" }).click();
@@ -569,9 +673,9 @@ await step("settings: change and persist", async () => {
   await page.getByLabel("Download proxy (optional)").fill("http://proxy.corp:8080");
   await page.getByLabel("Let Caddy trust its local certificate authority").check();
   await page.getByText(/changes the Windows certificate store/).waitFor();
-  await page.getByText(/certificate warning in the browser until you trust/).waitFor();
   await page.getByRole("button", { name: "Save settings" }).click();
   await page.getByText("Settings saved.").waitFor();
+  await page.getByRole("region", { name: "Unsaved changes" }).waitFor({ state: "detached" });
   await page.reload();
   await page.waitForFunction(() => document.querySelector("input[inputmode=numeric]")?.value === "8081");
   assert.equal(await page.getByLabel("Download proxy (optional)").inputValue(), "http://proxy.corp:8080");
@@ -579,7 +683,6 @@ await step("settings: change and persist", async () => {
   // portable block
   assert.equal(await page.getByTestId("data-folder").textContent(), "D:\\zero2dev\\bin\\data");
   await page.getByText(/Move the whole folder to move Zero2Dev/).waitFor();
-  await page.getByText("D:\\zero2dev\\bin\\data\\caddy\\data\\caddy\\pki\\authorities\\local\\root.crt").waitFor();
   await page.getByRole("button", { name: "Copy", exact: true }).click();
   await page.getByText("Data folder path copied.").waitFor();
   assert.equal(await page.evaluate(() => navigator.clipboard.readText()), "D:\\zero2dev\\bin\\data");
@@ -656,13 +759,16 @@ await step("databases, code editors and database tools", async () => {
   for (const h of ["Databases", "Code editors", "Database tools"])
     await page.getByRole("heading", { name: h }).waitFor();
   // MySQL is checked with the MD5 it publishes
+  await expand("mysql");
   const my = await pickOptions("mysql");
   assert.ok(
     my.some((o) => o.includes("MD5")),
     my.join("|"),
   );
+  await expand("mysql");
   await card("mysql").getByTestId("md5-hint").waitFor();
   // PostgreSQL has no checksum: unverified
+  await expand("postgres");
   assert.ok((await pickOptions("postgres")).some((o) => o.includes("unverified")));
 
   // install VS Code and HeidiSQL, open VS Code from its card
@@ -670,11 +776,15 @@ await step("databases, code editors and database tools", async () => {
     ["vscode", "vscode-1.145.0", "1.145.0"],
     ["heidisql", "heidisql-12.22", "12.22"],
   ]) {
+    await expand(kind);
     await picker(kind).selectOption(id);
+    await expand(kind);
     await card(kind).getByRole("button", { name: "Install", exact: true }).click();
+    await expand(kind);
     await li(kind, ver).waitFor({ timeout: 15000 });
   }
   const opened = page.waitForRequest((r) => /\/api\/runtimes\/[^/]+\/launch$/.test(r.url()) && r.method() === "POST");
+  await expand("vscode");
   await li("vscode", "1.145.0")
     .getByRole("button", { name: /^Open / })
     .click();
@@ -684,8 +794,8 @@ await step("databases, code editors and database tools", async () => {
   // a PostgreSQL service: default port, connection details, Open in editor and database tool
   await page.goto(BASE + "/#/services");
   await page.getByRole("button", { name: "New service" }).click();
+  await pickType("PostgreSQL");
   await page.getByLabel("Name", { exact: true }).fill("Shop DB");
-  await page.getByLabel("Type").selectOption("postgres");
   assert.equal(await page.getByLabel(/^Port/).inputValue(), "5432", "databases get their usual port");
   assert.equal(await page.getByLabel("Project folder", { exact: true }).count(), 0, "a database has no project folder");
   await page
@@ -726,10 +836,19 @@ await step("databases, code editors and database tools", async () => {
 await step("php settings: extensions, Xdebug download, php.ini, open in editor", async () => {
   await page.goto(BASE + "/#/services");
   await page.getByRole("button", { name: "New service" }).click();
+  await pickType("PHP");
   await page.getByLabel("Name", { exact: true }).fill("Shop site");
-  await page.getByLabel("Type").selectOption("php");
   assert.equal(await page.getByLabel(/^Port/).inputValue(), "8000");
   await page.getByLabel("Project folder", { exact: true }).fill("C:\\work\\shop");
+  // the loaded extensions are chips; another one is added by name
+  const chips = page.getByRole("list", { name: "Loaded PHP extensions" });
+  await chips.getByText("pdo_mysql").waitFor();
+  await page.getByLabel("Add a PHP extension").fill("gd");
+  await page.getByLabel("Add a PHP extension").press("Enter");
+  await chips.getByText("gd", { exact: true }).waitFor();
+  await chips.getByRole("button", { name: "Remove gd" }).click();
+  // the full list is one click away
+  await page.getByRole("button", { name: /^Show all/ }).click();
   const exts = page.getByRole("group", { name: "PHP extensions" });
   await exts.getByLabel("pdo_mysql").waitFor();
   assert.equal(await exts.getByLabel("pdo_mysql").isChecked(), true, "common extensions start ticked");
@@ -745,7 +864,7 @@ await step("php settings: extensions, Xdebug download, php.ini, open in editor",
   await page.getByRole("button", { name: "Download Xdebug" }).click();
   await exts.getByLabel("xdebug").waitFor({ timeout: 10000 });
   assert.equal(await exts.getByLabel("xdebug").isChecked(), true);
-  await page.getByLabel("Editor port").waitFor();
+  await page.locator('[data-option="xdebugMode"]').waitFor();
   await shot(page, "20-php-settings");
   const created = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith("/api/services"));
   await page.getByRole("button", { name: "Create service" }).click();
@@ -795,8 +914,215 @@ await step("a service from before settings keeps its own command line", async ()
   await page.getByRole("button", { name: "Cancel" }).click();
 });
 
+await step("dashboard: tiles, live service cards, activity", async () => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.goto(BASE + "/#/dashboard");
+  await page
+    .getByTestId("status-sentence")
+    .getByText(/services? running/)
+    .waitFor();
+  // a tile opens its page, already filtered
+  await page.getByTestId("tile-runtimes").click();
+  await page.waitForURL(/#\/runtimes\?filter=installed/);
+  assert.equal(await page.getByRole("button", { name: /^Installed/ }).getAttribute("aria-pressed"), "true");
+  await page.goto(BASE + "/#/dashboard");
+  // start and stop from a card; its latest output shows up there and in the activity list
+  const card = page.locator('article.svc[data-service="Demo API"]');
+  await card.waitFor();
+  if (await card.getByRole("button", { name: "Stop Demo API", exact: true }).count()) {
+    await card.getByRole("button", { name: "Stop Demo API", exact: true }).click();
+    await card.getByRole("button", { name: "Start Demo API", exact: true }).waitFor({ timeout: 8000 });
+  }
+  await card.getByRole("button", { name: "Start Demo API", exact: true }).click();
+  await card.locator('.badge[data-state="running"]').waitFor({ timeout: 8000 });
+  await card
+    .locator(".last")
+    .getByText(/listening|GET|ready|compiled/)
+    .waitFor({ timeout: 8000 });
+  await page.getByTestId("activity").getByText("Demo API").first().waitFor();
+  await shot(page, "21-dashboard-live");
+  await card.getByRole("button", { name: "Stop Demo API", exact: true }).click();
+  await card.locator('.badge[data-state="stopped"]').waitFor({ timeout: 8000 });
+});
+
+await step("runtimes: grid view, remembered after a reload", async () => {
+  await page.goto(BASE + "/#/runtimes");
+  await page.getByRole("button", { name: "Grid" }).click();
+  await page.locator("article.rt.tile").first().waitFor();
+  await page.reload();
+  assert.equal(await page.getByRole("button", { name: "Grid" }).getAttribute("aria-pressed"), "true");
+  assert.ok((await page.locator("article.rt.tile").count()) > 5);
+  // a tile opens its details in a dialog; the grid itself stays as it is
+  await page.getByRole("button", { name: "Manage Node.js" }).click();
+  const det = page.locator('[data-kind-dialog="node"]');
+  await det.getByText("Installed", { exact: true }).waitFor();
+  await det.getByRole("heading", { name: "Install another version" }).waitFor();
+  await shot(page, "22-runtimes-grid");
+  await page.getByRole("dialog").locator(".dlg-foot").getByRole("button", { name: "Close", exact: true }).click();
+  await det.waitFor({ state: "detached" });
+  assert.equal(await page.locator("article.rt.open").count(), 0, "no tile spans the grid");
+  await page.getByRole("button", { name: "List" }).click();
+  assert.equal(await page.locator("article.rt.tile").count(), 0);
+});
+
+await step("help: the Create a service tutorial guides and completes", async () => {
+  await page.goto(BASE + "/#/help");
+  await page.getByRole("heading", { name: "Tutorials" }).waitFor();
+  await page.getByRole("button", { name: "Start: Create a service" }).click();
+  const guide = page.getByTestId("tour-guide");
+  await guide.getByText("Step 1 of 8").waitFor();
+  // the spotlight is on the Services link; clicking it moves the tutorial on by itself
+  await page.locator(".ring").waitFor();
+  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Services" }).click();
+  await guide.getByText("Step 2 of 8").waitFor();
+  await page.getByRole("button", { name: "New service" }).click();
+  await guide.getByText("Step 3 of 8").waitFor();
+  await pickType("Custom command");
+  await guide.getByText("Step 4 of 8").waitFor();
+  await page.getByLabel("Name", { exact: true }).fill("Tour app");
+  await page.getByLabel("Working folder", { exact: true }).fill("C:\\work\\tour");
+  await page.getByLabel("Program").fill("C:\\tools\\tour.exe");
+  await guide.getByRole("button", { name: "Next" }).click();
+  await guide.getByText("Check what will run").waitFor();
+  await shot(page, "23-tour-step");
+  await guide.getByRole("button", { name: "Next" }).click();
+  await guide.getByText(/Waiting for you to create the service/).waitFor();
+  await page.getByRole("button", { name: "Create service" }).click();
+  await guide.getByText("Step 7 of 8").waitFor();
+  // a reload keeps the tutorial where it was
+  await page.reload();
+  await page.getByTestId("tour-guide").getByText("Step 7 of 8").waitFor();
+  await page
+    .locator('tr[data-service="Tour app"]')
+    .getByRole("button", { name: "Start Tour app", exact: true })
+    .click();
+  await page.getByTestId("tour-guide").getByText("Step 8 of 8").waitFor({ timeout: 10000 });
+  await page.getByTestId("tour-guide").getByRole("button", { name: "Finish" }).click();
+  await page.getByText("Tutorial finished: Create a service.").waitFor();
+  assert.equal(await page.getByTestId("tour-guide").count(), 0);
+  await page.goto(BASE + "/#/help");
+  await page
+    .locator('[data-tour-card="service"]')
+    .getByRole("button", { name: "Do again: Create a service" })
+    .waitFor();
+  await shot(page, "24-help");
+  const row = page.locator('tr[data-service="Tour app"]');
+  await page.goto(BASE + "/#/services");
+  await row.getByRole("button", { name: "Stop Tour app", exact: true }).click();
+});
+
+await step("appearance: the theme button's popover sets the theme and accent, saved and kept after a reload", async () => {
+  const settings = () =>
+    page.evaluate(async () => (await fetch("/api/settings", { headers: { Authorization: "Bearer devtoken" } })).json());
+  await page.goto(BASE + "/#/services");
+  const toggle = page.getByTestId("theme-toggle");
+  const pop = page.getByTestId("theme-popover");
+  const openPop = async () => {
+    if (!(await pop.isVisible())) await toggle.click();
+    await pop.waitFor();
+  };
+  // the page's own primary button shows the accent
+  const primary = page.locator("main .btn.primary").first();
+  // Buttons fade between colours (0.2 s), so wait for the value to settle.
+  const css = async (prop, want) => {
+    let v = "";
+    for (let i = 0; i < 40; i++) {
+      v = await primary.evaluate((el, p) => getComputedStyle(el)[p], prop);
+      if (v === want) break;
+      await page.waitForTimeout(50);
+    }
+    return v;
+  };
+
+  // Settings no longer has an Appearance section
+  await page.goto(BASE + "/#/settings");
+  await page.locator("#set-sites").waitFor();
+  assert.equal(await page.locator("#set-appearance").count(), 0);
+  await page.goto(BASE + "/#/services");
+
+  // the popover opens from the top bar, with focus on the selected theme; Escape closes it
+  await toggle.click();
+  await pop.waitFor();
+  assert.equal(await toggle.getAttribute("aria-expanded"), "true");
+  assert.equal(await page.evaluate(() => document.activeElement?.getAttribute("name")), "theme-mode");
+  await page.keyboard.press("Escape");
+  await pop.waitFor({ state: "hidden" });
+  assert.equal(await page.evaluate(() => document.activeElement?.dataset.testid), "theme-toggle");
+
+  // a preset: buildTheme("#722ed1", "light")["accent-solid"] is #722ed1 (white text reads on it)
+  await openPop();
+  await pop.getByRole("radio", { name: "Purple" }).click();
+  await pop.getByText("Accent Purple saved.").waitFor();
+  assert.equal(await css("backgroundColor", "rgb(114, 46, 209)"), "rgb(114, 46, 209)");
+  assert.equal((await settings()).accent, "#722ed1");
+  // a click outside closes it
+  await page.locator("main h1, main").first().click({ position: { x: 5, y: 5 } });
+  await pop.waitFor({ state: "hidden" });
+
+  await page.reload();
+  await primary.waitFor();
+  // the inline script in index.html applied the cached theme before the app ran
+  assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem("zero2dev.theme") ?? "{}").accent), "#722ed1");
+  assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), "light");
+  assert.equal(await css("backgroundColor", "rgb(114, 46, 209)"), "rgb(114, 46, 209)");
+  await openPop();
+  assert.equal(await pop.getByRole("radio", { name: "Purple" }).getAttribute("aria-checked"), "true");
+
+  // theme: Dark sets data-theme, then System and Light
+  await pop.locator(".seg label", { hasText: "Dark" }).click();
+  await page.waitForFunction(() => document.documentElement.dataset.theme === "dark");
+  assert.equal((await settings()).theme, "dark");
+  await pop.locator(".seg label", { hasText: "System" }).click();
+  await page.waitForFunction(() => document.documentElement.dataset.themeMode === "system");
+  await pop.locator(".seg label", { hasText: "Light" }).click();
+  await page.waitForFunction(() => document.documentElement.dataset.theme === "light");
+
+  // a custom colour: a bad value is explained; a light one gets dark text on buttons
+  const hex = pop.getByLabel("Custom accent colour (hex)");
+  await hex.fill("#zz0000");
+  await hex.press("Enter");
+  await pop.getByText(/Use a colour like #1677ff/).waitFor();
+  assert.equal(await hex.getAttribute("aria-invalid"), "true");
+  await hex.fill("#fadb14");
+  await hex.press("Enter");
+  await pop.getByText("Accent #fadb14 saved.").waitFor();
+  assert.equal(await css("color", "rgb(31, 31, 31)"), "rgb(31, 31, 31)");
+  // Undo puts the purple back
+  await pop.getByRole("button", { name: "Undo" }).click();
+  await pop.getByText("Change undone.").waitFor();
+  assert.equal((await settings()).accent, "#722ed1");
+
+  // back to the defaults for the rest of the run
+  await pop.locator(".seg label", { hasText: "System" }).click();
+  await pop.getByRole("radio", { name: "Blue", exact: true }).click();
+  await page.waitForFunction(() => document.documentElement.style.getPropertyValue("--accent") === "#1677ff");
+  await page.keyboard.press("Escape");
+  const s = await settings();
+  assert.equal(s.theme, "system");
+  assert.equal(s.accent, "#1677ff");
+});
+
 await step("no external network requests", async () => {
   assert.deepEqual(external, []);
+});
+
+await step("quit: confirm names what runs, then the stopped screen", async () => {
+  await page.goto(BASE + "/#/dashboard");
+  const card = page.locator('article.svc[data-service="Demo API"]');
+  await card.waitFor();
+  if (await card.getByRole("button", { name: "Stop Demo API", exact: true }).count()) {
+    await card.getByRole("button", { name: "Stop Demo API", exact: true }).click();
+    await card.getByRole("button", { name: "Start Demo API", exact: true }).waitFor({ timeout: 8000 });
+  }
+  await card.getByRole("button", { name: "Start Demo API", exact: true }).click();
+  await card.locator('.badge[data-state="running"]').waitFor({ timeout: 8000 });
+  await page.getByRole("button", { name: "Quit Zero2Dev" }).click();
+  const dlg = page.getByRole("dialog");
+  await dlg.getByText(/stops the running service \(Demo API\)/).waitFor();
+  await dlg.getByRole("button", { name: "Quit Zero2Dev" }).click();
+  await page.getByRole("heading", { name: "Zero2Dev has stopped" }).waitFor();
+  await shot(page, "25-stopped");
 });
 
 await browser.close();

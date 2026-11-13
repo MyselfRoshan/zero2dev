@@ -14,6 +14,6 @@ try {
 
 New-Item -ItemType Directory -Force -Path dist | Out-Null
 $env:GOOS = 'windows'; $env:GOARCH = 'amd64'
-go build -ldflags "-s -w -X main.version=$version" -o dist/zero2dev.exe ./cmd/zero2dev
+go build -ldflags "-s -w -H windowsgui -X main.version=$version" -o dist/zero2dev.exe ./cmd/zero2dev
 if ($LASTEXITCODE -ne 0) { throw 'go build failed' }
 Write-Host "Built dist/zero2dev.exe $version"

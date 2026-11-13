@@ -125,3 +125,24 @@ describe("databases", () => {
     expect(deleteServiceMessage({ kind: "node", id: "svc_1" }, true, "x")).toMatch(/running.*cannot be undone/);
   });
 });
+
+describe("runtime view preference", () => {
+  it("remembers list or grid, defaulting to list", async () => {
+    const { getRuntimeView, setRuntimeView } = await import("./ux");
+    const mem = new Map<string, string>();
+    const st = { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => void mem.set(k, v) };
+    expect(getRuntimeView(st)).toBe("list");
+    setRuntimeView("grid", st);
+    expect(getRuntimeView(st)).toBe("grid");
+    const broken = {
+      getItem: () => {
+        throw new Error("blocked");
+      },
+      setItem: () => {
+        throw new Error("blocked");
+      },
+    };
+    expect(getRuntimeView(broken)).toBe("list");
+    expect(() => setRuntimeView("grid", broken)).not.toThrow();
+  });
+});

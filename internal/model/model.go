@@ -161,7 +161,18 @@ type Settings struct {
 	TrustLocalCA       bool   `json:"trustLocalCA"`
 	DownloadProxy      string `json:"downloadProxy"`
 	SiteServer         string `json:"siteServer"` // caddy (default) | nginx: which program serves the sites
+	Theme              string `json:"theme"`      // system (default) | light | dark: the dashboard's colour scheme
+	Accent             string `json:"accent"`     // #rrggbb: the dashboard's accent colour (default #1677ff)
 }
+
+// Appearance defaults and accepted values.
+const (
+	DefaultTheme  = "system"
+	DefaultAccent = "#1677ff"
+)
+
+// Themes are the accepted Settings.Theme values.
+var Themes = []string{"system", "light", "dark"}
 
 // LogLine is one captured output line.
 type LogLine struct {

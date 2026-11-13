@@ -45,6 +45,9 @@ type Deps struct {
 	PickFolder func(title, start string) (path string, ok bool, err error)
 	// Launch opens an editor or database tool (launch.Start); nil disables it. Replaced in tests.
 	Launch func(bin string, args []string, dir string, env []string) error
+	// Quit stops the daemon (POST /api/shutdown): the same path as Ctrl+C or the
+	// tray's Quit. nil disables the endpoint.
+	Quit func()
 }
 
 // Server is the http.Handler for the whole daemon.
@@ -123,6 +126,7 @@ func (s *Server) routes() {
 	s.handle("POST /api/events/ticket", s.eventTicket)
 	s.handle("GET /api/events", s.eventStream)
 	s.handle("POST /api/dialog/folder", s.pickFolder)
+	s.handle("POST /api/shutdown", s.shutdown)
 	s.handle("/api/", func(http.ResponseWriter, *http.Request) error {
 		return apperr.NotFound("no such endpoint")
 	})

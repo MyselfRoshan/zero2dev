@@ -43,12 +43,11 @@
     pointer-events: auto;
     display: flex;
     align-items: flex-start;
-    gap: 10px;
-    padding: 10px 10px 10px 14px;
-    border-radius: 8px;
-    background: var(--surface);
-    border: 1px solid var(--line-strong);
-    border-left-width: 4px;
+    gap: 12px;
+    padding: 12px 12px 12px 16px;
+    border-radius: var(--radius-lg);
+    background: var(--elevated);
+    border: 1px solid var(--line);
     box-shadow: var(--shadow);
     word-break: break-word;
   }
@@ -56,16 +55,10 @@
     margin-top: 3px;
     flex: none;
   }
-  .toast.success {
-    border-left-color: var(--ok);
+  .toast.success > :global(svg) {
+    color: var(--ok-fill);
   }
-  .toast.success :global(svg) {
-    color: var(--ok);
-  }
-  .toast.error {
-    border-left-color: var(--bad);
-  }
-  .toast.error :global(svg) {
-    color: var(--bad);
+  .toast.error > :global(svg) {
+    color: var(--bad-fill);
   }
 </style>

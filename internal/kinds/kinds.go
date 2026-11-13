@@ -63,7 +63,8 @@ type Option struct {
 	Key         string            `json:"key"`
 	Group       string            `json:"group"`
 	Label       string            `json:"label"`
-	Type        string            `json:"type"` // text number bool select multi size lines
+	Common      bool              `json:"common,omitempty"` // shown up front; the rest is under "More settings"
+	Type        string            `json:"type"`             // text number bool select multi size lines
 	Default     string            `json:"default"`
 	Help        string            `json:"help"`
 	Placeholder string            `json:"placeholder,omitempty"`
@@ -86,6 +87,7 @@ type Option struct {
 type Profile struct {
 	Kind          string     `json:"kind"`
 	Label         string     `json:"label"`
+	Summary       string     `json:"summary"`           // one line on what the type is, for the type picker
 	Managed       bool       `json:"managed,omitempty"` // created by Zero2Dev, not offered for new services
 	Note          string     `json:"note,omitempty"`
 	Folder        Field      `json:"folder"`

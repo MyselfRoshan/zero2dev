@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { hashParam } from "../lib/router.svelte";
   import { onMount } from "svelte";
   import { clearLogs, lists, logs, seedLogs, app } from "../lib/store.svelte";
   import type { LogEntry } from "../lib/store.svelte";
@@ -6,7 +7,8 @@
   import LogViewer from "../ui/LogViewer.svelte";
   import PageHead from "../ui/PageHead.svelte";
 
-  let serviceId = $state("");
+  // #/logs?service=svc_... (from the dashboard) starts filtered on that service.
+  let serviceId = $state(hashParam("service"));
   const names = $derived(Object.fromEntries(lists.services.map((s) => [s.id, s.name])));
 
   onMount(() => {

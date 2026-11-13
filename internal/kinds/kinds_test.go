@@ -26,6 +26,12 @@ func TestEveryServiceKindHasAProfile(t *testing.T) {
 func TestProfilesAreConsistent(t *testing.T) {
 	types := []string{"text", "number", "bool", "select", "multi", "size", "lines"}
 	for _, p := range Profiles() {
+		if p.Summary == "" {
+			t.Errorf("%s: summary is required (the type picker shows it)", p.Kind)
+		}
+		if len(p.Options) > 0 && !slices.ContainsFunc(p.Options, func(o Option) bool { return o.Common }) {
+			t.Errorf("%s: at least one option must be common (shown up front)", p.Kind)
+		}
 		if p.Label == "" || p.Folder.Use == "" || p.Port.Use == "" {
 			t.Errorf("%s: label, folder.use and port.use are required", p.Kind)
 		}

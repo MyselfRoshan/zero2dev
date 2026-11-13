@@ -11,15 +11,18 @@ importers:
 
   .:
     dependencies:
+      '@ant-design/colors':
+        specifier: ^8.0.1
+        version: 8.0.1
       '@iconify-icons/logos':
-        specifier: ^2.0.6
-        version: 2.0.6
+        specifier: ^2.0.7
+        version: 2.0.7
       '@iconify-icons/lucide':
-        specifier: ^2.0.27
-        version: 2.0.27
+        specifier: ^2.0.30
+        version: 2.0.30
       '@iconify-icons/simple-icons':
-        specifier: ^2.0.8
-        version: 2.0.8
+        specifier: ^2.0.9
+        version: 2.0.9
       '@iconify/svelte':
         specifier: ^5.2.4
         version: 5.2.4(svelte@5.57.2)
@@ -54,6 +57,13 @@ importers:
 
 packages:
 
+  '@ant-design/colors@8.0.1':
+    resolution: {integrity: sha512-foPVl0+SWIslGUtD/xBr1p9U4AKzPhNYEseXYRRo5QSzGACYZrQbe11AYJbYfAWnWSpGBx6JjBmSeugUsD9vqQ==}
+
+  '@ant-design/fast-color@3.0.1':
+    resolution: {integrity: sha512-esKJegpW4nckh0o6kV3Tkb7NPIZYbPnnFxmQDUmL08ukXZAvV85TZBr70eGuke/CIArLaP6aw8lt9KILjnWuOw==}
+    engines: {node: '>=8.x'}
+
   '@babel/code-frame@7.29.7':
     resolution: {integrity: sha512-Aup7aUOfpbAUg2ROOJN6Iw5f9DMBlzu0mIkm/malLQFN/YQgO48wCj0Kxa3sEHJvPVFg7siR+qRInwXd2qhQKw==}
     engines: {node: '>=6.9.0'}
@@ -62,21 +72,21 @@ packages:
     resolution: {integrity: sha512-qehxGkRj55h/ff8EMaJ+cYhyaKlHIxqYDn682wQD7RNp9UujOQsHog2uS0r2vzr4pW+sXf90NeeayjcNaX3fFg==}
     engines: {node: '>=6.9.0'}
 
-  '@babel/runtime@7.29.10':
-    resolution: {integrity: sha512-NpugTzbKgGrNe45Ui32cN8vCFFMxVtP/9rtfwv0nP5FRDAjvYBxJcLVpYA9mr1jxP6cnIT7x9LUzuDTbWYYNRA==}
+  '@babel/runtime@7.29.14':
+    resolution: {integrity: sha512-Y5tqevQaUAZhhj82BpYMNC1ssvLQTVAfwKdm8iy8qwmhvC2/CpcAu8OC+QEtjM7pMk7knx83u1Qj8gzkicyelw==}
     engines: {node: '>=6.9.0'}
 
   '@blazediff/core@1.10.0':
     resolution: {integrity: sha512-AOQff0zgR7cGsZL+4E7hVkmujoPUpm0J9xzWGWZj5wCjd3gmxESXAPfKyuzs93VdpQNFhHlBhfOjrcZ+XTERtQ==}
 
-  '@iconify-icons/logos@2.0.6':
-    resolution: {integrity: sha512-TSA01vkvURfQwLYdStv5+n/iF6ewPPeaqcSoApSqHOZ656uSO/1193TbY5WktKvwbAKEcxzewSw5z0N2Re75Ug==}
+  '@iconify-icons/logos@2.0.7':
+    resolution: {integrity: sha512-F8wMhGFDT/rM0lhnt8AiXcoVCy5bRTiB/NVOeyziXUZ6eRXNpAU2E+1fuEl5EwcEsstpASbbAsTt88BgDZ0PBQ==}
 
-  '@iconify-icons/lucide@2.0.27':
-    resolution: {integrity: sha512-lEi+jDSex5X7h2DwRHKoxtfUMGLQmhg9lVTKmtUu4fHd4emgnSFnz/g38J7E+fUWDKKWL1rijYL13ylcu3rVbA==}
+  '@iconify-icons/lucide@2.0.30':
+    resolution: {integrity: sha512-93cnKsu8B0z8UoC+oBx4inqho7vCoyglJ1krhXsRCHwZT6qhp3SJ1LkfPlGf78/kgboFkxSLNemMDyGvKvlhVw==}
 
-  '@iconify-icons/simple-icons@2.0.8':
-    resolution: {integrity: sha512-T/Y45ZhrMABh+vDGVTrcMZYolnKswfV4xj+odeHU9eYYkTA+f9uDSoaMBgGzOGEBbaSTK6cVulyaMrT5O7MhLQ==}
+  '@iconify-icons/simple-icons@2.0.9':
+    resolution: {integrity: sha512-vJ7UaoXGErVVvaQv4VgQz/BKgzZ4AnBKUJfLtGUtxYgvlV/yo025SV2gljv/xTz0/QUcaIMmpsJHMU10AGiFOg==}
 
   '@iconify/svelte@5.2.4':
     resolution: {integrity: sha512-rKIsZikeLb2D30WaOoA/B5ggwm9KelOu0gXizmPHCjcwBNNm6+AGi+16gQ9HNEfm6MvMQqEuGKcp068ZeAsiNw==}
@@ -394,8 +404,8 @@ packages:
     resolution: {integrity: sha512-yzr2S9HyAIdhz2/6qHgbs665Q7PKVcDF05vsOlHPxG1mo36gKVesdYVeDLnXgfjJ03CrKRk08knc6+E/9m8v2Q==}
     engines: {node: '>=18'}
 
-  '@testing-library/user-event@14.6.8':
-    resolution: {integrity: sha512-vgSSqnANMnkcYR/vUNDbwS7aM3OErRLNUG8vCVVlj4oc6cKffUrccX7UAS5AmJQQNZTSibi9z5GvvRZ0aYgUCQ==}
+  '@testing-library/user-event@14.6.10':
+    resolution: {integrity: sha512-tA4stGNp3mLGOGO+lh87UA56Tz4c8NVGBSkyIF58O+W/bs2Re9BCI9xihnL70+DsThncFznE0skS88SM1D2hyg==}
     engines: {node: '>=12', npm: '>=6'}
     peerDependencies:
       '@testing-library/dom': '>=7.21.4'
@@ -1039,8 +1049,8 @@ packages:
     engines: {node: '>=20.11'}
     hasBin: true
 
-  ws@8.22.1:
-    resolution: {integrity: sha512-oyL6OPYme/CmiFvNuGzeoxCJ4nOrZE2O1FwM9MWM1AsGri6nLXB2pg+lNA8aLeXMSav0J6eIVS1j6vUPzUtK9g==}
+  ws@8.22.2:
+    resolution: {integrity: sha512-/rEZ2ejown2N5gxVTHUu9bVVC7ttu0/Tgzf5hbTOixR3Fs7mbbXgn2DbdbcKgJOmpQMtrIUWivtYuVMnp/W/yA==}
     engines: {node: '>=10.0.0'}
     peerDependencies:
       bufferutil: ^4.0.1
@@ -1064,6 +1074,12 @@ packages:
 
 snapshots:
 
+  '@ant-design/colors@8.0.1':
+    dependencies:
+      '@ant-design/fast-color': 3.0.1
+
+  '@ant-design/fast-color@3.0.1': {}
+
   '@babel/code-frame@7.29.7':
     dependencies:
       '@babel/helper-validator-identifier': 7.29.7
@@ -1072,19 +1088,19 @@ snapshots:
 
   '@babel/helper-validator-identifier@7.29.7': {}
 
-  '@babel/runtime@7.29.10': {}
+  '@babel/runtime@7.29.14': {}
 
   '@blazediff/core@1.10.0': {}
 
-  '@iconify-icons/logos@2.0.6':
+  '@iconify-icons/logos@2.0.7':
     dependencies:
       '@iconify/types': 2.0.0
 
-  '@iconify-icons/lucide@2.0.27':
+  '@iconify-icons/lucide@2.0.30':
     dependencies:
       '@iconify/types': 2.0.0
 
-  '@iconify-icons/simple-icons@2.0.8':
+  '@iconify-icons/simple-icons@2.0.9':
     dependencies:
       '@iconify/types': 2.0.0
 
@@ -1272,7 +1288,7 @@ snapshots:
   '@testing-library/dom@10.4.2':
     dependencies:
       '@babel/code-frame': 7.29.7
-      '@babel/runtime': 7.29.10
+      '@babel/runtime': 7.29.14
       '@types/aria-query': 5.0.4
       aria-query: 5.3.0
       dom-accessibility-api: 0.5.16
@@ -1280,7 +1296,7 @@ snapshots:
       picocolors: 1.1.1
       pretty-format: 27.5.1
 
-  '@testing-library/user-event@14.6.8(@testing-library/dom@10.4.2)':
+  '@testing-library/user-event@14.6.10(@testing-library/dom@10.4.2)':
     dependencies:
       '@testing-library/dom': 10.4.2
 
@@ -1304,7 +1320,7 @@ snapshots:
   '@vitest/browser-preview@5.1.0(@voidzero-dev/vite-plus-core@1.5.0(@types/node@24.19.2)(typescript@6.0.3))(vitest@5.1.0)':
     dependencies:
       '@testing-library/dom': 10.4.2
-      '@testing-library/user-event': 14.6.8(@testing-library/dom@10.4.2)
+      '@testing-library/user-event': 14.6.10(@testing-library/dom@10.4.2)
       '@vitest/browser': 5.1.0(@voidzero-dev/vite-plus-core@1.5.0(@types/node@24.19.2)(typescript@6.0.3))(vitest@5.1.0)
       vitest: 5.1.0(@types/node@24.19.2)(@vitest/browser-preview@5.1.0)(@vitest/ui@5.1.0(vitest@5.1.0))(@voidzero-dev/vite-plus-core@1.5.0(@types/node@24.19.2)(typescript@6.0.3))
     transitivePeerDependencies:
@@ -1324,7 +1340,7 @@ snapshots:
       sirv: 3.0.2
       tinyrainbow: 3.2.0
       vitest: 5.1.0(@types/node@24.19.2)(@vitest/browser-preview@5.1.0)(@vitest/ui@5.1.0(vitest@5.1.0))(@voidzero-dev/vite-plus-core@1.5.0(@types/node@24.19.2)(typescript@6.0.3))
-      ws: 8.22.1
+      ws: 8.22.2
     transitivePeerDependencies:
       - bufferutil
       - msw
@@ -1828,7 +1844,7 @@ snapshots:
 
   why-is-node-running@3.2.1: {}
 
-  ws@8.22.1: {}
+  ws@8.22.2: {}
 
   yuku-core@0.19.0:
     dependencies:

@@ -3,7 +3,9 @@ package api
 import (
 	"fmt"
 	"net/http"
+	"regexp"
 	"runtime"
+	"slices"
 	"strconv"
 	"time"
 
@@ -56,7 +58,11 @@ type settingsInput struct {
 	TrustLocalCA       *bool   `json:"trustLocalCA"`
 	DownloadProxy      *string `json:"downloadProxy"`
 	SiteServer         *string `json:"siteServer"`
+	Theme              *string `json:"theme"`
+	Accent             *string `json:"accent"`
 }
+
+var accentRE = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 
 func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) error {
 	var in settingsInput
@@ -115,6 +121,20 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) error {
 		}
 		if in.OpenBrowserOnStart != nil {
 			st.OpenBrowserOnStart = *in.OpenBrowserOnStart
+		}
+		// Appearance only changes the dashboard: no site server reload.
+		if in.Theme != nil {
+			v := lower(*in.Theme)
+			if !slices.Contains(model.Themes, v) {
+				return apperr.BadRequest("theme must be system, light or dark")
+			}
+			st.Theme = v
+		}
+		if in.Accent != nil {
+			if !accentRE.MatchString(*in.Accent) {
+				return apperr.BadRequest("accent must be a colour like #1677ff")
+			}
+			st.Accent = lower(*in.Accent)
 		}
 		return nil
 	})
@@ -203,4 +223,21 @@ func (s *Server) eventStream(w http.ResponseWriter, r *http.Request) error {
 			fl.Flush()
 		}
 	}
+}
+
+// POST /api/shutdown: stop all services and exit (Quit Zero2Dev in the UI).
+// Answers first, then quits, so the browser gets the reply.
+func (s *Server) shutdown(w http.ResponseWriter, r *http.Request) error {
+	if s.Quit == nil {
+		return &apperr.Error{Status: http.StatusNotImplemented, Code: "not_supported", Message: "quitting is not available"}
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{"stopping": true})
+	if f, ok := w.(http.Flusher); ok {
+		f.Flush()
+	}
+	go func() {
+		time.Sleep(200 * time.Millisecond)
+		s.Quit()
+	}()
+	return nil
 }

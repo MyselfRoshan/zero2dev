@@ -35,7 +35,7 @@ export function setupSteps(counts: { runtimes: number; services: number; sites: 
       title: "Add your app as a service",
       text: "Point Zero2Dev at your project folder. It starts the app, checks its port and keeps the logs.",
       done: counts.services > 0,
-      href: "#/services?new",
+      href: "#/services/new",
       action: "Add a service",
     },
     {
@@ -167,4 +167,29 @@ export function deleteServiceMessage(s: Pick<Service, "kind" | "id">, running: b
   if (isDatabase(s.kind))
     return `${what} The database files are kept in ${dataDir}; delete that folder yourself if you no longer need them.`;
   return `${what} This cannot be undone.`;
+}
+
+// ---- remembered view choices ----
+
+export type RuntimeView = "list" | "grid";
+const VIEW_KEY = "zero2dev.runtimes.view";
+
+/** The Runtimes page layout the user picked last (list when none, or storage is unavailable). */
+export function getRuntimeView(storage: Pick<Storage, "getItem"> | undefined = globalThis.localStorage): RuntimeView {
+  try {
+    return storage?.getItem(VIEW_KEY) === "grid" ? "grid" : "list";
+  } catch {
+    return "list";
+  }
+}
+
+export function setRuntimeView(
+  v: RuntimeView,
+  storage: Pick<Storage, "setItem"> | undefined = globalThis.localStorage,
+): void {
+  try {
+    storage?.setItem(VIEW_KEY, v);
+  } catch {
+    /* private mode: the choice lasts for this page only */
+  }
 }

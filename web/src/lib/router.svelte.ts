@@ -2,10 +2,13 @@ export type Route =
   | { name: "dashboard" }
   | { name: "services" }
   | { name: "service"; id: string }
+  | { name: "serviceNew" }
+  | { name: "serviceEdit"; id: string }
   | { name: "runtimes" }
   | { name: "sites" }
   | { name: "logs" }
-  | { name: "settings" };
+  | { name: "settings" }
+  | { name: "help" };
 
 export function parseHash(hash: string): Route {
   const path = hash.replace(/^#/, "").split("?")[0];
@@ -15,6 +18,8 @@ export function parseHash(hash: string): Route {
     case "dashboard":
       return { name: "dashboard" };
     case "services":
+      if (parts[1] === "new") return { name: "serviceNew" };
+      if (parts[1] && parts[2] === "edit") return { name: "serviceEdit", id: decodeURIComponent(parts[1]) };
       return parts[1] ? { name: "service", id: decodeURIComponent(parts[1]) } : { name: "services" };
     case "runtimes":
       return { name: "runtimes" };
@@ -24,6 +29,8 @@ export function parseHash(hash: string): Route {
       return { name: "logs" };
     case "settings":
       return { name: "settings" };
+    case "help":
+      return { name: "help" };
     default:
       return { name: "dashboard" };
   }
@@ -34,6 +41,12 @@ export const router = $state<{ route: Route }>({ route: parseHash(location.hash)
 window.addEventListener("hashchange", () => {
   router.route = parseHash(location.hash);
 });
+
+/** The value of `?key=` in the hash, e.g. `#/services/svc_1/edit?back=list`. */
+export function hashParam(key: string, hash: string = location.hash): string {
+  const q = hash.split("?")[1] ?? "";
+  return new URLSearchParams(q).get(key) ?? "";
+}
 
 export function navigate(path: string): void {
   location.hash = path;

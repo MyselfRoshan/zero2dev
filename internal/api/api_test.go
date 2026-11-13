@@ -564,6 +564,18 @@ func TestSitesAndSettingsAPI(t *testing.T) {
 	e.errCode("PUT", "/api/settings", map[string]any{"proxyHttpPort": 9443}, 400)
 	e.errCode("PUT", "/api/settings", map[string]any{"domainSuffix": "bad suffix!"}, 400)
 
+	// appearance: defaults, partial update, validation
+	if set.Theme != "system" || set.Accent != "#1677ff" {
+		t.Fatalf("appearance defaults: %q %q", set.Theme, set.Accent)
+	}
+	e.do("PUT", "/api/settings", map[string]any{"theme": "Dark", "accent": "#722ED1"}, &set)
+	if set.Theme != "dark" || set.Accent != "#722ed1" || set.ProxyHTTPPort != 9080 {
+		t.Fatalf("appearance update: %+v", set)
+	}
+	e.errCode("PUT", "/api/settings", map[string]any{"theme": "neon"}, 400)
+	e.errCode("PUT", "/api/settings", map[string]any{"accent": "blue"}, 400)
+	e.errCode("PUT", "/api/settings", map[string]any{"accent": "#12345"}, 400)
+
 	if resp := e.do("DELETE", "/api/sites/"+site.ID, nil, nil); resp.StatusCode != 204 {
 		t.Fatal("delete site")
 	}

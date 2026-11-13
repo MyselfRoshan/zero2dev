@@ -216,8 +216,13 @@ export const api = {
 
   getSettings: () => request<Settings>("GET", "/api/settings"),
   putSettings: (b: Settings) => request<Settings>("PUT", "/api/settings", b),
+  /** Changes only the given fields (the daemon treats missing ones as unchanged). */
+  patchSettings: (b: Partial<Settings>) => request<Settings>("PUT", "/api/settings", b),
 
   eventTicket: () => request<{ ticket: string }>("POST", "/api/events/ticket"),
+
+  /** Stops every service and exits the daemon (Quit Zero2Dev). */
+  shutdown: () => request<{ stopping: boolean }>("POST", "/api/shutdown"),
 
   /** Opens the native folder dialog on the daemon's PC; resolves when the user closes it. */
   pickFolder: (title: string, start: string) => request<FolderPick>("POST", "/api/dialog/folder", { title, start }),

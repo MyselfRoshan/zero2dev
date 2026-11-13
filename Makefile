@@ -17,7 +17,7 @@ build: $(UI)
 	go build -ldflags "$(LDFLAGS)" -o dist/zero2dev ./cmd/zero2dev
 
 build-windows: $(UI)
-	GOOS=windows GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o dist/zero2dev.exe ./cmd/zero2dev
+	GOOS=windows GOARCH=amd64 go build -ldflags "$(LDFLAGS) -H windowsgui" -o dist/zero2dev.exe ./cmd/zero2dev
 
 vet: $(UI)
 	go vet $(GOPKGS)

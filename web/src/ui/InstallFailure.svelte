@@ -44,12 +44,12 @@
     background: var(--surface);
     color: var(--text);
     border: 1px solid var(--line-strong);
-    font-size: 12.5px;
+    font-size: 12px;
     user-select: all;
   }
   .linklike {
     all: unset;
-    color: var(--accent);
+    color: var(--accent-text);
     text-decoration: underline;
     cursor: pointer;
   }

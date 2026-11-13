@@ -27,12 +27,34 @@
   import key from "@iconify-icons/lucide/key-round";
   import back from "@iconify-icons/lucide/arrow-left";
   import folder from "@iconify-icons/lucide/folder-open";
+  import info from "@iconify-icons/lucide/info";
+  import power from "@iconify-icons/lucide/power";
+  import grid from "@iconify-icons/lucide/layout-grid";
+  import list from "@iconify-icons/lucide/list";
+  import help from "@iconify-icons/lucide/circle-help";
+  import book from "@iconify-icons/lucide/book-open";
+  import activity from "@iconify-icons/lucide/activity";
+  import database from "@iconify-icons/lucide/database";
+  import arrowRight from "@iconify-icons/lucide/arrow-right";
+  import lightbulb from "@iconify-icons/lucide/lightbulb";
+  import rocket from "@iconify-icons/lucide/rocket";
+  import lifebuoy from "@iconify-icons/lucide/life-buoy";
+  import circleCheck from "@iconify-icons/lucide/circle-check";
+  import clock from "@iconify-icons/lucide/clock";
+  import compass from "@iconify-icons/lucide/compass";
+  import playCircle from "@iconify-icons/lucide/circle-play";
+  import sun from "@iconify-icons/lucide/sun";
+  import moon from "@iconify-icons/lucide/moon";
+  import monitor from "@iconify-icons/lucide/monitor";
+  import palette from "@iconify-icons/lucide/palette";
 
   type Props = { name: string; size?: number; label?: string };
   let { name, size = 16, label }: Props = $props();
   const icons = {
     dashboard, services, runtimes, sites, logs, settings, play, stop, restart, plus, trash, edit,
     external, copy, check, x, download, search, pause, arrowDown, broom, alert, key, back, folder,
+    info, power, grid, list, help, book, activity, database, arrowRight, lightbulb, rocket, lifebuoy,
+    circleCheck, clock, compass, playCircle, sun, moon, monitor, palette,
   };
   const icon = $derived(icons[name as keyof typeof icons]);
 </script>

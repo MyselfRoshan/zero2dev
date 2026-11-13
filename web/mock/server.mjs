@@ -15,6 +15,8 @@ const EMPTY = process.env.MOCK_EMPTY === "1";
 const DIST =
   process.env.MOCK_STATIC || path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../internal/webui/dist");
 const started = Date.now();
+// After POST /api/shutdown the mock answers 503 for a few seconds, like a daemon that has exited.
+let stoppedAt = 0;
 const id = (p) => `${p}_${randomBytes(4).toString("hex")}`;
 const now = () => new Date().toISOString();
 
@@ -33,6 +35,8 @@ const state = {
     trustLocalCA: false,
     downloadProxy: "",
     siteServer: "caddy",
+    theme: "system",
+    accent: "#1677ff",
   },
 };
 const EXE_DIR = "D:\\zero2dev\\bin";
@@ -596,6 +600,7 @@ function ensureSitesNginx() {
 async function api(req, res, url) {
   const p = url.pathname;
   const m = req.method;
+  if (stoppedAt) return fail(res, 503, "stopped", "Zero2Dev has stopped");
 
   if (m === "GET" && p === "/api/events") {
     const t = tickets.get(url.searchParams.get("ticket"));
@@ -641,6 +646,12 @@ async function api(req, res, url) {
         sites: state.sites.length,
       },
     });
+  }
+
+  if (m === "POST" && p === "/api/shutdown") {
+    if (process.env.MOCK_NO_QUIT !== "1") stoppedAt = Date.now();
+    for (const svc of state.services) if (procs.has(svc.id)) stopProc(svc);
+    return send(res, 202, { stopping: true });
   }
 
   // service types and command lines
@@ -1021,22 +1032,33 @@ async function api(req, res, url) {
     if (m === "GET") return send(res, 200, state.settings);
     if (m === "PUT") {
       if (!body) return fail(res, 400, "bad_request", "invalid body");
+      // Like the daemon: every field is optional (missing = unchanged).
+      const b = { ...state.settings, ...body };
       const ok = (n) => Number.isInteger(n) && n > 0 && n < 65536;
-      if (!ok(body.proxyHttpPort) || !ok(body.proxyHttpsPort))
+      if (!ok(b.proxyHttpPort) || !ok(b.proxyHttpsPort))
         return fail(res, 400, "bad_request", "proxy ports must be 1-65535");
-      if (body.downloadProxy && !/^https?:\/\/[^/\s]+$/.test(body.downloadProxy))
+      if (b.downloadProxy && !/^https?:\/\/[^/\s]+$/.test(b.downloadProxy))
         return fail(res, 400, "bad_request", "downloadProxy must look like http://host:port");
-      if (!body.domainSuffix) return fail(res, 400, "bad_request", "domainSuffix is required");
-      if (body.siteServer !== undefined && body.siteServer !== "caddy" && body.siteServer !== "nginx")
+      if (!b.domainSuffix) return fail(res, 400, "bad_request", "domainSuffix is required");
+      if (b.siteServer !== undefined && b.siteServer !== "caddy" && b.siteServer !== "nginx")
         return fail(res, 400, "bad_request", "siteServer must be caddy or nginx");
+      const theme = String(b.theme ?? "")
+        .trim()
+        .toLowerCase();
+      if (!["system", "light", "dark"].includes(theme))
+        return fail(res, 400, "bad_request", "theme must be system, light or dark");
+      if (!/^#[0-9a-fA-F]{6}$/.test(String(b.accent)))
+        return fail(res, 400, "bad_request", "accent must be a colour like #1677ff");
       Object.assign(state.settings, {
-        domainSuffix: body.domainSuffix,
-        proxyHttpPort: body.proxyHttpPort,
-        proxyHttpsPort: body.proxyHttpsPort,
-        openBrowserOnStart: !!body.openBrowserOnStart,
-        trustLocalCA: !!body.trustLocalCA,
-        downloadProxy: body.downloadProxy || "",
-        siteServer: body.siteServer ?? state.settings.siteServer,
+        domainSuffix: b.domainSuffix,
+        proxyHttpPort: b.proxyHttpPort,
+        proxyHttpsPort: b.proxyHttpsPort,
+        openBrowserOnStart: !!b.openBrowserOnStart,
+        trustLocalCA: !!b.trustLocalCA,
+        downloadProxy: b.downloadProxy || "",
+        siteServer: b.siteServer ?? state.settings.siteServer,
+        theme,
+        accent: String(b.accent).toLowerCase(),
       });
       ensureSitesNginx();
       return send(res, 200, state.settings);

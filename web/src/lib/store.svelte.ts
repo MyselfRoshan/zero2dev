@@ -18,6 +18,15 @@ import type {
   Status,
 } from "./types";
 import type { KindProfile } from "./kinds";
+import {
+  THEME_CACHE_KEY,
+  applyTheme,
+  normalizeAccent,
+  normalizeMode,
+  resolveScheme,
+  themeCache,
+  type ThemeMode,
+} from "./theme";
 
 export const MAX_LOG_LINES = 2000;
 
@@ -38,6 +47,8 @@ export const app = $state({
   status: null as Status | null,
   settings: null as Settings | null,
   loaded: { services: false, runtimes: false, sites: false, catalog: false },
+  /** Set after Quit Zero2Dev: the daemon is gone on purpose, not offline. */
+  stopped: false,
   reconnects: 0,
 });
 
@@ -97,6 +108,7 @@ export async function initCatalogStatus(): Promise<void> {
 // ---------- toasts ----------
 let toastSeq = 0;
 export function toast(kind: Toast["kind"], text: string): void {
+  if (app.stopped) return; // after Quit, failing requests are expected, not news
   const id = ++toastSeq;
   toasts.push({ id, kind, text });
   setTimeout(() => dismissToast(id), kind === "error" ? 9000 : 5000);
@@ -445,6 +457,78 @@ export function forgetToken(): void {
   conn?.stop();
   setToken(null);
   app.phase = "notoken";
+}
+
+// ---------- appearance (theme + accent) ----------
+const darkQuery = typeof matchMedia === "function" ? matchMedia("(prefers-color-scheme: dark)") : null;
+/** The OS colour scheme, kept live for the "system" theme. */
+export const appearance = $state({ prefersDark: darkQuery?.matches ?? false });
+darkQuery?.addEventListener("change", (e) => (appearance.prefersDark = e.matches));
+
+/** The saved theme and accent (defaults until the settings load or for an older daemon). */
+export function currentAppearance(): { theme: ThemeMode; accent: string } {
+  return { theme: normalizeMode(app.settings?.theme), accent: normalizeAccent(app.settings?.accent) };
+}
+
+let appliedKey = "";
+function applyAppearance(): void {
+  if (!app.settings || typeof document === "undefined") return; // until then the inline script in index.html has applied the cached theme
+  const { theme, accent } = currentAppearance();
+  const scheme = resolveScheme(theme, appearance.prefersDark);
+  const key = `${theme}|${accent}|${scheme}`;
+  if (key === appliedKey) return;
+  appliedKey = key;
+  const cache = themeCache(theme, accent);
+  applyTheme(document.documentElement, cache[scheme], scheme, theme);
+  try {
+    localStorage.setItem(THEME_CACHE_KEY, JSON.stringify(cache)); // read by index.html on the next load: no flash
+  } catch {
+    /* storage blocked: the theme still applies, only the next load starts with the default */
+  }
+}
+if (typeof document !== "undefined") {
+  $effect.root(() => {
+    $effect(() => applyAppearance());
+  });
+}
+
+let appearanceSeq = 0;
+/** Changes the theme and/or accent: applies at once, then saves. On failure it puts the old values back.
+ *  Mutates app.settings in place so an open Settings form keeps its unsaved edits. */
+export async function setAppearance(change: { theme?: ThemeMode; accent?: string }): Promise<boolean> {
+  const s = app.settings;
+  if (!s) return false;
+  const before = { theme: s.theme, accent: s.accent };
+  Object.assign(s, change);
+  const seq = ++appearanceSeq;
+  try {
+    const r = await api.patchSettings(change);
+    markOnline();
+    if (seq === appearanceSeq && app.settings) Object.assign(app.settings, { theme: r.theme, accent: r.accent });
+    return true;
+  } catch (e) {
+    handleError(e);
+    if (seq === appearanceSeq && app.settings) Object.assign(app.settings, before);
+    toast("error", errMessage(e));
+    return false;
+  }
+}
+
+/** Quit Zero2Dev: the daemon stops every service, then exits. Returns false when it refused. */
+export async function quitDaemon(): Promise<boolean> {
+  try {
+    await api.shutdown();
+  } catch (e) {
+    // The daemon may close the connection while answering; anything but a clear refusal means it is stopping.
+    if (e instanceof ApiError && !e.isNetwork) {
+      toast("error", e.message);
+      return false;
+    }
+  }
+  conn?.stop();
+  app.stopped = true;
+  toasts.splice(0, toasts.length);
+  return true;
 }
 
 /** Retry button on the offline / unauthorized banner. */

@@ -22,6 +22,50 @@
   - **MariaDB/MySQL**: character set, collation, SQL mode, max connections, buffer pool, max packet size, query and slow-query logs. **PostgreSQL**: max connections, shared buffers, statement logging, time zone. **Redis**: persistence (snapshots, every write, none), memory limit and eviction policy, number of databases.
   - **Advanced > Write my own command line** turns the settings off. Services created before this, with their own arguments, keep running exactly as before and can switch to the settings from their page.
   - API: `GET /api/kinds`, `POST /api/services/preview`, `GET /api/services/{id}/command`, `GET /api/runtimes/{id}/php-extensions`, `POST /api/runtimes/{id}/xdebug`, `GET /api/project/scripts`; services have `settings` and `customArgs`; `cwd` is optional for databases; the `{data}` placeholder (see `docs/API.md`).
+- **A clearer service editor.** New and Edit open a page instead of a dialog.
+  - It starts with **What do you want to run?**: one card per type, each with a one-line description.
+  - Then comes a short Basics part, and the few settings most people change for that type. **More settings (n)** holds the rest, grouped. A changed setting is marked **Edited** with **Reset**, and stays visible even when folded.
+  - Beside the form, a **What will run** panel stays in view: the command line with Copy, what is still missing in plain words ("Fill in Script…", "No MariaDB is installed yet…"), the number of changed settings with **Reset all**, the arguments that are always added and why, and Save.
+  - On/off settings are switches.
+  - PHP extensions are chips with an **Add an extension** box and **Show all**, and Xdebug has its own row.
+  - On narrow windows the panel moves below the form and Save stays pinned at the bottom.
+  - Routes: `#/services/new`, `#/services/{id}/edit`.
+  - `profiles.json` gained `summary` per type and `common` per setting (API.md).
+- **No terminal window.** `zero2dev.exe` is a Windows GUI program now: double-clicking it opens the dashboard in the browser and nothing else.
+  - **Tray icon** (notification area): click it to open the dashboard. Right-click for **Open dashboard**, **Open data folder** and **Quit Zero2Dev**; its tooltip says how many services run.
+  - **Quit Zero2Dev** is also at the bottom of the sidebar. The confirmation names the running services; they are stopped cleanly, then the page says Zero2Dev has stopped. API: `POST /api/shutdown`.
+  - **Starting it twice** opens the dashboard of the one already running instead of failing on the busy port.
+  - **Messages** go to `data\logs\zero2dev.log` (rotated at 1 MB); started from a terminal, they still print there, and `--version` works when piped. Startup errors are shown in a message box.
+  - The Windows build uses `-H windowsgui` (`build.ps1`, `make build-windows`, the release workflow).
+- **A livelier dashboard.**
+  - A one-line status, quick actions, and tiles for services, sites, runtimes and databases that open their page already filtered.
+  - Live service cards: uptime, latest output line, Start, Stop and Restart, and links to logs and the app. Start all and Stop all.
+  - Sites with a reachable dot and an on/off switch, and recent activity across services.
+  - On a fresh install, a welcome card and the Get started checklist with **Show me** tutorials.
+- **Help center with guided tutorials.** Help (sidebar and top bar) lists six interactive tutorials: install a runtime, create a service, give it a local domain, add a database, open a project in your editor, and a quick look around.
+  - The guide takes you to the right page and sits right next to what to press, with an arrow pointing at it and the rest of the page dimmed (clicks still go through). It moves on by itself when the step really happened. Progress survives a reload, and finished tutorials are ticked.
+  - Help also explains the main concepts and the common fixes.
+- **Ant Design look.** The dashboard follows Ant Design's design language: its colour tokens and palettes, 14 px type with only two weights, 32 px controls, 6 px corners on controls and 8 px on cards, flat cards with light borders, antd-style buttons, inputs, switches, tables, tags, alerts, dialogs and menu. It is still Svelte; no React components are used.
+- **Appearance** (Settings → Appearance, and a theme button in the top bar).
+  - **System, Light or Dark.** System follows Windows as it changes.
+  - **Accent colour**: Blue, Geek blue, Purple, Magenta, Volcano, Orange, Green or Cyan, or any colour you pick. A full palette is generated from it (as antd does), so buttons, links, selected menu items, switches and progress bars all follow, in light and dark.
+  - Text stays readable: when a colour would be too faint (antd's own blue with white text is 4.1:1), a deeper shade or dark text is used, so everything reaches WCAG AA.
+  - The choice is saved by Zero2Dev, not the browser, so every browser shows it, and the page opens in it without a flash. API: settings `theme` and `accent` (see `docs/API.md`).
+- **Design files.** `DESIGN.md` (in the `design.md` format AI design tools read) describes Zero2Dev's tokens and rules. `docs/design/` has Ant Design's own `design.md` and links to its AI documentation. A test keeps `DESIGN.md` in step with the code.
+- **Runtimes: List or Grid view**, remembered between visits. In the grid, Manage or Install opens the runtime's details in a dialog, so the grid itself never changes shape.
+- Fixed: in the narrow sidebar (below 1000 px) the menu links had no names for screen readers; and the info icon never rendered.
+- **A clearer Runtimes page.**
+  - Each runtime is one row instead of a large card: its icon, name and what it is, the versions you have (the default marked), an **Update** badge when a newer version of a line exists, and one button (**Install…** or **Manage**).
+  - The install form and the installed versions open in the row, so the page is about a third as long. An install in progress or a failed one opens its row by itself.
+  - Filters on top: All, Installed, and each group.
+  - A version list that could not be checked is a notice that explains what it means, not a red line.
+  - **Detect on this PC** shows proper names and has **Register all**.
+  - The page header no longer breaks on narrow windows.
+- **A clearer Settings page.**
+  - Sections (Sites, HTTPS, Downloads, Startup, This PC, Access), with a side menu.
+  - An **Unsaved changes** bar with Discard and Save appears only when something changed, and leaving the page asks first.
+  - The HTTPS warning only shows when trusting is switched on; otherwise **How to trust it yourself** explains the certificate file.
+  - Signing out is in a separate box.
 - Fixed: **Check for new versions** offered the current PHP 8.2 to 8.5 only as unverified downloads. windows.php.net now names rebuilt packages `8.4.27-1`, which the version check refused; those versions are verified with their SHA-256 again.
 - Fixed: **Detect** opened VS Code when its install folder, not its `bin` folder, is on PATH (as Laragon sets it up), because it ran `Code.exe --version`. VS Code and VSCodium are no longer run to read their version: it is read from their `resources\app\package.json`, and the editor's own `.exe` is recorded. Detect also finds `VSCodium.exe` on PATH.
 - Runtimes are grouped as **Languages, Web servers, Databases, Code editors, Database tools**.

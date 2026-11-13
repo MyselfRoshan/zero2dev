@@ -288,3 +288,26 @@ describe("runtime groups", () => {
     expect(by.languages).not.toContain("caddy");
   });
 });
+
+describe("runtimes page filters", () => {
+  it("shows all, the installed kinds or one group", async () => {
+    const { filterKinds, CARD_KINDS, KIND_SUMMARY } = await import("./catalog");
+    const rts = [{ kind: "php" }, { kind: "redis" }] as never[];
+    expect(filterKinds("all", rts)).toEqual(CARD_KINDS);
+    expect(filterKinds("installed", rts)).toEqual(["php", "redis"]);
+    expect(filterKinds("databases", rts)).toEqual(["mariadb", "mysql", "postgres", "redis"]);
+    for (const k of CARD_KINDS) expect(KIND_SUMMARY[k], k).toBeTruthy();
+  });
+});
+
+describe("ago", () => {
+  it("says when, in words", async () => {
+    const { ago } = await import("./format");
+    const now = new Date("2026-11-13T15:00:00").getTime();
+    expect(ago(new Date(now - 20_000).toISOString(), now)).toBe("just now");
+    expect(ago(new Date(now - 5 * 60_000).toISOString(), now)).toBe("5 minutes ago");
+    expect(ago(new Date(now - 60_000).toISOString(), now)).toBe("1 minute ago");
+    expect(ago(new Date(now - 3 * 3600_000).toISOString(), now)).toMatch(/^today at /);
+    expect(ago(null, now)).toBe("");
+  });
+});
