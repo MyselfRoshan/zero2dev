@@ -1012,96 +1012,107 @@ await step("help: the Create a service tutorial guides and completes", async () 
   await row.getByRole("button", { name: "Stop Tour app", exact: true }).click();
 });
 
-await step("appearance: the theme button's popover sets the theme and accent, saved and kept after a reload", async () => {
-  const settings = () =>
-    page.evaluate(async () => (await fetch("/api/settings", { headers: { Authorization: "Bearer devtoken" } })).json());
-  await page.goto(BASE + "/#/services");
-  const toggle = page.getByTestId("theme-toggle");
-  const pop = page.getByTestId("theme-popover");
-  const openPop = async () => {
-    if (!(await pop.isVisible())) await toggle.click();
+await step(
+  "appearance: the theme button's popover sets the theme and accent, saved and kept after a reload",
+  async () => {
+    const settings = () =>
+      page.evaluate(async () =>
+        (await fetch("/api/settings", { headers: { Authorization: "Bearer devtoken" } })).json(),
+      );
+    await page.goto(BASE + "/#/services");
+    const toggle = page.getByTestId("theme-toggle");
+    const pop = page.getByTestId("theme-popover");
+    const openPop = async () => {
+      if (!(await pop.isVisible())) await toggle.click();
+      await pop.waitFor();
+    };
+    // the page's own primary button shows the accent
+    const primary = page.locator("main .btn.primary").first();
+    // Buttons fade between colours (0.2 s), so wait for the value to settle.
+    const css = async (prop, want) => {
+      let v = "";
+      for (let i = 0; i < 40; i++) {
+        v = await primary.evaluate((el, p) => getComputedStyle(el)[p], prop);
+        if (v === want) break;
+        await page.waitForTimeout(50);
+      }
+      return v;
+    };
+
+    // Settings no longer has an Appearance section
+    await page.goto(BASE + "/#/settings");
+    await page.locator("#set-sites").waitFor();
+    assert.equal(await page.locator("#set-appearance").count(), 0);
+    await page.goto(BASE + "/#/services");
+
+    // the popover opens from the top bar, with focus on the selected theme; Escape closes it
+    await toggle.click();
     await pop.waitFor();
-  };
-  // the page's own primary button shows the accent
-  const primary = page.locator("main .btn.primary").first();
-  // Buttons fade between colours (0.2 s), so wait for the value to settle.
-  const css = async (prop, want) => {
-    let v = "";
-    for (let i = 0; i < 40; i++) {
-      v = await primary.evaluate((el, p) => getComputedStyle(el)[p], prop);
-      if (v === want) break;
-      await page.waitForTimeout(50);
-    }
-    return v;
-  };
+    assert.equal(await toggle.getAttribute("aria-expanded"), "true");
+    assert.equal(await page.evaluate(() => document.activeElement?.getAttribute("name")), "theme-mode");
+    await page.keyboard.press("Escape");
+    await pop.waitFor({ state: "hidden" });
+    assert.equal(await page.evaluate(() => document.activeElement?.dataset.testid), "theme-toggle");
 
-  // Settings no longer has an Appearance section
-  await page.goto(BASE + "/#/settings");
-  await page.locator("#set-sites").waitFor();
-  assert.equal(await page.locator("#set-appearance").count(), 0);
-  await page.goto(BASE + "/#/services");
+    // a preset: buildTheme("#722ed1", "light")["accent-solid"] is #722ed1 (white text reads on it)
+    await openPop();
+    await pop.getByRole("radio", { name: "Purple" }).click();
+    await pop.getByText("Accent Purple saved.").waitFor();
+    assert.equal(await css("backgroundColor", "rgb(114, 46, 209)"), "rgb(114, 46, 209)");
+    assert.equal((await settings()).accent, "#722ed1");
+    // a click outside closes it
+    await page
+      .locator("main h1, main")
+      .first()
+      .click({ position: { x: 5, y: 5 } });
+    await pop.waitFor({ state: "hidden" });
 
-  // the popover opens from the top bar, with focus on the selected theme; Escape closes it
-  await toggle.click();
-  await pop.waitFor();
-  assert.equal(await toggle.getAttribute("aria-expanded"), "true");
-  assert.equal(await page.evaluate(() => document.activeElement?.getAttribute("name")), "theme-mode");
-  await page.keyboard.press("Escape");
-  await pop.waitFor({ state: "hidden" });
-  assert.equal(await page.evaluate(() => document.activeElement?.dataset.testid), "theme-toggle");
+    await page.reload();
+    await primary.waitFor();
+    // the inline script in index.html applied the cached theme before the app ran
+    assert.equal(
+      await page.evaluate(() => JSON.parse(localStorage.getItem("zero2dev.theme") ?? "{}").accent),
+      "#722ed1",
+    );
+    assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), "light");
+    assert.equal(await css("backgroundColor", "rgb(114, 46, 209)"), "rgb(114, 46, 209)");
+    await openPop();
+    assert.equal(await pop.getByRole("radio", { name: "Purple" }).getAttribute("aria-checked"), "true");
 
-  // a preset: buildTheme("#722ed1", "light")["accent-solid"] is #722ed1 (white text reads on it)
-  await openPop();
-  await pop.getByRole("radio", { name: "Purple" }).click();
-  await pop.getByText("Accent Purple saved.").waitFor();
-  assert.equal(await css("backgroundColor", "rgb(114, 46, 209)"), "rgb(114, 46, 209)");
-  assert.equal((await settings()).accent, "#722ed1");
-  // a click outside closes it
-  await page.locator("main h1, main").first().click({ position: { x: 5, y: 5 } });
-  await pop.waitFor({ state: "hidden" });
+    // theme: Dark sets data-theme, then System and Light
+    await pop.locator(".seg label", { hasText: "Dark" }).click();
+    await page.waitForFunction(() => document.documentElement.dataset.theme === "dark");
+    assert.equal((await settings()).theme, "dark");
+    await pop.locator(".seg label", { hasText: "System" }).click();
+    await page.waitForFunction(() => document.documentElement.dataset.themeMode === "system");
+    await pop.locator(".seg label", { hasText: "Light" }).click();
+    await page.waitForFunction(() => document.documentElement.dataset.theme === "light");
 
-  await page.reload();
-  await primary.waitFor();
-  // the inline script in index.html applied the cached theme before the app ran
-  assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem("zero2dev.theme") ?? "{}").accent), "#722ed1");
-  assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), "light");
-  assert.equal(await css("backgroundColor", "rgb(114, 46, 209)"), "rgb(114, 46, 209)");
-  await openPop();
-  assert.equal(await pop.getByRole("radio", { name: "Purple" }).getAttribute("aria-checked"), "true");
+    // a custom colour: a bad value is explained; a light one gets dark text on buttons
+    const hex = pop.getByLabel("Custom accent colour (hex)");
+    await hex.fill("#zz0000");
+    await hex.press("Enter");
+    await pop.getByText(/Use a colour like #1677ff/).waitFor();
+    assert.equal(await hex.getAttribute("aria-invalid"), "true");
+    await hex.fill("#fadb14");
+    await hex.press("Enter");
+    await pop.getByText("Accent #fadb14 saved.").waitFor();
+    assert.equal(await css("color", "rgb(31, 31, 31)"), "rgb(31, 31, 31)");
+    // Undo puts the purple back
+    await pop.getByRole("button", { name: "Undo" }).click();
+    await pop.getByText("Change undone.").waitFor();
+    assert.equal((await settings()).accent, "#722ed1");
 
-  // theme: Dark sets data-theme, then System and Light
-  await pop.locator(".seg label", { hasText: "Dark" }).click();
-  await page.waitForFunction(() => document.documentElement.dataset.theme === "dark");
-  assert.equal((await settings()).theme, "dark");
-  await pop.locator(".seg label", { hasText: "System" }).click();
-  await page.waitForFunction(() => document.documentElement.dataset.themeMode === "system");
-  await pop.locator(".seg label", { hasText: "Light" }).click();
-  await page.waitForFunction(() => document.documentElement.dataset.theme === "light");
-
-  // a custom colour: a bad value is explained; a light one gets dark text on buttons
-  const hex = pop.getByLabel("Custom accent colour (hex)");
-  await hex.fill("#zz0000");
-  await hex.press("Enter");
-  await pop.getByText(/Use a colour like #1677ff/).waitFor();
-  assert.equal(await hex.getAttribute("aria-invalid"), "true");
-  await hex.fill("#fadb14");
-  await hex.press("Enter");
-  await pop.getByText("Accent #fadb14 saved.").waitFor();
-  assert.equal(await css("color", "rgb(31, 31, 31)"), "rgb(31, 31, 31)");
-  // Undo puts the purple back
-  await pop.getByRole("button", { name: "Undo" }).click();
-  await pop.getByText("Change undone.").waitFor();
-  assert.equal((await settings()).accent, "#722ed1");
-
-  // back to the defaults for the rest of the run
-  await pop.locator(".seg label", { hasText: "System" }).click();
-  await pop.getByRole("radio", { name: "Blue", exact: true }).click();
-  await page.waitForFunction(() => document.documentElement.style.getPropertyValue("--accent") === "#1677ff");
-  await page.keyboard.press("Escape");
-  const s = await settings();
-  assert.equal(s.theme, "system");
-  assert.equal(s.accent, "#1677ff");
-});
+    // back to the defaults for the rest of the run
+    await pop.locator(".seg label", { hasText: "System" }).click();
+    await pop.getByRole("radio", { name: "Blue", exact: true }).click();
+    await page.waitForFunction(() => document.documentElement.style.getPropertyValue("--accent") === "#1677ff");
+    await page.keyboard.press("Escape");
+    const s = await settings();
+    assert.equal(s.theme, "system");
+    assert.equal(s.accent, "#1677ff");
+  },
+);
 
 await step("no external network requests", async () => {
   assert.deepEqual(external, []);
