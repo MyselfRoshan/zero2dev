@@ -81,6 +81,7 @@ func TestServiceSettingsValidationAndFolder(t *testing.T) {
 }
 
 func TestPreviewAndCommand(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
 	e := newEnv(t)
 	dir := t.TempDir()
 	var pv struct {
