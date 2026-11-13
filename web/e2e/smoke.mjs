@@ -655,6 +655,12 @@ await step("settings: change and persist", async () => {
   assert.equal(await page.getByRole("button", { name: "Save settings" }).count(), 0);
   await page.getByLabel("HTTP proxy port").fill("9999");
   await page.getByRole("region", { name: "Unsaved changes" }).waitFor();
+  page.once("dialog", (dialog) => dialog.dismiss());
+  await page.evaluate(() => {
+    location.hash = "#/runtimes";
+  });
+  await page.waitForFunction(() => location.hash === "#/settings");
+  assert.equal(await page.getByLabel("HTTP proxy port").inputValue(), "9999");
   await page.getByRole("button", { name: "Discard" }).click();
   assert.equal(await page.getByLabel("HTTP proxy port").inputValue(), "8080");
   await page.getByRole("region", { name: "Unsaved changes" }).waitFor({ state: "detached" });

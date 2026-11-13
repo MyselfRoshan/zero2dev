@@ -1,6 +1,10 @@
 package main
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -9,15 +13,22 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"zero2dev/internal/api"
+	"zero2dev/internal/config"
 )
 
 func TestAlreadyRunning(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/status" && r.Header.Get("Authorization") == "Bearer good" {
-			w.WriteHeader(200)
+		if r.Header.Get("Authorization") != "" {
+			t.Error("probe leaked credentials")
+		}
+		if r.URL.Path == "/.well-known/zero2dev-instance" {
+			mac := hmac.New(sha256.New, []byte("good"))
+			mac.Write([]byte("zero2dev-instance:" + r.URL.Query().Get("challenge")))
+			io.WriteString(w, hex.EncodeToString(mac.Sum(nil)))
 			return
 		}
-		w.WriteHeader(401)
+		w.WriteHeader(404)
 	}))
 	defer srv.Close()
 	port := srv.Listener.Addr().(*net.TCPAddr).Port
@@ -49,5 +60,51 @@ func TestLogToFile(t *testing.T) {
 	}
 	if f, ok := out.(*os.File); ok {
 		f.Close()
+	}
+}
+
+func TestOwnership(t *testing.T) {
+	home := t.TempDir()
+	first, err := acquireOwnership(home)
+	if err != nil || first == nil {
+		t.Fatalf("first: %v", err)
+	}
+	second, err := acquireOwnership(home)
+	if err != nil || second != nil {
+		t.Fatalf("second acquired ownership: %v", err)
+	}
+	first.Close()
+	third, err := acquireOwnership(home)
+	if err != nil || third == nil {
+		t.Fatalf("reacquire: %v", err)
+	}
+	third.Close()
+}
+
+func TestAlreadyRunningUntrustedListener(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "" {
+			t.Error("token leaked")
+		}
+		http.Redirect(w, r, "/api/status", http.StatusFound)
+	}))
+	defer srv.Close()
+	if alreadyRunning(srv.Listener.Addr().(*net.TCPAddr).Port, "secret", srv.Client()) {
+		t.Fatal("accepted redirect")
+	}
+}
+
+func TestAlreadyRunningActualServer(t *testing.T) {
+	cfg := &config.Config{Token: "shared-token"}
+	srv := httptest.NewUnstartedServer(nil)
+	cfg.Port = srv.Listener.Addr().(*net.TCPAddr).Port
+	srv.Config.Handler = api.New(api.Deps{Cfg: cfg})
+	srv.Start()
+	defer srv.Close()
+	if !alreadyRunning(cfg.Port, cfg.Token, srv.Client()) {
+		t.Fatal("actual server proof rejected")
+	}
+	if alreadyRunning(cfg.Port, "wrong-token", srv.Client()) {
+		t.Fatal("accepted wrong owner")
 	}
 }

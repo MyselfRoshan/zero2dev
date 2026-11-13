@@ -1,6 +1,10 @@
 package main
 
 import (
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
@@ -60,18 +64,34 @@ func fail(err error) {
 	}
 }
 
-// alreadyRunning reports whether a Zero2Dev with this token answers on port.
+// alreadyRunning verifies a fresh challenge using the shared token without sending it.
 func alreadyRunning(port int, token string, c *http.Client) bool {
-	req, err := http.NewRequest("GET", "http://127.0.0.1:"+strconv.Itoa(port)+"/api/status", nil)
+	if token == "" {
+		return false
+	}
+	nonce := make([]byte, 32)
+	if _, err := rand.Read(nonce); err != nil {
+		return false
+	}
+	challenge := hex.EncodeToString(nonce)
+	req, err := http.NewRequest("GET", "http://127.0.0.1:"+strconv.Itoa(port)+"/.well-known/zero2dev-instance?challenge="+challenge, nil)
 	if err != nil {
 		return false
 	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Host = "127.0.0.1:" + strconv.Itoa(port)
-	resp, err := c.Do(req)
+	// Do not follow redirects or route loopback traffic through an environment proxy.
+	client := *c
+	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.Proxy = nil
+	defer transport.CloseIdleConnections()
+	client.Transport = transport
+	resp, err := client.Do(req)
 	if err != nil {
 		return false
 	}
-	resp.Body.Close()
-	return resp.StatusCode == http.StatusOK
+	defer resp.Body.Close()
+	proof, err := io.ReadAll(io.LimitReader(resp.Body, 65))
+	mac := hmac.New(sha256.New, []byte(token))
+	mac.Write([]byte("zero2dev-instance:" + challenge))
+	return err == nil && resp.StatusCode == http.StatusOK && hmac.Equal(proof, []byte(hex.EncodeToString(mac.Sum(nil))))
 }

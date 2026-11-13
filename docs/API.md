@@ -736,4 +736,4 @@ The UI keeps a copy of the built theme in `localStorage` (`zero2dev.theme`) only
 
 Stops every running service (databases cleanly, as on Ctrl+C) and exits the daemon. The answer is sent first; the daemon quits about 200 ms later. Behind the token like every route; `501` when the daemon was built without a quit handler. The tray icon's **Quit Zero2Dev** and Ctrl+C take the same path.
 
-A second `zero2dev.exe` started while one runs asks `GET /api/status` on the configured port with the token from `data/token`; if that answers 200 it opens the dashboard URL and exits with code 0.
+A second launch acquires neither the home lock nor the listening port and does not modify shared files. It verifies the running instance using `GET /.well-known/zero2dev-instance?challenge=<64 hex characters>`. This Host-checked public endpoint returns hex HMAC-SHA256 of `zero2dev-instance:<challenge>` keyed by the token. The second launch verifies this proof locally without sending the token, then opens the dashboard and exits with code 0.

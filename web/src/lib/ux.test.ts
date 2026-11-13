@@ -127,6 +127,23 @@ describe("databases", () => {
 });
 
 describe("runtime view preference", () => {
+  it("handles a throwing localStorage getter", async () => {
+    const { getRuntimeView, setRuntimeView } = await import("./ux");
+    const original = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      get() {
+        throw new Error("blocked");
+      },
+    });
+    try {
+      expect(getRuntimeView()).toBe("list");
+      expect(() => setRuntimeView("grid")).not.toThrow();
+    } finally {
+      if (original) Object.defineProperty(globalThis, "localStorage", original);
+      else Reflect.deleteProperty(globalThis, "localStorage");
+    }
+  });
   it("remembers list or grid, defaulting to list", async () => {
     const { getRuntimeView, setRuntimeView } = await import("./ux");
     const mem = new Map<string, string>();

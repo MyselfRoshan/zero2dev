@@ -3,8 +3,10 @@
 package api
 
 import (
+	"crypto/hmac"
 	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -129,6 +131,18 @@ func (s *Server) routes() {
 	s.handle("POST /api/shutdown", s.shutdown)
 	s.handle("/api/", func(http.ResponseWriter, *http.Request) error {
 		return apperr.NotFound("no such endpoint")
+	})
+	// A non-secret proof for second launches; the bearer token never crosses an unverified connection.
+	s.mux.HandleFunc("GET /.well-known/zero2dev-instance", func(w http.ResponseWriter, r *http.Request) {
+		challenge := r.URL.Query().Get("challenge")
+		if b, err := hex.DecodeString(challenge); err != nil || len(b) != 32 {
+			http.Error(w, "invalid challenge", http.StatusBadRequest)
+			return
+		}
+		mac := hmac.New(sha256.New, []byte(s.Cfg.Token))
+		mac.Write([]byte("zero2dev-instance:" + challenge))
+		w.Header().Set("Cache-Control", "no-store")
+		io.WriteString(w, hex.EncodeToString(mac.Sum(nil)))
 	})
 	s.mux.Handle("/", s.static())
 }

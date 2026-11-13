@@ -175,20 +175,17 @@ export type RuntimeView = "list" | "grid";
 const VIEW_KEY = "zero2dev.runtimes.view";
 
 /** The Runtimes page layout the user picked last (list when none, or storage is unavailable). */
-export function getRuntimeView(storage: Pick<Storage, "getItem"> | undefined = globalThis.localStorage): RuntimeView {
+export function getRuntimeView(storage?: Pick<Storage, "getItem">): RuntimeView {
   try {
-    return storage?.getItem(VIEW_KEY) === "grid" ? "grid" : "list";
+    return (storage ?? globalThis.localStorage)?.getItem(VIEW_KEY) === "grid" ? "grid" : "list";
   } catch {
     return "list";
   }
 }
 
-export function setRuntimeView(
-  v: RuntimeView,
-  storage: Pick<Storage, "setItem"> | undefined = globalThis.localStorage,
-): void {
+export function setRuntimeView(v: RuntimeView, storage?: Pick<Storage, "setItem">): void {
   try {
-    storage?.setItem(VIEW_KEY, v);
+    (storage ?? globalThis.localStorage)?.setItem(VIEW_KEY, v);
   } catch {
     /* private mode: the choice lasts for this page only */
   }
