@@ -93,6 +93,29 @@ func TestNoWritesOutsideHome(t *testing.T) {
 		t.Fatalf("daemon did not start in %s:\n%s", data, outBuf.String())
 	}
 
+	// A second launch must leave the active instance's temporary files and configuration intact.
+	sentinel := filepath.Join(data, "tmp", "active-install")
+	if err := os.WriteFile(sentinel, []byte("keep"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	tokenBefore, _ := os.ReadFile(filepath.Join(data, "token"))
+	stateBefore, _ := os.ReadFile(filepath.Join(data, "state.json"))
+	second := exec.Command(exe)
+	second.Dir, second.Env = cmd.Dir, cmd.Env
+	if output, err := second.CombinedOutput(); err != nil {
+		t.Fatalf("second launch: %v %s", err, output)
+	}
+	if b, err := os.ReadFile(sentinel); err != nil || string(b) != "keep" {
+		t.Fatal("second launch cleared active temp files")
+	}
+	if b, _ := os.ReadFile(filepath.Join(data, "token")); !bytes.Equal(b, tokenBefore) {
+		t.Fatal("second launch changed token")
+	}
+	if b, _ := os.ReadFile(filepath.Join(data, "state.json")); !bytes.Equal(b, stateBefore) {
+		t.Fatal("second launch changed state")
+	}
+	os.Remove(sentinel)
+
 	base := fmt.Sprintf("http://127.0.0.1:%d", port)
 	call := func(method, path string, body any, out any) int {
 		var rd io.Reader

@@ -38,8 +38,23 @@ export function parseHash(hash: string): Route {
 
 export const router = $state<{ route: Route }>({ route: parseHash(location.hash) });
 
+// Guards run before publishing the route, so a rejected hash change keeps the form mounted.
+const guards = new Set<(to: Route) => boolean>();
+export function beforeNavigate(guard: (to: Route) => boolean): () => void {
+  guards.add(guard);
+  return () => {
+    guards.delete(guard);
+  };
+}
+let acceptedHash = location.hash;
 window.addEventListener("hashchange", () => {
-  router.route = parseHash(location.hash);
+  const to = parseHash(location.hash);
+  if ([...guards].some((guard) => !guard(to))) {
+    history.replaceState(null, "", location.pathname + location.search + acceptedHash);
+    return;
+  }
+  acceptedHash = location.hash;
+  router.route = to;
 });
 
 /** The value of `?key=` in the hash, e.g. `#/services/svc_1/edit?back=list`. */

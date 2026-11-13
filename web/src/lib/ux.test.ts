@@ -146,3 +146,21 @@ describe("runtime view preference", () => {
     expect(() => setRuntimeView("grid", broken)).not.toThrow();
   });
 });
+
+it("handles a throwing localStorage getter", async () => {
+  const { getRuntimeView, setRuntimeView } = await import("./ux");
+  const original = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  Object.defineProperty(globalThis, "localStorage", {
+    configurable: true,
+    get() {
+      throw new Error("blocked");
+    },
+  });
+  try {
+    expect(getRuntimeView()).toBe("list");
+    expect(() => setRuntimeView("grid")).not.toThrow();
+  } finally {
+    if (original) Object.defineProperty(globalThis, "localStorage", original);
+    else Reflect.deleteProperty(globalThis, "localStorage");
+  }
+});

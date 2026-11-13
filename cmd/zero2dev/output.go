@@ -1,6 +1,10 @@
 package main
 
 import (
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
@@ -60,18 +64,51 @@ func fail(err error) {
 	}
 }
 
-// alreadyRunning reports whether a Zero2Dev with this token answers on port.
+// instanceProof answers a fresh challenge without disclosing the bearer token.
+func instanceProof(token, challenge string) string {
+	mac := hmac.New(sha256.New, []byte(token))
+	mac.Write([]byte("zero2dev-instance:" + challenge))
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+func instanceHandler(token string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && r.URL.Path == "/.well-known/zero2dev-instance" {
+			challenge := r.URL.Query().Get("challenge")
+			if b, err := hex.DecodeString(challenge); err != nil || len(b) != 32 {
+				http.Error(w, "invalid challenge", 400)
+				return
+			}
+			w.Header().Set("Cache-Control", "no-store")
+			fmt.Fprint(w, instanceProof(token, challenge))
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// alreadyRunning verifies knowledge of our token without sending it to the listener.
 func alreadyRunning(port int, token string, c *http.Client) bool {
-	req, err := http.NewRequest("GET", "http://127.0.0.1:"+strconv.Itoa(port)+"/api/status", nil)
+	if token == "" {
+		return false
+	}
+	nonce := make([]byte, 32)
+	if _, err := rand.Read(nonce); err != nil {
+		return false
+	}
+	challenge := hex.EncodeToString(nonce)
+	req, err := http.NewRequest("GET", "http://127.0.0.1:"+strconv.Itoa(port)+"/.well-known/zero2dev-instance?challenge="+challenge, nil)
 	if err != nil {
 		return false
 	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Host = "127.0.0.1:" + strconv.Itoa(port)
-	resp, err := c.Do(req)
+	// Never follow a redirect to an unrelated listener.
+	client := *c
+	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	resp, err := client.Do(req)
 	if err != nil {
 		return false
 	}
-	resp.Body.Close()
-	return resp.StatusCode == http.StatusOK
+	defer resp.Body.Close()
+	proof, err := io.ReadAll(io.LimitReader(resp.Body, 65))
+	return err == nil && resp.StatusCode == http.StatusOK && hmac.Equal(proof, []byte(instanceProof(token, challenge)))
 }

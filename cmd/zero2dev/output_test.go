@@ -12,13 +12,7 @@ import (
 )
 
 func TestAlreadyRunning(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/status" && r.Header.Get("Authorization") == "Bearer good" {
-			w.WriteHeader(200)
-			return
-		}
-		w.WriteHeader(401)
-	}))
+	srv := httptest.NewServer(instanceHandler("good", http.NotFoundHandler()))
 	defer srv.Close()
 	port := srv.Listener.Addr().(*net.TCPAddr).Port
 	c := &http.Client{Timeout: time.Second}
@@ -49,5 +43,18 @@ func TestLogToFile(t *testing.T) {
 	}
 	if f, ok := out.(*os.File); ok {
 		f.Close()
+	}
+}
+
+func TestAlreadyRunningDoesNotDiscloseToken(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "" || strings.Contains(r.URL.String(), "secret") {
+			t.Error("token disclosed")
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+	if alreadyRunning(srv.Listener.Addr().(*net.TCPAddr).Port, "secret", srv.Client()) {
+		t.Fatal("unverified listener accepted")
 	}
 }

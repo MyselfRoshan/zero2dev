@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -52,10 +53,36 @@ func main() {
 }
 
 func run() error {
-	cfg, err := config.FromEnv(os.Getenv)
+	cfg, err := config.ResolveEnv(os.Getenv)
 	if err != nil {
 		return err
 	}
+	// Bind before any shared writes; the listener owns this port until shutdown.
+	url := fmt.Sprintf("http://127.0.0.1:%d/#token=", cfg.Port)
+	ln, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(cfg.Port)))
+	if err != nil {
+		b, readErr := os.ReadFile(filepath.Join(cfg.Home, "token"))
+		token := strings.TrimSpace(string(b))
+		if readErr == nil && alreadyRunning(cfg.Port, token, &http.Client{Timeout: 3 * time.Second}) {
+			say("Zero2Dev is already running; opening the dashboard.")
+			if !cfg.NoBrowser {
+				openBrowser(url + token)
+			}
+			return nil
+		}
+		return fmt.Errorf("port %d on 127.0.0.1 is used by another program, so Zero2Dev cannot start. "+
+			"Close that program, or set the ZERO2DEV_PORT environment variable to another port: %w", cfg.Port, err)
+	}
+	defer ln.Close()
+	release, err := lockHome(cfg.Home)
+	if err != nil {
+		return err
+	}
+	defer release()
+	if err := cfg.Initialize(); err != nil {
+		return err
+	}
+	url += cfg.Token
 	// Everything the daemon (and children that inherit its env) writes to
 	// temp goes below <home>/tmp, never the system temp folder.
 	cfg.ApplyTempEnv()
@@ -108,6 +135,10 @@ func run() error {
 	// One way to stop for all: Ctrl+C, the tray's Quit, and POST /api/shutdown.
 	quitCtx, quit := context.WithCancel(context.Background())
 	defer quit()
+	shutdownDone := make(chan struct{})
+	removeConsoleQuit := consoleQuit(quit, shutdownDone)
+	defer removeConsoleQuit()
+	defer close(shutdownDone)
 	srv := api.New(api.Deps{
 		Cfg: cfg, Store: st, Hub: hub, Sup: sup, Runtimes: rt, Installer: inst, Sites: site,
 		Catalog: func() ([]model.CatalogEntry, error) { return catalog.Load(cfg.Home) }, Remote: remote,
@@ -117,23 +148,7 @@ func run() error {
 		Quit:       quit,
 	})
 
-	// Bind loopback only; never 0.0.0.0.
-	url := fmt.Sprintf("http://127.0.0.1:%d/#token=%s", cfg.Port, cfg.Token)
-	ln, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(cfg.Port)))
-	if err != nil {
-		// Started again while running (a second double-click): open the dashboard of the
-		// running one instead of failing.
-		if alreadyRunning(cfg.Port, cfg.Token, &http.Client{Timeout: 3 * time.Second}) {
-			say("Zero2Dev is already running; opening the dashboard.")
-			if !cfg.NoBrowser {
-				openBrowser(url)
-			}
-			return nil
-		}
-		return fmt.Errorf("port %d on 127.0.0.1 is used by another program, so Zero2Dev cannot start. "+
-			"Close that program, or set the ZERO2DEV_PORT environment variable to another port: %w", cfg.Port, err)
-	}
-	httpSrv := &http.Server{Handler: srv, ReadHeaderTimeout: 10 * time.Second}
+	httpSrv := &http.Server{Handler: instanceHandler(cfg.Token, srv), ReadHeaderTimeout: 10 * time.Second}
 
 	ctx, stop := signal.NotifyContext(quitCtx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
