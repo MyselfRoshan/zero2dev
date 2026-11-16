@@ -1,35 +1,35 @@
 [
   {
-    "id": "node-22.11.0-windows-amd64",
+    "id": "node-26.13.1-windows-amd64",
     "kind": "node",
-    "version": "22.11.0",
-    "name": "Node.js 22.11.0",
-    "url": "https://nodejs.org/dist/v22.11.0/node-v22.11.0-win-x64.zip",
+    "version": "26.13.1",
+    "name": "Node.js 26.13.1",
+    "url": "https://nodejs.org/dist/v26.13.1/node-v26.13.1-win-x64.zip",
     "checksum": {
       "type": "shasums",
-      "url": "https://nodejs.org/dist/v22.11.0/SHASUMS256.txt"
+      "url": "https://nodejs.org/dist/v26.13.1/SHASUMS256.txt"
     },
     "binaryRelPath": "node.exe",
     "stripComponents": 1,
     "os": "windows",
     "arch": "amd64",
-    "homepage": "https://nodejs.org/dist/v22.11.0/"
+    "homepage": "https://nodejs.org/dist/v26.13.1/"
   },
   {
-    "id": "node-22.11.0-linux-amd64",
+    "id": "node-26.13.1-linux-amd64",
     "kind": "node",
-    "version": "22.11.0",
-    "name": "Node.js 22.11.0",
-    "url": "https://nodejs.org/dist/v22.11.0/node-v22.11.0-linux-x64.tar.gz",
+    "version": "26.13.1",
+    "name": "Node.js 26.13.1",
+    "url": "https://nodejs.org/dist/v26.13.1/node-v26.13.1-linux-x64.tar.gz",
     "checksum": {
       "type": "shasums",
-      "url": "https://nodejs.org/dist/v22.11.0/SHASUMS256.txt"
+      "url": "https://nodejs.org/dist/v26.13.1/SHASUMS256.txt"
     },
     "binaryRelPath": "bin/node",
     "stripComponents": 1,
     "os": "linux",
     "arch": "amd64",
-    "homepage": "https://nodejs.org/dist/v22.11.0/"
+    "homepage": "https://nodejs.org/dist/v26.13.1/"
   },
   {
     "id": "go-1.23.3-windows-amd64",

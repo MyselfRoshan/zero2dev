@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -27,7 +26,9 @@ type resolved struct {
 	bin      string
 	args     []string
 	env      []string
-	added    []string // the part of env Zero2Dev adds (for the preview)
+	added    []string // the part of env Zero2Dev adds
+	shown    []string // added without the secret values, for the preview
+	info     []string // lines for the start log (what was loaded)
 	workdir  string
 	dataDir  string  // the service's data folder ("" when none)
 	db       *dbPlan // database services: data folder, first-start setup, clean stop
@@ -58,7 +59,7 @@ func (s *Supervisor) Preview(svc model.Service) Preview {
 	for _, f := range r.files {
 		files = append(files, f.Path)
 	}
-	return Preview{Program: r.bin, Args: nonNil(r.args), Env: nonNil(r.added), Workdir: r.workdir, DataDir: r.dataDir, Files: files, Warnings: nonNil(r.warnings)}
+	return Preview{Program: r.bin, Args: nonNil(r.args), Env: nonNil(r.shown), Workdir: r.workdir, DataDir: r.dataDir, Files: files, Warnings: nonNil(r.warnings)}
 }
 
 func nonNil(s []string) []string {
@@ -79,6 +80,7 @@ func (s *Supervisor) resolveWith(svc model.Service, d store.Data, lenient bool) 
 	r := &resolved{}
 	bin := strings.TrimSpace(svc.Command)
 	extraPath, version, runtimeBin := "", "", ""
+	var rtUsed *model.Runtime // the Zero2Dev runtime the service runs on (nil: a program from PATH or a command)
 	if bin == "" {
 		if svc.Kind == "custom" || svc.Kind == "" {
 			if !lenient {
@@ -90,6 +92,7 @@ func (s *Supervisor) resolveWith(svc model.Service, d store.Data, lenient bool) 
 			switch {
 			case err == nil && rt != nil:
 				bin, extraPath, version = rt.Binary, filepath.Dir(rt.Binary), rt.Version
+				rtUsed = rt
 			case err == nil:
 				bin = path
 			case lenient:
@@ -160,22 +163,14 @@ func (s *Supervisor) resolveWith(svc model.Service, d store.Data, lenient bool) 
 	}
 	r.bin, r.args = bin, plan.Args
 
-	port := strconv.Itoa(svc.Port)
-	add := func(kv string) { r.added = append(r.added, kv) }
-	for _, e := range plan.Env {
-		add(e)
+	// Order (later wins): runtime home, kind settings, database, .env, user Env, PORT.
+	added, shown, warns, info, err := serviceVars(svc, d, rtUsed, plan.Env, lenient)
+	if err != nil {
+		return nil, err
 	}
-	keys := make([]string, 0, len(svc.Env))
-	for k := range svc.Env {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	for _, k := range keys { // the user's own variables win over the settings
-		add(k + "=" + strings.ReplaceAll(svc.Env[k], "{port}", port))
-	}
-	if svc.Port > 0 {
-		add("PORT=" + port)
-	}
+	r.added, r.shown, r.info = added, shown, info
+	r.warnings = append(r.warnings, warns...)
+	add := func(kv string) { r.added, r.shown = append(r.added, kv), append(r.shown, kv) }
 	if isCaddy(svc, bin) {
 		// Caddy writes certificates and config below XDG_* (on every OS,
 		// else %AppData%\Caddy). Keep all of it inside the data folder.
@@ -302,6 +297,9 @@ func portFree(port int) bool {
 func (s *Supervisor) prepare(id string, r *resolved) error {
 	for _, w := range r.warnings {
 		s.logLine(id, "system", "note: "+w)
+	}
+	for _, line := range r.info {
+		s.logLine(id, "system", line)
 	}
 	for _, d := range r.dirs {
 		if err := os.MkdirAll(d, 0o755); err != nil {

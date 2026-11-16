@@ -1,6 +1,6 @@
 # Zero2Dev
 
-Version 0.0.3. A portable local development control panel: one program that opens in your browser at `http://127.0.0.1:7000`.
+Version 0.0.4. A portable local development control panel: one program that opens in your browser at `http://127.0.0.1:7000`.
 Register or install runtimes (Node, Go, Caddy, nginx, PHP and Java), define services (a command, arguments, a folder and a port),
 start and stop them with live logs, and map local domains such as `myapp.localhost` to a folder or a service.
 
@@ -13,20 +13,21 @@ The dashboard follows Ant Design's look, in light or dark, with an accent colour
 ## Portable by design
 
 Everything Zero2Dev stores lives in the `data` and `bin` folders **next to the program**. Nothing is written to your user profile,
-`AppData`, the registry or the Windows certificate store.
+`AppData`, the registry or the Windows certificate store, with one opt-in exception (below the layout).
 
 ```
 zero2dev.exe
 bin\                 Node, Go, Caddy and anything else installed from the catalog
 data\
   token              your access token
-  state.json         services, runtimes, sites, settings
+  state.json         services, runtimes, sites, projects, settings
   config\            Caddyfile and nginx.conf, generated, do not edit
   caddy\             Caddy's own data and config (kept out of %AppData%)
   nginx\             nginx's logs, temp files and local certificates
   mariadb\ mysql\ postgres\ redis\   database files, one folder per service
   code\ codium\ notepadpp\ heidisql\ dbeaver\   settings and workspaces of installed tools
   cache\             the list of versions found by "Check for new versions"
+  shims\             node.cmd, npm.cmd, php.cmd ... and activate scripts for your own terminals, generated
   logs\              one log per service, plus installer.log
   tmp\               work area for downloads, safe to delete when Zero2Dev is stopped
 ```
@@ -36,12 +37,17 @@ data\
 - Set `ZERO2DEV_HOME` to use a different data folder; installed runtimes then go to its `bin` subfolder.
 - Set `ZERO2DEV_BIN` to keep installed runtimes in a folder of your choice instead.
 
+**The one exception, off by default.** The Environment page lists the folders and variables Zero2Dev can put into your Windows environment, and each one has its own switch:
+the `shims\` folder, the folder of one particular runtime version, a folder of your own, `JAVA_HOME`, `GOROOT` and any variable you add. When you apply the ones you switched on,
+Zero2Dev edits your own user environment in the registry (`HKCU\Environment`, no administrator rights). It never overwrites a variable you already have, and switching an item off
+removes exactly what it added. Without it, `shims\` is only a folder of files, and you can use it in one terminal with `activate.cmd` or `activate.ps1`.
+
 What is _not_ isolated: the services you run are your own programs. A Node app still writes to the normal Windows temp folder, and
 runtimes you registered by path stay where they are.
 
 ## Quick start (Windows)
 
-Build prerequisites: [Go 1.24+](https://go.dev/dl/), [Node.js 22.18+](https://nodejs.org/) and [pnpm 10](https://pnpm.io/installation) (`corepack enable` sets up the pinned version).
+Build prerequisites: [Go 1.24+](https://go.dev/dl/), [Node.js 26](https://nodejs.org/) (the version the web UI is built and tested with) and [pnpm 10](https://pnpm.io/installation) (`corepack enable` sets up the pinned version).
 
 ```powershell
 cd D:\zero2dev
@@ -76,18 +82,40 @@ go build ./...              # now works
 `make` rebuilds the UI only when `internal/webui/dist` is missing; run `make web` to force a rebuild after UI changes.
 The release workflow builds the UI in CI too, so nothing generated has to be committed.
 
-## What 0.0.3 does
+## Tests in CI and releasing
 
-| Area              | Included                                                                                                                                                                                                                                                               |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Services          | Create, edit, delete; start, stop, restart; port-conflict checks; health probes; live and stored logs                                                                                                                                                                  |
-| Service settings  | Each type shows only the fields it uses and its settings, each with its default and what it does (no program docs needed), plus the exact command line; PHP extensions, a php.ini per service and one-click Xdebug                                                    |
-| Process safety    | Children die with the daemon (Windows Job Object, process groups elsewhere); no shell strings are ever run                                                                                                                                                             |
-| Runtimes          | Detect what is on your PATH, register a program by path, install Node, Go, Caddy, nginx, PHP and Java (many versions side by side, a default per runtime, a version per service, and a button to check for new versions), or import an archive you downloaded yourself |
-| Databases         | MariaDB, MySQL, PostgreSQL and Redis as services: data kept in the Zero2Dev folder, created on first start, local only, stopped cleanly; connection details on the service page                                                                                        |
-| Editors and tools | VS Code, VSCodium and Notepad++, HeidiSQL and DBeaver: **Open in** a project folder or a database with one click                                                                                                                                            |
-| Sites             | `*.localhost` domains for a folder or a service, served by a managed Caddy or nginx (your choice in Settings); optional HTTPS                                                                                                                                          |
-| Security          | Loopback only, bearer token, Host and Origin checks, single-use event tickets, Caddy admin API turned off                                                                                                                                                              |
+**Every pull request** and every push to `main` and `develop` runs [`.github/workflows/ci.yml`](.github/workflows/ci.yml):
+
+- the dashboard (format, lint, types, unit tests, build);
+- Go on Linux (`gofmt`, `go vet` for Linux and Windows, `go test -race`);
+- Go on a real Windows runner (`go vet`, `go test`, the GUI build);
+- the Playwright smoke test against the mock daemon.
+
+**Releases come from the `release` branch.** Merging into it publishes the version in `VERSION`, but only after the whole CI run passes again on the merged commit:
+
+1. `scripts/bump-version.sh 0.0.5` sets the version in `VERSION`, `web/package.json`, `cmd/zero2dev/main.go` and the installer, and opens a `## 0.0.5` section in `CHANGELOG.md`. Write that section: it becomes the release notes.
+2. Open a pull request into `release`. Besides the tests, CI checks that the version is new and written the same everywhere (`scripts/release-check.sh --require-new`).
+3. Merge it. [`.github/workflows/release.yml`](.github/workflows/release.yml) runs the tests, builds `zero2dev_<version>_windows_amd64.zip` / `.exe` with a checksum file and a build attestation, then creates the tag `v<version>` on the merged commit and the GitHub release (marked pre-release while the version is `0.x` or has a `-suffix`).
+
+Merging into `release` without a version bump publishes nothing: the run says the version is already released and stops. To try the build without releasing, start **release** by hand in the Actions tab (a dry run that keeps the files as a workflow artifact).
+
+## What 0.0.4 does
+
+| Area              | Included                                                                                                                                                                                                                                                                                           |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Services          | Create, edit, delete; start, stop, restart; port-conflict checks; health probes; live and stored logs; **Start all** and **Stop all**; an **Open terminal** button that uses the service's runtime versions                                                                                        |
+| Projects          | Group services and sites that belong together (an API, its database, its address). **Start** switches the project's sites on, makes sure the site server runs and starts the services; **Stop** stops them                                                                                         |
+| Start order       | A service can start after others, and an app can name its database. Start waits for them; Stop all and a project's Stop go the other way round. A dependency loop is refused with a message                                                                                                        |
+| Crash handling    | Optionally restart a service that exits by itself, after 1 s, 2 s, 4 s ... (at most 60 s), up to a limit you set. A tray balloon and a dashboard notice tell you when it crashed or gave up                                                                                                        |
+| Environment       | A `.env` file for any service type (relative to its folder); database variables (`DATABASE_URL`, `DB_HOST`, `DB_PORT` ...) for an app that names its database; the runtime's `JAVA_HOME` or `GOROOT`                                                                                               |
+| Service settings  | Each type shows only the fields it uses and its settings, each with its default and what it does (no program docs needed), plus the exact command line; PHP extensions, a php.ini per service and one-click Xdebug                                                                                 |
+| Process safety    | Children die with the daemon (Windows Job Object, process groups elsewhere); no shell strings are ever run                                                                                                                                                                                         |
+| Runtimes          | Detect what is on your PATH, register a program by path, install Node 26 LTS (and other versions), Go, Caddy, nginx, PHP and Java (many versions side by side, a default per runtime, a version per service, and a button to check for new versions), or import an archive you downloaded yourself |
+| Command line      | `data\shims\` has `node`, `npm`, `php`, `java`, `go` ... shims for the default runtimes and `activate.cmd` / `activate.ps1` / `activate.sh` for one terminal. The Environment page puts chosen folders and variables on your Windows user PATH, item by item (opt-in, reversible)                                                            |
+| Databases         | MariaDB, MySQL, PostgreSQL and Redis as services: data kept in the Zero2Dev folder, created on first start, local only, stopped cleanly; connection details on the service page                                                                                                                    |
+| Editors and tools | VS Code, VSCodium and Notepad++, HeidiSQL and DBeaver: **Open in** a project folder or a database with one click                                                                                                                                                                                   |
+| Sites             | `*.localhost` domains for a folder or a service, served by a managed Caddy or nginx (your choice in Settings); optional HTTPS; **Enable all** and **Disable all** with one restart of the site server                                                                                              |
+| Security          | Loopback only, bearer token, Host and Origin checks, single-use event tickets, Caddy admin API turned off                                                                                                                                                                                          |
 
 Not yet: ports 80/443 and hosts-file domains, database templates, auto-update, code signing.
 
@@ -153,6 +181,12 @@ The installer only downloads from URLs in the catalog and verifies each archive 
 published. Some publishers (nginx.org) publish none: those downloads are marked unverified, Zero2Dev asks before installing them,
 and installing them means trusting the download source and the HTTPS connection.
 Unsigned programs that download and run executables can trigger antivirus heuristics.
+
+Zero2Dev changes nothing in the registry unless you switch items on in the Environment page and apply them. Every item is off by default.
+It writes only to your own user environment (`HKCU\Environment`, never the machine-wide one), keeps a copy of the previous PATH in `data\shims\.registry-backup.json`
+and undoes only its own changes when you switch an item off. The registry code is tested against a fake registry; a real Windows check is still pending, so try it on a
+machine where you can recover your PATH. Known limits: the `.cmd` shims read the OEM code page, so a data folder with non-ASCII characters in its path can break them,
+and PowerShell's default execution policy can block `activate.ps1` (use `Set-ExecutionPolicy -Scope Process Bypass` in that window).
 
 ## License
 

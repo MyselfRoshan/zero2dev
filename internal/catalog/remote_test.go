@@ -209,8 +209,8 @@ func TestRefreshCachesAndMerges(t *testing.T) {
 		return false
 	}
 	if has("nginx-1.26.2-windows-amd64") || !has("nginx-1.24.0-windows-amd64") || !has("php-8.4.1-windows-amd64") || !has("java-21.0.1-b9-linux-amd64") ||
-		!has("php-7.1.33-windows-amd64") || !has("node-20.18.0-windows-amd64") || !has("go-1.22.9-linux-amd64") || !has("caddy-2.7.6-windows-amd64") ||
-		has("node-22.11.0-windows-amd64") || has("go-1.23.3-windows-amd64") || has("caddy-2.8.4-windows-amd64") {
+		!has("php-7.1.33-windows-amd64") || !has("node-26.14.0-windows-amd64") || !has("node-24.15.0-windows-amd64") || !has("go-1.22.9-linux-amd64") || !has("caddy-2.7.6-windows-amd64") ||
+		has("node-26.13.1-windows-amd64") || has("go-1.23.3-windows-amd64") || has("caddy-2.8.4-windows-amd64") {
 		t.Fatalf("added = %v", added)
 	}
 	es, err := Load(home)
@@ -226,8 +226,8 @@ func TestRefreshCachesAndMerges(t *testing.T) {
 		}
 		seen[e.ID] = true
 	}
-	// php: 2 current + 2 archived lines; java: 3 versions x 2 OS; node/go/caddy: the 2 built-in entries plus 2 new lines x 2 OS.
-	if counts["php"] != 4 || counts["java"] != 6 || counts["nginx"] != 3 || counts["node"] != 6 || counts["go"] != 4 || counts["caddy"] != 4 {
+	// php: 2 current + 2 archived lines; java: 3 versions x 2 OS; node: the 2 built-in 26.13.1 entries plus 26.14.0, 25, 24 and 22 x 2 OS; go/caddy: the 2 built-in entries plus 2 new lines x 2 OS.
+	if counts["php"] != 4 || counts["java"] != 6 || counts["nginx"] != 3 || counts["node"] != 10 || counts["go"] != 4 || counts["caddy"] != 4 {
 		t.Fatalf("counts %v", counts)
 	}
 	// A second refresh adds nothing new.
@@ -318,10 +318,11 @@ func TestAnnotateLatestPerLine(t *testing.T) {
 }
 
 const nodeJSON = `[
- {"version":"v23.1.0","lts":false,"files":["win-x64-zip","linux-x64"]},
- {"version":"v22.11.0","lts":"Jod","files":["win-x64-zip","linux-x64","osx-x64-tar"]},
- {"version":"v22.10.0","lts":false,"files":["win-x64-zip","linux-x64"]},
- {"version":"v20.18.0","lts":"Iron","files":["win-x64-zip","linux-x64"]},
+ {"version":"v26.14.0","lts":"Lithium","files":["win-x64-zip","linux-x64","osx-x64-tar"]},
+ {"version":"v26.13.1","lts":"Lithium","files":["win-x64-zip","linux-x64"]},
+ {"version":"v25.9.0","lts":false,"files":["win-x64-zip","linux-x64"]},
+ {"version":"v24.15.0","lts":"Krypton","files":["win-x64-zip","linux-x64"]},
+ {"version":"v22.23.5","lts":"Jod","files":["win-x64-zip","linux-x64"]},
  {"version":"v12.22.12","lts":"Erbium","files":["win-x64-zip","linux-x64"]},
  {"version":"v0.12.18","lts":false,"files":["win-x64-zip"]}
 ]`
@@ -364,20 +365,33 @@ func TestParseNode(t *testing.T) {
 	for _, e := range es {
 		got[e.ID] = e
 	}
-	if len(es) != 6 || got["node-22.11.0-windows-amd64"].Version == "" || got["node-22.10.0-windows-amd64"].ID != "" || got["node-12.22.12-windows-amd64"].ID != "" {
+	if len(es) != 8 || got["node-26.14.0-windows-amd64"].Version == "" || got["node-26.13.1-windows-amd64"].ID != "" || got["node-12.22.12-windows-amd64"].ID != "" {
 		t.Fatalf("newest patch of each major >= 14 only: %v", len(es))
 	}
-	w, l := got["node-22.11.0-windows-amd64"], got["node-23.1.0-linux-amd64"]
-	if w.URL != "https://nodejs.org/dist/v22.11.0/node-v22.11.0-win-x64.zip" || w.Checksum.Type != "shasums" || w.Checksum.URL != "https://nodejs.org/dist/v22.11.0/SHASUMS256.txt" ||
-		w.BinaryRelPath != "node.exe" || w.StripComponents != 1 || w.Line != "22" || w.Channel != "lts" || l.Channel != "" || l.BinaryRelPath != "bin/node" || l.Line != "23" {
+	w, l := got["node-26.14.0-windows-amd64"], got["node-25.9.0-linux-amd64"]
+	if w.URL != "https://nodejs.org/dist/v26.14.0/node-v26.14.0-win-x64.zip" || w.Checksum.Type != "shasums" || w.Checksum.URL != "https://nodejs.org/dist/v26.14.0/SHASUMS256.txt" ||
+		w.BinaryRelPath != "node.exe" || w.StripComponents != 1 || w.Line != "26" || w.Channel != "lts" || l.Channel != "" || l.BinaryRelPath != "bin/node" || l.Line != "25" {
 		t.Fatalf("%+v / %+v", w, l)
 	}
-	// Same id and URL as the built-in manifest entry, so the merge dedupes it.
+	// When the built-in release is the newest of its major, the remote parser yields the same id and URLs, so the merge dedupes it.
+	only, err := parseNode([]byte(`[{"version":"v26.13.1","lts":"Lithium","files":["win-x64-zip","linux-x64"]}]`), "https://nodejs.org/dist/")
+	if err != nil {
+		t.Fatal(err)
+	}
 	builtin, _ := Parse(defaultManifest)
-	for _, b := range builtin {
-		if b.ID == w.ID && (b.URL != w.URL || b.Checksum.URL != w.Checksum.URL) {
-			t.Fatalf("remote and built-in node entry differ: %+v vs %+v", b, w)
+	agreed := 0
+	for _, r := range only {
+		for _, b := range builtin {
+			if b.ID == r.ID {
+				agreed++
+				if b.URL != r.URL || b.Checksum.URL != r.Checksum.URL || b.BinaryRelPath != r.BinaryRelPath || b.StripComponents != r.StripComponents {
+					t.Fatalf("remote and built-in node entry differ: %+v vs %+v", b, r)
+				}
+			}
 		}
+	}
+	if agreed != 2 {
+		t.Fatalf("the built-in node entries must match the remote ids, matched %d", agreed)
 	}
 	for _, e := range es {
 		if err := validate(&e); err != nil {

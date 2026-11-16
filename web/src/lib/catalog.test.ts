@@ -76,7 +76,7 @@ const catalog = [
     unverified: true,
   }),
   e({ id: "java-21.0.5", kind: "java", version: "21.0.5", line: "21", channel: "lts", latest: true }),
-  e({ id: "node-22.11.0", kind: "node", version: "22.11.0", line: "22", channel: "lts", latest: true }),
+  e({ id: "node-26.13.1", kind: "node", version: "26.13.1", line: "26", channel: "lts", latest: true }),
 ];
 
 describe("compareVersions / sorting", () => {

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { api } from "../lib/api";
+  import { setAllSites } from "../lib/actions";
   import { consumeNewFlag } from "../lib/router.svelte";
   import { app, attempt, lists, loadSites, loadStatus } from "../lib/store.svelte";
   import type { Site } from "../lib/types";
@@ -46,6 +47,19 @@
     if (r) await loadSites();
   }
 
+  // Enable all and Disable all change every site with one config write and one site server restart.
+  const disabledCount = $derived(lists.sites.filter((s) => !s.enabled).length);
+  const enabledCount = $derived(lists.sites.length - disabledCount);
+  let bulk = $state(false);
+  async function all(on: boolean) {
+    bulk = true;
+    try {
+      await setAllSites(on);
+    } finally {
+      bulk = false;
+    }
+  }
+
   async function confirmDelete() {
     if (!deleting) return;
     const s = deleting;
@@ -62,6 +76,10 @@
 </script>
 
 <PageHead sub="Friendly addresses like shop.localhost for your services, ports or folders.">
+  {#if lists.sites.length > 0}
+    <button class="btn" type="button" disabled={bulk || disabledCount === 0} onclick={() => all(true)} aria-label="Enable all sites" title="Switches every site on with one restart of the site server" data-testid="enable-all"><Icon name="play" size={14} /> Enable all</button>
+    <button class="btn" type="button" disabled={bulk || enabledCount === 0} onclick={() => all(false)} aria-label="Disable all sites" title="Switches every site off with one restart of the site server" data-testid="disable-all"><Icon name="stop" size={14} /> Disable all</button>
+  {/if}
   <button class="btn primary" onclick={() => (editing = "new")} data-tour="new-site"><Icon name="plus" /> New site</button>
 </PageHead>
 

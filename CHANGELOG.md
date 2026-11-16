@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.0.4
+
+- **Stop all stops things in a safe order.** One request to the daemon (`POST /api/services/stop-all`) stops apps first, then databases, then the web server (Caddy or nginx), so an app never loses its database while it is still running. Services in the same group stop at the same time, and the answer lists what stopped and what did not. Before, the dashboard stopped services one by one in list order, and only while the page was open.
+  - The dashboard's **Stop all** uses it and says how many services stopped, or names the ones that did not.
+  - The tray menu has **Stop all services** (Zero2Dev keeps running); a balloon reports the result.
+  - A service that others depend on (see **Start order**) now stops after them. `?project=<id>` stops only the services of one project.
+- **Start all, Stop all, Enable all and Disable all are the daemon's job now.** The buttons call one request each instead of looping in the page.
+  - **Services** page: **Start all** and **Stop all** at the top. The dashboard's two buttons use the same requests (`POST /api/services/start-all`, `stop-all`).
+  - **Sites** page: **Enable all** and **Disable all** (`POST /api/sites/enable-all`, `disable-all`). All sites change with one config write and **one** restart of Caddy or nginx, not one per site. The answer is `{"changed": n}`.
+  - Both start and stop accept `?project=<id>`.
+- **Projects.** A named group of services and sites: `#/projects`, and a **Projects** box on the dashboard.
+  - **Start** switches the project's sites on, makes sure the site server runs, and starts the services with the ones they depend on. **Stop** stops the project's services only; sites, the site server and other services keep running.
+  - Create, edit and delete from the page. Deleting a project keeps its services and sites. A deleted service or site leaves its projects by itself.
+  - API: `GET/POST /api/projects`, `PUT/DELETE /api/projects/{id}`; event `projects.changed`. Projects are kept in `state.json`.
+- **Start order.** A service can **start after** other services, and an app can name its **Database** (Advanced in the service form).
+  - `POST /api/services/{id}/start` starts what is not running first and waits for it (about 30 s at most per step of the chain), then starts the service. If a dependency fails, the service is not started and the answer is `409` naming it.
+  - **Start all** and a project's **Start** start in waves: the site server, then databases, then apps, each after what it needs. The dependents of a service that fails are reported as failed ("waits for X") and are not started.
+  - **Stop all** goes the other way round. Without any dependencies set, the order is the same as before.
+  - A dependency loop cannot be saved: the `400` names it (`A -> B -> A`).
+  - Services that start with Zero2Dev (**Start automatically**) are not ordered.
+- **Restart on crash.** Under Advanced, **Restart if it crashes** starts a service again when it exits by itself or never passes its health check.
+  - Delays of 1 s, 2 s, 4 s ... up to 60 s; **Give up after** 1 to 20 attempts (5 by default). The count starts again after the service has run for a minute, or on a manual Start. Stop, Stop all, delete and quitting cancel a pending restart.
+  - **Notice on a crash:** a tray balloon on the first crash, one when Zero2Dev gives up, and one for a crash with no restart planned (the retries in between are silent), plus a notice with **See logs** and **Dismiss** on the dashboard and the service page.
+  - API: `restartOnCrash` and `restartLimit` on services, `restarts` in the service status, and the event `service.crashed` (`id, name, error, attempt, limit, retryInSec, gaveUp`; `limit` 0 means no restart is planned).
+- **A `.env` file for any service type.** Under Advanced, a path relative to the project folder; its `KEY=VALUE` lines are added to the service's environment (comments, `export`, quotes and multi-line values work; no `$VAR` expansion).
+  - It replaces the Node-only **.env file** setting (`--env-file`); a Node service that had one is moved over by itself, so no old state is lost.
+  - A missing file is a warning, not an error. A path outside the project folder is refused. In **What will run**, values whose names look secret (`PASSWORD`, `TOKEN`, `KEY` ...) are shown as `(hidden)`.
+  - **Environment order** (later wins): the runtime on `PATH`, `JAVA_HOME` / `GOROOT` when a Zero2Dev runtime is used, the type's variables, the database variables, the `.env` file, the service's own variables, `PORT`.
+- **Database variables.** A service with a **Database** gets `DB_CONNECTION`, `DB_HOST`, `DB_PORT`, `DB_USERNAME`, `DB_USER`, an empty `DB_PASSWORD` and `DATABASE_URL` (Redis: `DB_CONNECTION`, `DB_HOST`, `DB_PORT`, `DB_PASSWORD` and `REDIS_URL`). The databases only listen on `127.0.0.1` and have no password.
+- **Open terminal.** A button on the service page opens a console in the service's folder with the runtime versions the service uses on `PATH`, plus `JAVA_HOME` / `GOROOT`, the database variables, the `.env` file and the service's variables: Windows Terminal when `wt.exe` is found, otherwise a Command Prompt window. API: `POST /api/services/{id}/terminal` (`204`; `501` off Windows). The environment hand-over has not been checked in a real window yet.
+- **Use the runtimes from your own terminals.** `data\shims\` holds `node`, `npm`, `npx`, `php`, `java`, `javac`, `jar`, `go`, `gofmt` and the database client tools (`mysql`, `psql`, `redis-cli` ...) for the default runtime of each kind, plus `activate.cmd`, `activate.ps1` and `activate.sh`. They are rewritten on every runtime change, **Make default** included. **Settings > Command line** shows the folder and the lines to run in one terminal.
+  - **A new Environment page, item by item, nothing on by default.** Instead of one all-or-nothing switch, every folder and variable has its own switch: the shims folder, the folder of **one particular runtime version** (only Node 26.13.1, only Java 17 ...), a folder of your own, `JAVA_HOME`, `GOROOT`, and any variable you add (the default version of a runtime, one version you pick, or a value you type). **Quick start** sets up the default versions in one click. The list order is the PATH order (up/down arrows), each folder says which commands it gives and which ones a folder above already wins, and each row has one plain status line with a way out of problems (*No Java runtime is installed*, **Install Java**). A review bar lists exactly what **Apply** will change, the page then says what was done and which command to try in a new terminal, and **Remove everything** undoes it all. It is the one exception to "nothing is written to the registry": it edits only your own user environment (`HKCU\Environment`, no administrator rights), the registry type and the rest of `Path` stay as they were, and the old `Path` is saved in `data\shims\.registry-backup.json`. API: `GET` and `PUT /api/environment`; the `registerPath` setting is gone.
+  - **Reversible and careful:** a variable you already have is never overwritten, and a folder you already had on `Path` is never removed. Switching an item off removes only what Zero2Dev added. A `default` variable follows **Make default**; deleting a runtime takes its items away. If Windows refuses a change, `PUT /api/environment` answers `409` with the reason and nothing is saved.
+  - Known limits: the registry code is tested against a fake registry, and a real Windows check is still to do. The `.cmd` shims read the OEM code page, so a data folder with non-ASCII characters in its path can break them. PowerShell's default execution policy can block `activate.ps1`.
+- **Node.js 26 LTS** (26.13.1, "Lithium") replaces Node 22 in the built-in catalog, so **Install** offers it from the start. Zero2Dev's own build uses it too: CI runs Node 26, `@types/node` is 26, and the README names Node 26 as the version the web UI is built with (vite-plus needs 22.18, 24.11 or 26 and newer).
+- Fixed: a test that expected "no PHP installed" failed on machines that have PHP (such as the GitHub runners); it now runs with an empty PATH.
+- Version 0.0.4. The plan for this release is in `docs/ROADMAP.md`.
+
 ## 0.0.3
 
 - **Databases**: MariaDB, MySQL, PostgreSQL and Redis can be installed from the Runtimes page and run as services.

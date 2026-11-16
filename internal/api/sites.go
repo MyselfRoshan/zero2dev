@@ -61,3 +61,31 @@ func (s *Server) deleteSite(w http.ResponseWriter, r *http.Request) error {
 	w.WriteHeader(http.StatusNoContent)
 	return nil
 }
+
+// POST /api/sites/enable-all and /disable-all[?project=id]: switch every site
+// (or the sites of one project) on or off with one config write and one site
+// server restart. Answers {"changed": n}, the number of sites that changed.
+func (s *Server) enableAllSites(w http.ResponseWriter, r *http.Request) error {
+	return s.setAllSitesEnabled(w, r, true)
+}
+
+func (s *Server) disableAllSites(w http.ResponseWriter, r *http.Request) error {
+	return s.setAllSitesEnabled(w, r, false)
+}
+
+func (s *Server) setAllSitesEnabled(w http.ResponseWriter, r *http.Request, on bool) error {
+	p, err := s.projectParam(r)
+	if err != nil {
+		return err
+	}
+	var ids []string // nil: every site
+	if p != nil {
+		ids = append([]string{}, p.SiteIDs...) // non-nil: an empty project has no sites
+	}
+	n, err := s.Sites.SetEnabledMany(ids, on)
+	if err != nil {
+		return err
+	}
+	writeJSON(w, http.StatusOK, map[string]int{"changed": n})
+	return nil
+}

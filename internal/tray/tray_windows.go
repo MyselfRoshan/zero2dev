@@ -76,9 +76,10 @@ const (
 	hwndMessage = ^uintptr(2) // (HWND)-3
 	smCxSmIcon  = 49
 
-	cmdOpen   = 1
-	cmdFolder = 2
-	cmdQuit   = 3
+	cmdOpen    = 1
+	cmdFolder  = 2
+	cmdQuit    = 3
+	cmdStopAll = 4
 )
 
 type wndClassEx struct {
@@ -326,6 +327,9 @@ func (t *icon) showMenu() {
 		add(cmdFolder, ft)
 	}
 	pAppendMenuW.Call(m, mfSeparator, 0, 0)
+	if t.menu.OnStopAll != nil {
+		add(cmdStopAll, "Stop all services")
+	}
 	add(cmdQuit, "Quit Zero2Dev")
 	pSetMenuDefaultItem.Call(m, cmdOpen, 0)
 	var p point
@@ -347,6 +351,8 @@ func (t *icon) run(cmd int) {
 		call(t.menu.OnOpen)
 	case cmdFolder:
 		call(t.menu.OnFolder)
+	case cmdStopAll:
+		call(t.menu.OnStopAll)
 	case cmdQuit:
 		call(t.menu.OnQuit)
 	}

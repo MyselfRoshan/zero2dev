@@ -47,6 +47,14 @@
   import moon from "@iconify-icons/lucide/moon";
   import monitor from "@iconify-icons/lucide/monitor";
   import palette from "@iconify-icons/lucide/palette";
+  import projects from "@iconify-icons/lucide/folder-kanban";
+  import terminal from "@iconify-icons/lucide/square-terminal";
+  import variable from "@iconify-icons/lucide/variable";
+  import chevronUp from "@iconify-icons/lucide/chevron-up";
+  import chevronDown from "@iconify-icons/lucide/chevron-down";
+  import reorder from "@iconify-icons/lucide/arrow-up-down";
+  import undo from "@iconify-icons/lucide/undo-2";
+  import sparkles from "@iconify-icons/lucide/sparkles";
 
   type Props = { name: string; size?: number; label?: string };
   let { name, size = 16, label }: Props = $props();
@@ -54,7 +62,8 @@
     dashboard, services, runtimes, sites, logs, settings, play, stop, restart, plus, trash, edit,
     external, copy, check, x, download, search, pause, arrowDown, broom, alert, key, back, folder,
     info, power, grid, list, help, book, activity, database, arrowRight, lightbulb, rocket, lifebuoy,
-    circleCheck, clock, compass, playCircle, sun, moon, monitor, palette,
+    circleCheck, clock, compass, playCircle, sun, moon, monitor, palette, projects, terminal, variable,
+    chevronUp, chevronDown, reorder, undo, sparkles,
   };
   const icon = $derived(icons[name as keyof typeof icons]);
 </script>

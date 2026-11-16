@@ -16,12 +16,14 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
 	"zero2dev/internal/api"
 	"zero2dev/internal/catalog"
 	"zero2dev/internal/config"
+	"zero2dev/internal/envreg"
 	"zero2dev/internal/events"
 	"zero2dev/internal/installer"
 	"zero2dev/internal/launch"
@@ -36,7 +38,7 @@ import (
 )
 
 // version is overridden with -ldflags "-X main.version=...".
-var version = "0.0.3"
+var version = "0.0.4"
 
 func main() {
 	setupOutput()
@@ -113,7 +115,19 @@ func run() error {
 	inst.Version = version
 	// A new caddy (or, when nginx serves the sites, nginx) runtime gets its
 	// site server service automatically.
-	rt.OnChange = func() { _, _ = site.EnsureServers() }
+	// Every runtime change also refreshes the shims folder and the items of the Environment
+	// page that follow a runtime (JAVA_HOME of the default Java, ...), when the user turned
+	// any on.
+	refreshShims := func() {
+		if err := envreg.Refresh(cfg.Home, st.Snapshot()); err != nil {
+			say("shims: %v", err)
+		}
+	}
+	rt.OnChange = func() {
+		_, _ = site.EnsureServers()
+		refreshShims()
+		hub.Publish("environment.changed", struct{}{})
+	}
 
 	if _, err := site.EnsureServers(); err != nil {
 		return err
@@ -121,6 +135,7 @@ func run() error {
 	if err := site.Regenerate(); err != nil {
 		return fmt.Errorf("cannot write the site server config: %w", err)
 	}
+	refreshShims()
 
 	remote := &catalog.Remote{
 		Home: cfg.Home, Version: version,
@@ -131,6 +146,15 @@ func run() error {
 		NodeURL: os.Getenv("ZERO2DEV_NODE_URL"), NodeBase: os.Getenv("ZERO2DEV_NODE_BASE_URL"),
 		GoURL: os.Getenv("ZERO2DEV_GO_URL"), GoBase: os.Getenv("ZERO2DEV_GO_BASE_URL"),
 		CaddyURL: os.Getenv("ZERO2DEV_CADDY_URL"), PHPArchiveURL: os.Getenv("ZERO2DEV_PHP_ARCHIVE_URL"),
+	}
+	// Crash balloons go to the tray icon once it is up (it is created after the API starts).
+	var trayIcon atomic.Value // tray.Icon
+	sup.OnCrash = func(c supervisor.Crash) {
+		if title, text := crashNotice(c); title != "" {
+			if ti, ok := trayIcon.Load().(tray.Icon); ok {
+				ti.Notify(title, text)
+			}
+		}
 	}
 	// One way to stop for all: Ctrl+C, the tray's Quit, and POST /api/shutdown.
 	quitCtx, quit := context.WithCancel(context.Background())
@@ -145,6 +169,9 @@ func run() error {
 		UI: webui.FS(), Version: version, Started: time.Now(),
 		PickFolder: folderPicker(),
 		Launch:     launch.Start,
+		Terminal:   launch.OpenTerminal,
+		EnvApply:   func(d store.Data) error { return envreg.Apply(cfg.Home, d) },
+		EnvReport:  func(d store.Data) envreg.Report { return envreg.Inspect(cfg.Home, d) },
 		Quit:       quit,
 	})
 
@@ -161,13 +188,21 @@ func run() error {
 	openOnStart := !cfg.NoBrowser && st.Snapshot().Settings.OpenBrowserOnStart
 
 	// The tray icon is how Zero2Dev is found and stopped without a console window.
+	var ti tray.Icon
 	ti, terr := tray.Start(tray.Menu{
 		Tooltip:  "Zero2Dev",
 		OnOpen:   func() { openBrowser(url) },
 		OnFolder: func() { openFolder(cfg.Home) },
-		OnQuit:   quit,
+		OnStopAll: func() {
+			title, text := stopAllNotice(sup.StopAllOrdered())
+			if ti != nil {
+				ti.Notify(title, text)
+			}
+		},
+		OnQuit: quit,
 	})
 	if terr == nil {
+		trayIcon.Store(ti)
 		defer ti.Close()
 		go trayTooltip(ctx, ti, st, sup)
 		if !openOnStart {
@@ -237,6 +272,31 @@ func openFolder(dir string) {
 	if cmd.Start() == nil {
 		go func() { _ = cmd.Wait() }()
 	}
+}
+
+// stopAllNotice words the tray balloon shown after "Stop all services".
+func stopAllNotice(rep supervisor.StopReport) (title, text string) {
+	plural := func(n int) string {
+		if n == 1 {
+			return "1 service"
+		}
+		return fmt.Sprintf("%d services", n)
+	}
+	switch {
+	case len(rep.Failed) > 0:
+		names := make([]string, 0, 3)
+		for i, f := range rep.Failed {
+			if i == 3 {
+				names = append(names, fmt.Sprintf("and %d more", len(rep.Failed)-3))
+				break
+			}
+			names = append(names, f.Name)
+		}
+		return "Some services did not stop", fmt.Sprintf("Stopped %d. Still running: %s.", len(rep.Stopped), strings.Join(names, ", "))
+	case len(rep.Stopped) == 0:
+		return "Nothing to stop", "No services were running."
+	}
+	return "Services stopped", "Stopped " + plural(len(rep.Stopped)) + ". Zero2Dev is still running."
 }
 
 // trayTooltip keeps the tray's hover text on the number of running services.

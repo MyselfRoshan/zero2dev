@@ -15,7 +15,7 @@ Status: **done** (shipped and tested), **in progress** (code exists but is not f
 | 0.0.1 | Services, runtimes, sites, portable data folder | done |
 | 0.0.2 | Many versions side by side, version discovery, nginx as site server | done |
 | 0.0.3 | Databases, code editors, database tools, settings for each service type, no console window (tray icon), a new dashboard, in-app tutorials, and an Ant Design look with your own accent colour | done |
-| 0.0.4 | **Projects**: one click starts the whole stack | planned |
+| 0.0.4 | **Projects**: one click starts the whole stack, in the right order, and tells you when something crashes; a `.env` file and database variables for every service; runtimes usable from your own terminals; Node.js 26 LTS | done (a few checks on a real Windows desktop are still open, see below) |
 | 0.0.5 | **Data**: databases you can create, fill and reset; snapshots of a whole environment | planned |
 | 0.0.6 | **More languages** and **one-click new projects** for each language and framework | planned |
 | 0.0.7 | **WSL aware**: run, detect and open projects that live in WSL | planned |
@@ -28,48 +28,57 @@ Checked against the code in this repository.
 
 | Area | What a developer gets | Status |
 | --- | --- | --- |
-| Portable | Everything in `data\` and `bin\` next to the program; no AppData, registry or certificate store changes | done |
-| Runtimes | Install Node, Go, Caddy, nginx, PHP and Java; detect what is on PATH; register a program by path | done |
+| Portable | Everything in `data\` and `bin\` next to the program; no AppData, registry or certificate store changes, except one opt-in, reversible switch for the user PATH (off by default) | done |
+| Runtimes | Install Node (26 LTS and older), Go, Caddy, nginx, PHP and Java; detect what is on PATH; register a program by path | done |
 | Versions | Many versions side by side, a default per runtime, a version per service, **Check for new versions** | done |
 | Downloads | Verified against the publisher's SHA-256, SHA-512 or MD5; download proxy; **Import file** when downloads are blocked | done |
-| Services | Create, edit, start, stop, restart; port-conflict checks; health checks; start with Zero2Dev | done |
+| Services | Create, edit, start, stop, restart; port-conflict checks; health checks; start with Zero2Dev; **Start all** / **Stop all** on the Services page and the dashboard, done by the daemon | done |
+| Projects | A named group of services and sites; **Start** (sites on, site server running, services with their dependencies) and **Stop** per project, on the Projects page and the dashboard | done |
+| Start order | **Starts after** and **Database** per service; Start waits for what a service needs; Start all, a project's Start and **Stop all** (apps, databases, site server, reversed dependencies); loops refused | done |
+| Crash handling | **Restart if it crashes** (1 s, 2 s, 4 s ... up to 60 s, limit 1-20); tray balloon and a dashboard notice on a crash | done |
+| Environment | A `.env` file for any service type; `DATABASE_URL`, `DB_HOST`, `DB_PORT` ... from a linked database; `JAVA_HOME` / `GOROOT`; **Open terminal** with the service's environment | done |
+| Command line | `data\shims\` (`node`, `npm`, `php`, `java`, `go` ... and `activate` scripts for the default runtimes); opt-in per-item Environment page for the Windows user PATH and variables | done |
 | Process safety | Children stop with the daemon (Job Object on Windows, process groups elsewhere); no shell strings run | done |
 | Logs | Live and stored logs per service, filter, follow, copy, clear; installer log | done |
 | Settings per type | The form asks only what the type uses, with defaults, explanations and a live **What will run** command line | done |
-| Node | Script or npm script (read from `package.json`), `--watch`, `--env-file`, debugger, npm cache in `data\` | done |
+| Node | Script or npm script (read from `package.json`), `--watch`, debugger, npm cache in `data\` (the `.env` file is a service field for every type now) | done |
 | PHP | Per-service `php.ini`, extensions as tick boxes, limits, one-click **Xdebug** matching the PHP version | done |
 | Go, Java | Go caches in `data\go`; JAR or main class, heap, Spring Boot port, debugger | done |
 | Databases | MariaDB, MySQL, PostgreSQL, Redis as services: created on first start, local only, clean stop, connection URL | done |
 | Editors and tools | VS Code, VSCodium, Notepad++, HeidiSQL, DBeaver; **Open in** a project folder or a database | done |
-| Sites | `*.localhost` for a folder, a port or a service, served by Caddy or nginx; optional HTTPS with a local CA | done |
+| Sites | `*.localhost` for a folder, a port or a service, served by Caddy or nginx; optional HTTPS with a local CA; **Enable all** / **Disable all** with one site-server restart | done |
 | Security | Loopback only, bearer token, Host and Origin checks, single-use event tickets, Caddy admin API off | done |
-| Running it | No console window: a double-click opens the dashboard; **tray icon** (open, data folder, quit); a second start opens the running one; **Quit** in the UI stops services cleanly; messages in `data\logs\zero2dev.log` | done |
+| Running it | No console window: a double-click opens the dashboard; **tray icon** (open, data folder, stop all services, quit); a second start opens the running one; **Quit** in the UI stops services cleanly; messages in `data\logs\zero2dev.log` | done |
 | Dashboard | Status line, clickable tiles, live service cards (uptime, latest output, Start/Stop/Restart, Start all/Stop all), sites with on/off switches, recent activity | done |
 | Help | Six **guided tutorials** that take you to the right page, highlight what to press with the rest dimmed, and move on when the step really happened; concepts and common fixes | done |
 | Appearance | The **Ant Design** look (its tokens, sizes and palettes, in Svelte); **System / Light / Dark**; an **accent colour** from 8 presets or any colour, with its palette generated and text kept readable (WCAG AA); `DESIGN.md` describes it all | done |
 
 ## 0.0.4: projects, one click for the whole stack
 
-Today a developer starts the database, then the API, then the front end, then the site server, one at a time, and finds out
-from a crash that the order was wrong. A project groups all of that.
+Before, a developer started the database, then the API, then the front end, then the site server, one at a time, and found out
+from a crash that the order was wrong. A project groups all of that, and the daemon knows the order.
 
-The tray icon this needs for crash notices shipped in 0.0.3.
+The tray icon that the crash notices need shipped in 0.0.3.
 
 | Stage | What | Why it helps | Status |
 | --- | --- | --- | --- |
-| 1 | **Projects**: a named group of services and sites with **Start all** / **Stop all** | One click instead of five | planned |
-| 2 | **Stop all, done by the daemon**: one request (`POST /api/services/stop-all`, optionally for one project) that stops apps first, then databases, then the site server, services in the same group at the same time, and reports what did not stop | Free the machine in one click, from anywhere, without damaging data | planned |
-| 3 | **Stop all services** in the **tray menu** (Zero2Dev keeps running), next to Quit | Stop everything before a meeting or a game without opening the dashboard | planned |
-| 4 | **Start order**: a service can wait for another (the API waits until the database is ready); Stop all uses the same order in reverse | No more "connection refused" on the first start, and no app errors while its database stops | planned |
-| 5 | **Restart on crash** with a growing delay and a limit, chosen per service | A watcher or dev server that dies comes back by itself | planned |
-| 6 | **Notify on crash**: a tray balloon and a dashboard badge when a service stops unexpectedly | The developer learns about it before the browser shows an error | planned |
-| 7 | **`.env` file for any service type** (today only Node has `--env-file`) | Use the project's existing `.env` instead of retyping variables | planned |
-| 8 | **Open terminal here**: a terminal in the project folder with the service's runtime versions on PATH | `php`, `node`, `composer` in the terminal match what the service uses | planned |
-| 9 | **Database connection variables**: link a service to a database service and get `DATABASE_URL` (and `DB_HOST`, `DB_PORT`...) set for it | No copying ports and user names between pages | planned |
+| 1 | **Projects**: a named group of services and sites; **Start** and **Stop** per project (`#/projects`, `/api/projects`, a box on the dashboard) | One click instead of five | done |
+| 2 | **Stop all, done by the daemon**: one request (`POST /api/services/stop-all`, optionally `?project=<id>`) that stops apps first, then databases, then the site server, services in the same group at the same time, and reports what did not stop | Free the machine in one click, from anywhere, without damaging data | done |
+| 3 | **Stop all services** in the **tray menu** (Zero2Dev keeps running), next to Quit | Stop everything before a meeting or a game without opening the dashboard | done |
+| 4 | **Start order**: **Starts after** and **Database** per service; Start waits for what a service needs, Start all and a project's Start go in waves, Stop all uses the reverse order; a dependency loop is refused | No more "connection refused" on the first start, and no app errors while its database stops | done |
+| 5 | **Restart on crash** with a growing delay (1 s, 2 s, 4 s ... up to 60 s) and a limit of 1 to 20, chosen per service | A watcher or dev server that dies comes back by itself | done |
+| 6 | **Notify on crash**: a tray balloon (first crash, giving up, or a crash with no restart planned) and a notice on the dashboard and the service page | The developer learns about it before the browser shows an error | done; the balloon has not been seen on a real desktop yet |
+| 7 | **`.env` file for any service type** (replaces the Node-only `--env-file` setting, migrated by itself) | Use the project's existing `.env` instead of retyping variables | done |
+| 8 | **Open terminal**: a terminal in the service's folder with its runtime versions on PATH, `JAVA_HOME` / `GOROOT`, the database variables and the `.env` file | `php`, `node`, `java` in the terminal match what the service uses | done; not yet checked in a real Windows Terminal or Command Prompt window |
+| 9 | **Database connection variables**: link a service to a database service and get `DATABASE_URL`, `DB_HOST`, `DB_PORT`, `DB_USERNAME`, `DB_PASSWORD`... (and `REDIS_URL`) set for it | No copying ports and user names between pages | done |
+| 10 | **Start all / Stop all** on the Services page and **Enable all / Disable all** on the Sites page; the dashboard buttons use the daemon too. Sites change with one config write and one site-server restart | Bulk actions that are fast and in the right order, from every page | done |
+| 11 | **Runtime environment registration**: `data\shims\` (`node`, `npm`, `php`, `java`, `go`, database clients, `activate.cmd/.ps1/.sh`) regenerated on every runtime change; an opt-in, reversible switch for the Windows user PATH | The runtimes Zero2Dev installed work in any terminal, with the version you made default | done; the registry writes are only tested against a fake, a real Windows check is open |
+| 12 | **Node.js 26 LTS** (26.13.1) in the built-in catalog; CI, `@types/node` and the documented prerequisite move to Node 26 | The newest LTS is the one Zero2Dev offers and is built with | done |
 
-**Stop all today** (0.0.3) is a dashboard button: the browser stops the running services one at a time, in list order, so it
-only works while the dashboard is open, and a database can stop before the app that uses it. Stages 2 to 4 replace that loop
-with the daemon's own Stop all; the dashboard button, the Services page and the tray then all call it.
+Release 0.0.4: **done**. These checks need a real Windows desktop and have only been covered by tests so far:
+- **Open terminal**: that Windows Terminal and Command Prompt really receive the service's environment (`node -v`, `JAVA_HOME`).
+- **Registry**: turning *Add Zero2Dev's tools to my Windows user PATH* on and off against the real user environment (`reg query HKCU\Environment`, a new shell finding `node`, the old `Path` restored).
+- **Tray balloon**: the crash balloons on a real desktop.
 
 ## 0.0.5: data, databases and environment snapshots
 
@@ -157,6 +166,14 @@ the user set up as a service.
 | **Linux and macOS** at the same level as Windows (today the catalog has Linux builds of Node, Go and Caddy only, and Java from Adoptium; no tray) | The same tool for the whole team | planned |
 
 ---
+
+## 0.0.4 in detail
+
+- **Start order** is computed in waves: services whose dependencies are running are ready; the site server starts first, then databases, then apps; a wave is awaited only when something waits for it, and no wave waits longer than the health timeout (30 s). Stop is the same plan reversed. With no dependencies set it is the old tier order.
+- **Environment, later wins:** runtime `PATH`, `JAVA_HOME` / `GOROOT`, the type's own variables, the database variables, the `.env` file, the service's own variables, `PORT`.
+- **Restart on crash** gives up after the limit, resets after a minute of stable running, and is cancelled by Stop, Stop all, delete and quit.
+- **The Environment page** (per-item switches for PATH folders and variables: shims, one runtime version, your own folder, `JAVA_HOME`, `GOROOT`, custom variables) touches only `HKCU\Environment`, keeps a backup in `data\shims\.registry-backup.json`, never overwrites a variable you have, and undoes only its own changes. Known limits: the `.cmd` shims read the OEM code page (non-ASCII data folder paths can break them) and PowerShell's default execution policy can block `activate.ps1`.
+- **Not in 0.0.4:** services that start with Zero2Dev (**Start automatically**) are not ordered.
 
 ## 0.0.3 in detail
 

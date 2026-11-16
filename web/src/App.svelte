@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { app, forgetToken, lists, retryConnection, startApp } from "./lib/store.svelte";
+  import { app, crashes, forgetToken, lists, retryConnection, startApp } from "./lib/store.svelte";
   import { router } from "./lib/router.svelte";
   import Icon from "./ui/Icon.svelte";
   import ThemeToggle from "./ui/ThemeToggle.svelte";
@@ -10,8 +10,11 @@
   import Services from "./pages/Services.svelte";
   import ServiceDetail from "./pages/ServiceDetail.svelte";
   import ServiceEditor from "./pages/ServiceEditor.svelte";
+  import Projects from "./pages/Projects.svelte";
+  import ProjectForm from "./pages/ProjectForm.svelte";
   import Runtimes from "./pages/Runtimes.svelte";
   import Sites from "./pages/Sites.svelte";
+  import Environment from "./pages/Environment.svelte";
   import Logs from "./pages/Logs.svelte";
   import Settings from "./pages/Settings.svelte";
   import Help from "./pages/Help.svelte";
@@ -33,19 +36,25 @@
   const nav = [
     { href: "#/dashboard", name: "dashboard", label: "Dashboard", icon: "dashboard" },
     { href: "#/services", name: "services", label: "Services", icon: "services" },
+    { href: "#/projects", name: "projects", label: "Projects", icon: "projects" },
     { href: "#/runtimes", name: "runtimes", label: "Runtimes", icon: "runtimes" },
     { href: "#/sites", name: "sites", label: "Sites", icon: "sites" },
+    { href: "#/environment", name: "environment", label: "Environment", icon: "variable" },
     { href: "#/logs", name: "logs", label: "Logs", icon: "logs" },
     { href: "#/settings", name: "settings", label: "Settings", icon: "settings" },
     { href: "#/help", name: "help", label: "Help", icon: "help" },
   ];
 
-  const section = $derived(router.route.name.startsWith("service") ? "services" : router.route.name);
+  const section = $derived(
+    router.route.name.startsWith("service") ? "services" : router.route.name.startsWith("project") ? "projects" : router.route.name,
+  );
   const title = $derived.by(() => {
     const r = router.route;
     if (r.name === "service") return lists.services.find((s) => s.id === r.id)?.name ?? "Service";
     if (r.name === "serviceNew") return "New service";
     if (r.name === "serviceEdit") return `Edit ${lists.services.find((s) => s.id === r.id)?.name ?? "service"}`;
+    if (r.name === "projectNew") return "New project";
+    if (r.name === "projectEdit") return `Edit ${lists.projects.find((p) => p.id === r.id)?.name ?? "project"}`;
     return nav.find((n) => n.name === r.name)?.label ?? "";
   });
   $effect(() => {
@@ -53,6 +62,8 @@
   });
 
   const running = $derived(lists.services.filter((s) => s.state === "running").length);
+  /** Services that crashed and have not been started again by hand: a badge on the Services link. */
+  const crashed = $derived(Object.keys(crashes).length);
   const connLabel = $derived(
     app.conn === "unauthorized" ? "Unauthorized" : app.conn === "offline" ? "Daemon offline" : app.stream === "open" ? "Connected" : "Connecting",
   );
@@ -82,6 +93,7 @@
           <a href={n.href} class="nav" aria-current={section === n.name ? "page" : undefined} data-tour="nav-{n.name}" aria-label={n.label} title={n.label}>
             <Icon name={n.icon} />
             <span>{n.label}</span>
+            {#if n.name === "services" && crashed > 0}<span class="count crash" data-testid="crash-count" aria-label="{crashed} crashed">{crashed}</span>{/if}
             {#if n.name === "services" && running > 0}<span class="count" aria-label="{running} running">{running}</span>{/if}
           </a>
         {/each}
@@ -131,10 +143,18 @@
             <ServiceEditor />
           {:else if router.route.name === "serviceEdit"}
             <ServiceEditor id={router.route.id} />
+          {:else if router.route.name === "projects"}
+            <Projects />
+          {:else if router.route.name === "projectNew"}
+            <ProjectForm />
+          {:else if router.route.name === "projectEdit"}
+            <ProjectForm id={router.route.id} />
           {:else if router.route.name === "runtimes"}
             <Runtimes />
           {:else if router.route.name === "sites"}
             <Sites />
+          {:else if router.route.name === "environment"}
+            <Environment />
           {:else if router.route.name === "logs"}
             <Logs />
           {:else if router.route.name === "settings"}
@@ -233,6 +253,14 @@
     line-height: 20px;
     background: var(--ok-solid);
     color: var(--ok-ink);
+  }
+  .count.crash {
+    margin-left: auto;
+    background: var(--bad-solid);
+    color: var(--bad-ink);
+  }
+  .count.crash + .count {
+    margin-left: 4px;
   }
   .conn {
     margin-top: auto;

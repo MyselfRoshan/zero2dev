@@ -28,6 +28,11 @@ const svc = (o: Partial<ServiceInput> = {}): ServiceInput => ({
   healthPath: "",
   runtimeId: "",
   autostart: false,
+  dependsOn: [],
+  databaseId: "",
+  envFile: "",
+  restartOnCrash: false,
+  restartLimit: 5,
   ...o,
 });
 const site = (o: Partial<SiteInput> = {}): SiteInput => ({
@@ -100,6 +105,31 @@ describe("validateService", () => {
     expect(validateService(svc({ healthPath: "health" })).healthPath).toBeTruthy();
     expect(validateService(svc({ healthPath: "/health", port: 0 })).healthPath).toBeTruthy();
     expect(validateService(svc({ healthPath: "/health" }))).toEqual({});
+  });
+});
+
+describe("validateService: .env file and restart limit", () => {
+  it("accepts a relative .env path and the 1-20 range", () => {
+    expect(validateService(svc({ envFile: ".env" }))).toEqual({});
+    expect(validateService(svc({ envFile: "config\\.env.local" }))).toEqual({});
+    expect(validateService(svc({ restartOnCrash: true, restartLimit: 20 }))).toEqual({});
+    expect(validateService(svc({ restartLimit: 1 }))).toEqual({});
+  });
+  it("rejects absolute paths and paths that leave the folder", () => {
+    for (const p of [
+      "C:\\secrets\\.env",
+      "C:.env",
+      "/etc/passwd",
+      "\\\\host\\share\\.env",
+      "../.env",
+      "a/../../.env",
+      "a\\..\\..\\.env",
+    ])
+      expect(validateService(svc({ envFile: p })).envFile, p).toBeTruthy();
+  });
+  it("rejects a restart limit outside 1-20", () => {
+    for (const n of [0, 21, -1, 2.5])
+      expect(validateService(svc({ restartLimit: n })).restartLimit, String(n)).toBeTruthy();
   });
 });
 

@@ -112,25 +112,6 @@
         "help": "Node restarts your app whenever a file it loaded is saved."
       },
       {
-        "key": "envFile",
-        "group": "Run",
-        "label": ".env file",
-        "type": "text",
-        "default": "",
-        "placeholder": ".env",
-        "minVersion": "20.6",
-        "show": {
-          "run": "script"
-        },
-        "pattern": "^[^<>|\"*?]+$",
-        "emit": {
-          "arg": [
-            "--env-file={v}"
-          ]
-        },
-        "help": "Load environment variables from this file (relative to the project folder) before the app starts. Empty: none."
-      },
-      {
         "key": "inspect",
         "group": "Debugging",
         "label": "Allow a debugger to attach",
