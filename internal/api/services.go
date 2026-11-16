@@ -358,13 +358,15 @@ func validateLinks(sv *model.Service, in model.ServiceInput, d store.Data, selfI
 	}
 
 	if ef := strings.TrimSpace(in.EnvFile); ef != "" {
-		if strings.ContainsRune(ef, 0) || filepath.IsAbs(ef) || filepath.VolumeName(ef) != "" || fsutil.HasWindowsDrivePrefix(ef) || strings.HasPrefix(ef, "/") || strings.HasPrefix(ef, `\`) {
-			return apperr.BadRequest("envFile must be a path relative to the service folder")
-		}
+		// Reject parent segments before cleaning can erase them.
 		if slices.Contains(strings.FieldsFunc(ef, func(r rune) bool { return r == '/' || r == '\\' }), "..") {
 			return apperr.BadRequest("envFile must stay inside the service folder (no ..)")
 		}
-		sv.EnvFile = filepath.Clean(ef)
+		ef = filepath.Clean(ef)
+		if strings.ContainsRune(ef, 0) || filepath.IsAbs(ef) || filepath.VolumeName(ef) != "" || fsutil.HasWindowsDrivePrefix(ef) || strings.HasPrefix(ef, "/") || strings.HasPrefix(ef, `\`) {
+			return apperr.BadRequest("envFile must be a path relative to the service folder")
+		}
+		sv.EnvFile = ef
 	}
 
 	sv.RestartOnCrash = in.RestartOnCrash

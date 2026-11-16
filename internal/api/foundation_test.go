@@ -60,6 +60,8 @@ func TestServiceLinkFieldsValidation(t *testing.T) {
 		"envFile nested parent":   {"envFile": "a/../../.env"},
 		"envFile backslash up":    {"envFile": `a\..\..\.env`},
 		"envFile drive":           {"envFile": `C:.env`},
+		"envFile dotted drive":    {"envFile": "./C:.env"},
+		"envFile cleaned parent":  {"envFile": "config/../.env"},
 		"envFile lowercase drive": {"envFile": `z:/config/.env`},
 		"envFile backslash root":  {"envFile": `\evil`},
 		"envFile UNC":             {"envFile": `\\server\share\.env`},
