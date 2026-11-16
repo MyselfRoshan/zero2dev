@@ -89,7 +89,7 @@ func TestLoadEnvFile(t *testing.T) {
 		t.Fatalf("empty: %v %q %v", vars, warns, err)
 	}
 	// escaping the folder is an error
-	for _, p := range []string{"../.env", filepath.Join("a", "..", "..", ".env"), filepath.Join(dir, ".env"), "..", `\evil`} {
+	for _, p := range []string{"../.env", filepath.Join("a", "..", "..", ".env"), filepath.Join(dir, ".env"), "..", `\evil`, `\\server\share\.env`, `C:.env`, `z:/config/.env`} {
 		if _, _, err := loadEnvFile(dir, p); err == nil {
 			t.Errorf("%q must be refused", p)
 		}

@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"zero2dev/internal/apperr"
+	"zero2dev/internal/fsutil"
 	"zero2dev/internal/kinds"
 	"zero2dev/internal/model"
 	"zero2dev/internal/store"
@@ -357,7 +358,7 @@ func validateLinks(sv *model.Service, in model.ServiceInput, d store.Data, selfI
 	}
 
 	if ef := strings.TrimSpace(in.EnvFile); ef != "" {
-		if strings.ContainsRune(ef, 0) || filepath.IsAbs(ef) || filepath.VolumeName(ef) != "" || strings.HasPrefix(ef, "/") || strings.HasPrefix(ef, `\`) {
+		if strings.ContainsRune(ef, 0) || filepath.IsAbs(ef) || filepath.VolumeName(ef) != "" || fsutil.HasWindowsDrivePrefix(ef) || strings.HasPrefix(ef, "/") || strings.HasPrefix(ef, `\`) {
 			return apperr.BadRequest("envFile must be a path relative to the service folder")
 		}
 		if slices.Contains(strings.FieldsFunc(ef, func(r rune) bool { return r == '/' || r == '\\' }), "..") {
