@@ -347,3 +347,78 @@ func TestStartWithDepsWithoutDependenciesIsPlainStart(t *testing.T) {
 	}
 	waitState(t, e.sup, solo, model.StateRunning, 5*time.Second)
 }
+
+func TestSequence(t *testing.T) {
+	svc := func(id string, deps ...string) model.Service { return model.Service{ID: id, DependsOn: deps} }
+	all := []model.Service{svc("db"), svc("cache", "db"), svc("api", "cache"), svc("web"), svc("worker", "api")}
+	cases := []struct {
+		members, want []string
+	}{
+		{[]string{"web", "db", "api"}, []string{"web", "db", "api"}},       // the list order when nothing conflicts
+		{[]string{"api", "web", "db"}, []string{"web", "db", "api"}},       // api needs db (through cache, not a member)
+		{[]string{"worker", "api", "db"}, []string{"db", "api", "worker"}}, // a chain is pulled into order
+		{[]string{"web", "gone", "web", "db"}, []string{"web", "db"}},      // unknown ids and duplicates are dropped
+		{nil, []string{}},
+	}
+	for _, c := range cases {
+		if got := Sequence(c.members, all); !slices.Equal(got, c.want) {
+			t.Errorf("Sequence(%v) = %v, want %v", c.members, got, c.want)
+		}
+	}
+	// a loop keeps its members in list order and does not hold the others back
+	loop := []model.Service{svc("a", "b"), svc("b", "a"), svc("c", "a")}
+	if got := Sequence([]string{"c", "b", "a"}, loop); !slices.Equal(got, []string{"b", "a", "c"}) {
+		t.Errorf("loop: %v", got)
+	}
+}
+
+func TestStartInOrder(t *testing.T) {
+	e := newOrdEnv(t)
+	a := e.add("custom", "a", "serve")
+	b := e.add("custom", "b", "serve")
+	c := e.add("custom", "c", "serve")
+	front := e.add("caddy", "front door", "serve")
+
+	var problems []string
+	e.expect(&problems, a+":starting", model.StateRunning, c)
+	e.expect(&problems, b+":starting", model.StateRunning, c, a)
+
+	rep := e.sup.StartInOrder([]string{c, a, b}, front)
+	if len(rep.Failed) != 0 || len(rep.Started) != 4 {
+		t.Fatalf("report %+v", rep)
+	}
+	if len(problems) != 0 {
+		t.Fatalf("a member started before the one above it was running: %v", problems)
+	}
+	if e.index(front+":starting") > e.index(a+":starting") {
+		t.Fatalf("the site server starts in the first wave: %v", e.log.seq)
+	}
+
+	stop := e.sup.StopInOrder([]string{c, a, b})
+	if len(stop.Failed) != 0 || len(stop.Stopped) != 3 {
+		t.Fatalf("stop report %+v", stop)
+	}
+	// ("stopped" is published just after the process is reaped, so it can trail the next
+	// stop; "stopping" is the moment each stop began.)
+	if !(e.index(b+":stopping") < e.index(a+":stopping") && e.index(a+":stopping") < e.index(c+":stopping")) {
+		t.Fatalf("stop goes from the bottom of the list up: %v", e.log.seq)
+	}
+	if e.sup.State(front) != model.StateRunning {
+		t.Fatalf("only the members stop: front door is %s", e.sup.State(front))
+	}
+}
+
+func TestStartInOrderFailedMemberDoesNotStopTheRest(t *testing.T) {
+	e := newOrdEnv(t)
+	broken := e.add("custom", "broken", "exit")
+	next := e.add("custom", "next", "serve")
+	needy := e.add("custom", "needy", "serve", broken)
+
+	rep := e.sup.StartInOrder([]string{broken, next, needy})
+	if !slices.Equal(rep.Started, []string{next}) {
+		t.Fatalf("started %v, want only %s", rep.Started, next)
+	}
+	if len(rep.Failed) != 2 || rep.Failed[0].ID != broken || rep.Failed[1].Error != "waits for broken" {
+		t.Fatalf("failed %+v", rep.Failed)
+	}
+}

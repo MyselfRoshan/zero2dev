@@ -39,11 +39,11 @@ export type ServiceField =
   | "envFile"
   | "restartLimit";
 
-/** The .env path must stay inside the service folder: relative, no drive, no "..". */
+/** The .env path must stay inside the service folder: relative, no drive or ":" anywhere, no "..". */
 export function envFileProblem(p: string): string {
   const t = p.trim();
   if (!t) return "";
-  if (isAbsolutePath(t) || /^[A-Za-z]:/.test(t) || t.startsWith("\\"))
+  if (isAbsolutePath(t) || t.includes(":") || t.startsWith("\\"))
     return "Use a path relative to the folder, for example .env.";
   if (t.split(/[\\/]/).includes("..")) return "The file must be inside the folder (no ..).";
   return "";

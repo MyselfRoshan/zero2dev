@@ -835,7 +835,11 @@ IDs have the prefix `prj_`. `ProjectInput` is `{ "name", "serviceIds", "siteIds"
 - `name` is required, 1-64 characters (`400 name must be 1-64 characters`). Every id must exist (`400 service <id> not found`, `400 site <id> not found`); duplicates are dropped. An unknown project id is `404 not_found`.
 - Deleting a service or a site removes it from every project (the project itself stays).
 - **Start** (`POST /api/services/start-all?project=<id>`): switches the project's sites on with one config write and one site-server restart, makes sure the site-server service (Caddy, or the managed nginx service, as set in Settings) is among the services to start when the project has at least one site, then starts the members with their dependencies like `start-all`. Members that were deleted meanwhile are skipped. If the sites cannot be switched on, the services still start, and `failed` gets an extra entry `{ "id": "", "name": "Sites", "error": "could not enable the sites: ..." }`.
-- **Stop** (`POST /api/services/stop-all?project=<id>`): stops the project's services only. Sites, the site server and every other service keep running.
+- **Start order:** the order of `serviceIds` is the project's start order, and it is kept as sent (duplicates dropped).
+  - The daemon's sequence is that list, except that a member moves down to just after the last member it needs (`dependsOn` and `databaseId`, transitively, also through services that are not members). Members in a dependency loop keep their list order.
+  - Start goes through the sequence one member at a time. Each one is awaited until it is `running`, has failed, or `HealthTimeout` has passed, before the next starts. Its inactive dependencies start before it as usual.
+  - A failed member does not fail the members after it, unless they need it. In that case they are reported as `"waits for <name>"`. The site server is not part of the sequence and starts in the first wave.
+- **Stop** (`POST /api/services/stop-all?project=<id>`): stops the project's services only, one at a time in the reverse of the start sequence. Sites, the site server and every other service keep running.
 - Event: `projects.changed` (data `{}`) after create, update and delete.
 
 ### Switching all sites

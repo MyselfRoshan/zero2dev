@@ -65,6 +65,8 @@ func TestServiceLinkFieldsValidation(t *testing.T) {
 		"envFile lowercase drive": {"envFile": `z:/config/.env`},
 		"envFile backslash root":  {"envFile": `\evil`},
 		"envFile UNC":             {"envFile": `\\server\share\.env`},
+		"envFile stream":          {"envFile": ".env:hidden"},
+		"envFile nested drive":    {"envFile": "config/C:.env"},
 	}
 	for name, extra := range invalid {
 		if c := e.errCode("POST", "/api/services", svcBody("bad", dir, extra), 400); c != "bad_request" {

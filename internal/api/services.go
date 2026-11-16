@@ -362,6 +362,12 @@ func validateLinks(sv *model.Service, in model.ServiceInput, d store.Data, selfI
 		if slices.Contains(strings.FieldsFunc(ef, func(r rune) bool { return r == '/' || r == '\\' }), "..") {
 			return apperr.BadRequest("envFile must stay inside the service folder (no ..)")
 		}
+		// A colon anywhere is a drive ("C:.env", also "./C:.env", which Windows' Clean keeps as
+		// `.\C:.env`) or an NTFS stream (".env:x"); neither is a file inside the folder. Checked
+		// before cleaning, so the answer is the same on every OS.
+		if strings.ContainsRune(ef, ':') {
+			return apperr.BadRequest("envFile must be a path relative to the service folder")
+		}
 		ef = filepath.Clean(ef)
 		if strings.ContainsRune(ef, 0) || filepath.IsAbs(ef) || filepath.VolumeName(ef) != "" || fsutil.HasWindowsDrivePrefix(ef) || strings.HasPrefix(ef, "/") || strings.HasPrefix(ef, `\`) {
 			return apperr.BadRequest("envFile must be a path relative to the service folder")

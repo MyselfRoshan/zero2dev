@@ -12,6 +12,7 @@
   - Both start and stop accept `?project=<id>`.
 - **Projects.** A named group of services and sites: `#/projects`, and a **Projects** box on the dashboard.
   - **Start** switches the project's sites on, makes sure the site server runs, and starts the services with the ones they depend on. **Stop** stops the project's services only; sites, the site server and other services keep running.
+  - **Start order per project.** The project form lists the chosen services under **Start order**, with buttons to move them up and down. Start goes down the list and waits for each service to be running before it starts the next. Stop goes back up, one service at a time. A service that needs one listed below it still starts after it, and the form says so. A service that fails does not hold back the ones after it, unless they need it. The order is the order of `serviceIds`.
   - Create, edit and delete from the page. Deleting a project keeps its services and sites. A deleted service or site leaves its projects by itself.
   - API: `GET/POST /api/projects`, `PUT/DELETE /api/projects/{id}`; event `projects.changed`. Projects are kept in `state.json`.
 - **Start order.** A service can **start after** other services, and an app can name its **Database** (Advanced in the service form).

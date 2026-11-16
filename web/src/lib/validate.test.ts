@@ -124,6 +124,9 @@ describe("validateService: .env file and restart limit", () => {
       "../.env",
       "a/../../.env",
       "a\\..\\..\\.env",
+      "./C:.env",
+      "config/C:.env",
+      ".env:hidden",
     ])
       expect(validateService(svc({ envFile: p })).envFile, p).toBeTruthy();
   });

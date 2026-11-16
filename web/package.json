@@ -11,7 +11,8 @@
     "preview": "vp preview",
     "test": "vp test run",
     "check": "vp check",
-    "e2e": "node e2e/smoke.mjs"
+    "e2e": "node e2e/smoke.mjs",
+    "screenshots": "node e2e/screenshots.mjs"
   },
   "dependencies": {
     "@ant-design/colors": "^8.0.1",

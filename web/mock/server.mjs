@@ -585,7 +585,7 @@ function validateLinks(b, selfId) {
   if (!Number.isInteger(limit) || limit < 0 || limit > 20) return "restartLimit must be 1-20";
   const ef = String(b.envFile ?? "").trim();
   if (ef) {
-    if (isAbs(ef) || /^[A-Za-z]:/.test(ef) || ef.startsWith("/") || ef.startsWith("\\"))
+    if (isAbs(ef) || ef.includes(":") || ef.startsWith("/") || ef.startsWith("\\"))
       return "envFile must be a path relative to the service folder";
     if (ef.split(/[\\/]/).includes("..")) return "envFile must stay inside the service folder (no ..)";
   }
@@ -711,6 +711,37 @@ function startProblem(svc) {
 const isActive = (svc) => svc.state === "running" || svc.state === "starting";
 const tierOf = (k) => (DB_KINDS.includes(k) ? 1 : k === "caddy" || k === "nginx" ? 2 : 0);
 const depsOf = (svc) => [...new Set([...(svc.dependsOn ?? []), svc.databaseId].filter(Boolean))];
+// A project's start order, like supervisor.Sequence: the members as listed, except that a member
+// moves down to just after the last member it needs (transitively, also through non-members).
+function startSequence(memberIds) {
+  const byId = new Map(state.services.map((s) => [s.id, s]));
+  const list = [...new Set(memberIds)].filter((id) => byId.has(id));
+  const reach = (id) => {
+    const seen = new Set();
+    const walk = (x) => {
+      for (const d of depsOf(byId.get(x))) {
+        if (byId.has(d) && !seen.has(d)) {
+          seen.add(d);
+          walk(d);
+        }
+      }
+    };
+    walk(id);
+    return seen;
+  };
+  const needs = new Map(list.map((m) => [m, reach(m)]));
+  const out = [];
+  while (out.length < list.length) {
+    const next =
+      list.find(
+        (m) =>
+          !out.includes(m) &&
+          list.every((o) => o === m || out.includes(o) || !needs.get(m).has(o) || needs.get(o).has(m)),
+      ) ?? list.find((m) => !out.includes(m));
+    out.push(next);
+  }
+  return out;
+}
 
 function startProc(svc) {
   svc.restarts = 0;
@@ -1089,7 +1120,10 @@ async function api(req, res, url) {
       startProc(svc);
       started.push(svc.id);
     };
-    const todo = state.services.filter((x) => !want || want.has(x.id)).sort((a, b) => tierOf(b.kind) - tierOf(a.kind));
+    // A project starts in its own order (each member after the ones above it), dependencies first.
+    const todo = pp.project
+      ? startSequence(pp.project.serviceIds).map((sid) => state.services.find((x) => x.id === sid))
+      : state.services.filter((x) => !want || want.has(x.id)).sort((a, b) => tierOf(b.kind) - tierOf(a.kind));
     for (const svc of todo) begin(svc);
     await new Promise((r) => setTimeout(r, 300));
     return send(res, 200, { started: started.sort((a, b) => a.localeCompare(b)), failed });
@@ -1100,6 +1134,17 @@ async function api(req, res, url) {
     // Like the daemon: apps first, then databases, then the site server; answers when they are down.
     const want = pp.project ? new Set(pp.project.serviceIds) : null;
     const stopped = [];
+    if (pp.project) {
+      // A project stops from the bottom of its start order up, one service at a time.
+      for (const sid of startSequence(pp.project.serviceIds).reverse()) {
+        const svc = state.services.find((x) => x.id === sid);
+        if (!svc || !(svc.state === "running" || svc.state === "starting")) continue;
+        stopProc(svc);
+        stopped.push(svc.id);
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      return send(res, 200, { stopped: stopped.sort((a, b) => a.localeCompare(b)), failed: [] });
+    }
     for (let t = 0; t <= 2; t++) {
       const group = state.services.filter(
         (s) => (s.state === "running" || s.state === "starting") && tierOf(s.kind) === t && (!want || want.has(s.id)),

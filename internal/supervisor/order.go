@@ -54,7 +54,100 @@ func (s *Supervisor) StartOrdered(ids []string) StartReport {
 		}
 	}
 	todo := s.startClosure(d.Services, byID, wanted)
-	started, failed, _ := s.startWaves(byID, todo, false)
+	started, failed, _ := s.startWaves(byID, todo, false, nil)
+	rep.Started = append(rep.Started, started...)
+	rep.Failed = append(rep.Failed, failed...)
+	return rep
+}
+
+// Sequence is the order a project's services start in: the members in the
+// order they are listed, except that a member moves down to just after the
+// last member it needs (model.Deps, transitively, also through services that
+// are not members). Ids that name no service are left out, and so are
+// duplicates. A dependency loop (the API rejects those) leaves the members
+// that are in it in list order.
+func Sequence(members []string, services []model.Service) []string {
+	byID := serviceIndex(services)
+	var list []string
+	for _, id := range members {
+		if _, ok := byID[id]; ok && !slices.Contains(list, id) {
+			list = append(list, id)
+		}
+	}
+	// needs[m]: the other members m needs, directly or through any service.
+	needs := make(map[string]map[string]bool, len(list))
+	for _, m := range list {
+		reach := map[string]bool{}
+		var visit func(id string)
+		visit = func(id string) {
+			for _, d := range model.Deps(byID[id]) {
+				if _, known := byID[d]; known && !reach[d] {
+					reach[d] = true
+					visit(d)
+				}
+			}
+		}
+		visit(m)
+		needs[m] = map[string]bool{}
+		for _, o := range list {
+			if o != m && reach[o] {
+				needs[m][o] = true
+			}
+		}
+	}
+	out := make([]string, 0, len(list))
+	placed := map[string]bool{}
+	for len(out) < len(list) {
+		next := ""
+		for _, m := range list {
+			if placed[m] {
+				continue
+			}
+			ok := true
+			for o := range needs[m] {
+				if !placed[o] && !needs[o][m] { // a loop does not hold anyone back
+					ok = false
+					break
+				}
+			}
+			if ok {
+				next = m
+				break
+			}
+		}
+		if next == "" { // cannot happen with the loop rule above; keep list order anyway
+			for _, m := range list {
+				if !placed[m] {
+					next = m
+					break
+				}
+			}
+		}
+		placed[next] = true
+		out = append(out, next)
+	}
+	return out
+}
+
+// StartInOrder starts a project: the members one after the other in their
+// Sequence, each awaited until it is running (or has failed) before the next
+// one starts, together with the inactive services they need, which start
+// before them as in StartOrdered. A member that fails does not stop the
+// members after it (unless they need it). Members that are already active are
+// left alone. also lists more services to start that have no place in the
+// order (the site server of a project with sites); they start in the first wave.
+func (s *Supervisor) StartInOrder(members []string, also ...string) StartReport {
+	rep := StartReport{Started: []string{}, Failed: []StartFailure{}}
+	d := s.st.Snapshot()
+	byID := serviceIndex(d.Services)
+	seq := Sequence(members, d.Services)
+	wanted := append(append([]string{}, also...), seq...)
+	todo := s.startClosure(d.Services, byID, wanted)
+	after := make(map[string][]string, len(seq))
+	for i := 1; i < len(seq); i++ {
+		after[seq[i]] = seq[:i]
+	}
+	started, failed, _ := s.startWaves(byID, todo, false, after)
 	rep.Started = append(rep.Started, started...)
 	rep.Failed = append(rep.Failed, failed...)
 	return rep
@@ -82,7 +175,7 @@ func (s *Supervisor) StartWithDeps(id string) error {
 	if len(todo) <= 1 && !s.hasStartingDep(byID, id) {
 		return s.Start(id)
 	}
-	_, failed, startErr := s.startWaves(byID, todo, false)
+	_, failed, startErr := s.startWaves(byID, todo, false, nil)
 	if err, ok := startErr[id]; ok {
 		return err
 	}
@@ -154,7 +247,11 @@ func (s *Supervisor) startClosure(all []model.Service, byID map[string]model.Ser
 // cause always comes before the services that wait for it) and the raw error
 // of every service whose Start itself failed. waitAll makes every wave wait for
 // all of its services, not only those something depends on.
-func (s *Supervisor) startWaves(byID map[string]model.Service, todo []string, waitAll bool) ([]string, []StartFailure, map[string]error) {
+//
+// after adds an order that is not a dependency (a project's start order): a
+// service waits until the services listed for it are running, have failed or
+// are not starting at all, but a failure among them does not fail it.
+func (s *Supervisor) startWaves(byID map[string]model.Service, todo []string, waitAll bool, after map[string][]string) ([]string, []StartFailure, map[string]error) {
 	started, failed := []string{}, []StartFailure{}
 	startErr := map[string]error{}
 	pending := make(map[string]bool, len(todo))
@@ -204,6 +301,16 @@ func (s *Supervisor) startWaves(byID map[string]model.Service, todo []string, wa
 					fail(id, "waits for "+dep.Name)
 					return failedState
 				}
+			}
+		}
+		for _, d := range after[id] {
+			switch {
+			case bad[d], ready[d]:
+			case pending[d]:
+				res = blockedState
+			case s.State(d) == model.StateStarting:
+				res = blockedState
+				extWait = append(extWait, d)
 			}
 		}
 		return res
@@ -264,7 +371,7 @@ func (s *Supervisor) startWaves(byID map[string]model.Service, todo []string, wa
 		}
 		var await []string
 		for _, id := range spawned {
-			if waitAll || hasPendingDependent(byID, pending, id) {
+			if waitAll || hasPendingDependent(byID, pending, after, id) {
 				await = append(await, id)
 			}
 		}
@@ -282,9 +389,9 @@ func (s *Supervisor) startWaves(byID map[string]model.Service, todo []string, wa
 	return started, failed, startErr
 }
 
-func hasPendingDependent(byID map[string]model.Service, pending map[string]bool, id string) bool {
+func hasPendingDependent(byID map[string]model.Service, pending map[string]bool, after map[string][]string, id string) bool {
 	for p := range pending {
-		if p != id && slices.Contains(model.Deps(byID[p]), id) {
+		if p != id && (slices.Contains(model.Deps(byID[p]), id) || slices.Contains(after[p], id)) {
 			return true
 		}
 	}
@@ -349,7 +456,19 @@ func (s *Supervisor) awaitRunning(ids []string) map[string]string {
 // database while it is still running. Without dependencies this is exactly the
 // tier order. Dependents outside ids do not hold a service back: the caller
 // asked for it explicitly. A dependency loop is stopped as one last wave.
-func (s *Supervisor) StopOrdered(ids []string) StopReport {
+func (s *Supervisor) StopOrdered(ids []string) StopReport { return s.stopWaves(ids, nil) }
+
+// StopInOrder stops a project: its active members in the reverse of their
+// Sequence, one after the other, each awaited before the next. Dependencies
+// keep their rule (dependents first), which the Sequence already follows.
+func (s *Supervisor) StopInOrder(members []string) StopReport {
+	seq := Sequence(members, s.st.Snapshot().Services)
+	return s.stopWaves(seq, seq)
+}
+
+// stopWaves is StopOrdered for ids, where seq (may be nil) adds an order: a
+// service in seq stops only after every active service later in seq.
+func (s *Supervisor) stopWaves(ids, seq []string) StopReport {
 	rep := StopReport{Stopped: []string{}, Failed: []StopFailure{}}
 	pending := map[string]model.Service{}
 	for _, svc := range s.st.Snapshot().Services {
@@ -367,6 +486,13 @@ func (s *Supervisor) StopOrdered(ids []string) StopReport {
 			for _, d := range model.Deps(sv) {
 				if d != sv.ID {
 					needed[d] = true
+				}
+			}
+		}
+		for i, id := range seq {
+			if _, ok := pending[id]; ok {
+				for _, earlier := range seq[:i] {
+					needed[earlier] = true
 				}
 			}
 		}

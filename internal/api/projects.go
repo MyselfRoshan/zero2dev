@@ -163,26 +163,28 @@ func (s *Server) projectParam(r *http.Request) (*model.Project, error) {
 // startProject brings a project up: it enables the project's sites with one
 // bulk change (one config write, one site server restart), makes sure the
 // site server service is among the services to start when the project has a
-// site, and starts the members with their dependencies
-// (supervisor.StartOrdered, which leaves running services alone). A failure to
-// switch the sites on is reported like a failed start and does not stop the
+// site, and starts the members in the project's start order, each with its
+// dependencies (supervisor.StartInOrder, which leaves running services
+// alone); the site server has no place in that order. A failure to switch
+// the sites on is reported like a failed start and does not stop the
 // services from starting. Members and sites deleted since the project was
 // read are skipped.
 func (s *Server) startProject(p model.Project) supervisor.StartReport {
 	d := s.Store.Snapshot()
 	ids := existingServices(p.ServiceIDs, d.Services)
 	var siteErr error
+	var also []string
 	if sites := existingSites(p.SiteIDs, d.Sites); len(sites) > 0 {
 		if _, err := s.Sites.SetEnabledMany(sites, true); err != nil {
 			siteErr = err
 		} else {
 			_, _ = s.Sites.EnsureServers() // the site server service may not exist yet
 			if id := siteServerServiceID(s.Store.Snapshot()); id != "" && !slices.Contains(ids, id) {
-				ids = append(ids, id)
+				also = append(also, id)
 			}
 		}
 	}
-	rep := s.Sup.StartOrdered(ids)
+	rep := s.Sup.StartInOrder(ids, also...)
 	if siteErr != nil {
 		rep.Failed = append(rep.Failed, supervisor.StartFailure{Name: "Sites", Error: "could not enable the sites: " + siteErr.Error()})
 	}
@@ -190,19 +192,21 @@ func (s *Server) startProject(p model.Project) supervisor.StartReport {
 }
 
 // stopProject stops the project's services only (sites, the site server and
-// every other service keep running). The result is never nil-listed.
+// every other service keep running), in the reverse of the start order. The
+// result is never nil-listed.
 func (s *Server) stopProject(p model.Project) supervisor.StopReport {
 	ids := existingServices(p.ServiceIDs, s.Store.Snapshot().Services)
-	return s.Sup.StopOrdered(ids)
+	return s.Sup.StopInOrder(ids)
 }
 
-// existingServices keeps the ids that still name a service. The result is never
-// nil: a nil list would mean "every service" to the supervisor.
+// existingServices keeps the ids that still name a service, in the order of
+// ids (a project's start order). The result is never nil: a nil list would
+// mean "every service" to the supervisor.
 func existingServices(ids []string, all []model.Service) []string {
 	out := []string{}
-	for _, sv := range all {
-		if slices.Contains(ids, sv.ID) {
-			out = append(out, sv.ID)
+	for _, id := range ids {
+		if slices.ContainsFunc(all, func(sv model.Service) bool { return sv.ID == id }) && !slices.Contains(out, id) {
+			out = append(out, id)
 		}
 	}
 	return out

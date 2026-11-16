@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
   deleteProjectMessage,
+  moveId,
+  orderRows,
   projectStatus,
+  sequenceLine,
   servicesLine,
   sitesLine,
+  startSequence,
   stateLabel,
   toggleId,
   validateProjectForm,
@@ -109,5 +113,39 @@ describe("validateProjectForm", () => {
     expect(validateProjectForm("Shop")).toEqual({});
     expect(validateProjectForm("x".repeat(64))).toEqual({});
     expect(validateProjectForm("x".repeat(65)).name).toBeTruthy();
+  });
+});
+
+describe("start order", () => {
+  const s = (id: string, dependsOn: string[] = [], databaseId = "") =>
+    ({ id, name: id.toUpperCase(), dependsOn, databaseId }) as Service;
+  // api needs db through cache (not a member); worker needs api
+  const all = [s("db"), s("cache", [], "db"), s("api", ["cache"]), s("web"), s("worker", ["api"])];
+
+  it("keeps the list order when nothing conflicts", () => {
+    expect(startSequence(["web", "db", "api"], all)).toEqual(["web", "db", "api"]);
+  });
+  it("moves a member after the members it needs, also through other services", () => {
+    expect(startSequence(["api", "web", "db"], all)).toEqual(["web", "db", "api"]);
+    expect(startSequence(["worker", "api", "db"], all)).toEqual(["db", "api", "worker"]);
+  });
+  it("drops deleted and repeated ids", () => {
+    expect(startSequence(["web", "gone", "web", "db"], all)).toEqual(["web", "db"]);
+  });
+  it("does not hang on a loop", () => {
+    const loop = [s("a", ["b"]), s("b", ["a"]), s("c", ["a"])];
+    expect(startSequence(["c", "b", "a"], loop)).toEqual(["b", "a", "c"]);
+  });
+  it("explains each row", () => {
+    const rows = orderRows(["api", "web", "db"], all);
+    expect(rows.map((r) => r.service.id)).toEqual(["api", "web", "db"]);
+    expect(rows[0]).toMatchObject({ after: ["DB"], outside: ["CACHE"] });
+    expect(rows[1]).toMatchObject({ after: [], outside: [] });
+    expect(sequenceLine(["api", "web", "db"], all)).toBe("WEB, then DB, then API");
+  });
+  it("moves ids up and down", () => {
+    expect(moveId(["a", "b", "c"], "c", -1)).toEqual(["a", "c", "b"]);
+    expect(moveId(["a", "b", "c"], "a", -1)).toEqual(["a", "b", "c"]);
+    expect(moveId(["a", "b", "c"], "c", 1)).toEqual(["a", "b", "c"]);
   });
 });

@@ -82,6 +82,21 @@ go build ./...              # now works
 `make` rebuilds the UI only when `internal/webui/dist` is missing; run `make web` to force a rebuild after UI changes.
 The release workflow builds the UI in CI too, so nothing generated has to be committed.
 
+## Screenshots of every page
+
+`web/e2e/screenshots.mjs` takes a full-height screenshot of every page of the dashboard against the mock daemon, with a small demo project loaded. It shoots light and dark, desktop and phone width, and writes them to `docs/screenshots/pages/`. That folder is in `.gitignore`: the images are made locally and never committed. The script also writes `manifest.json`, which says what each image shows, and a `README.md` that lists every image. Feed the images to a design tool, or compare them before and after a UI change.
+
+```sh
+cd web
+pnpm run build
+NODE_PATH=<folder with playwright>/node_modules pnpm run screenshots
+# options: --themes=dark  --sizes=desktop,laptop,mobile  --pages=dashboard,projects
+#          --viewport (visible part only)  --out=<dir>
+#          --url=http://127.0.0.1:8765 --token=<token> (a running Zero2Dev instead of the mock)
+```
+
+Playwright is not a project dependency, the same as for the smoke test. Install it separately, for example `npm install --prefix <folder> playwright@1.64.0`, then run `npx playwright install chromium`.
+
 ## Tests in CI and releasing
 
 **Every pull request** and every push to `main` and `develop` runs [`.github/workflows/ci.yml`](.github/workflows/ci.yml):

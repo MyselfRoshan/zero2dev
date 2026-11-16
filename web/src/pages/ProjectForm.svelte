@@ -3,7 +3,8 @@
   // start and stop together, and the sites that go on with them.
   import { api, ApiError } from "../lib/api";
   import { navigate } from "../lib/router.svelte";
-  import { toggleId, validateProjectForm } from "../lib/projects";
+  import { tick } from "svelte";
+  import { moveId, orderRows, sequenceLine, toggleId, validateProjectForm } from "../lib/projects";
   import { app, lists, loadProjects, toast } from "../lib/store.svelte";
   import { serviceKindLabel } from "../lib/ux";
   import Icon from "../ui/Icon.svelte";
@@ -32,6 +33,23 @@
     serviceIds = project.serviceIds.filter((sid) => lists.services.some((s) => s.id === sid));
     siteIds = project.siteIds.filter((sid) => lists.sites.some((s) => s.id === sid));
   });
+
+  // The ticked services in start order: a newly ticked one goes to the end of the list.
+  const rows = $derived(orderRows(serviceIds, lists.services));
+  const sequence = $derived(sequenceLine(serviceIds, lists.services));
+  let moved = $state("");
+
+  async function move(sid: string, by: -1 | 1) {
+    serviceIds = moveId(serviceIds, sid, by);
+    const at = serviceIds.indexOf(sid);
+    const svc = lists.services.find((s) => s.id === sid);
+    moved = `${svc?.name ?? "Service"} moved to place ${at + 1} of ${serviceIds.length}.`;
+    // Keep the keyboard on the row that moved; at either end, on its other button.
+    await tick();
+    const edge = (by === -1 && at === 0) || (by === 1 && at === serviceIds.length - 1);
+    const dir = edge ? (by === -1 ? "down" : "up") : by === -1 ? "up" : "down";
+    document.querySelector<HTMLButtonElement>(`[data-move="${sid}:${dir}"]`)?.focus();
+  }
 
   async function save(e: SubmitEvent) {
     e.preventDefault();
@@ -105,6 +123,37 @@
       </div>
     </section>
 
+    {#if rows.length > 1}
+      <section class="section-card" aria-labelledby="sec-order" data-testid="project-order">
+        <header>
+          <h2 id="sec-order">Start order</h2>
+          <p>Start goes down this list and waits for each service to be running before it starts the next one. Stop goes back up.</p>
+        </header>
+        <div class="body">
+          <ol class="order">
+            {#each rows as r, i (r.service.id)}
+              <li data-testid="project-order-row" data-service={r.service.name}>
+                <span class="place" aria-hidden="true">{i + 1}</span>
+                <KindIcon kind={r.service.kind} size={16} />
+                <span class="what">
+                  <span class="pick-name">{r.service.name}</span>
+                  <span class="muted small">{serviceKindLabel(r.service.kind)}</span>
+                  {#if r.after.length}<span class="note small">Starts after {r.after.join(" and ")}, which it needs.</span>{/if}
+                  {#if r.outside.length}<span class="note small muted">Also starts {r.outside.join(" and ")} first, which it needs.</span>{/if}
+                </span>
+                <span class="moves">
+                  <button class="btn sm ghost icon" type="button" data-move="{r.service.id}:up" disabled={i === 0} onclick={() => move(r.service.id, -1)} aria-label="Move {r.service.name} up" title="Move up"><Icon name="chevronUp" size={14} /></button>
+                  <button class="btn sm ghost icon" type="button" data-move="{r.service.id}:down" disabled={i === rows.length - 1} onclick={() => move(r.service.id, 1)} aria-label="Move {r.service.name} down" title="Move down"><Icon name="chevronDown" size={14} /></button>
+                </span>
+              </li>
+            {/each}
+          </ol>
+          <p class="muted small sequence" data-testid="project-sequence">Start runs {sequence}.</p>
+          <p class="sr-only" aria-live="polite">{moved}</p>
+        </div>
+      </section>
+    {/if}
+
     <section class="section-card" aria-labelledby="sec-sites" data-testid="project-sites">
       <header><h2 id="sec-sites">Sites</h2><p>Start switches these sites on and makes sure the site server runs. Stop leaves them as they are.</p></header>
       <div class="body">
@@ -166,6 +215,58 @@
     font-weight: 600;
     min-width: 0;
     overflow-wrap: anywhere;
+  }
+  .order {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+  }
+  .order li {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 12px;
+  }
+  .order li + li {
+    border-top: 1px solid var(--line);
+  }
+  .order :global(svg) {
+    flex: none;
+    margin-top: 2px;
+  }
+  .place {
+    flex: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: inline-grid;
+    place-items: center;
+    font-size: 12px;
+    font-weight: 600;
+    background: var(--surface-2);
+    color: var(--muted);
+  }
+  .what {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: 8px;
+    row-gap: 2px;
+  }
+  .what .note {
+    flex-basis: 100%;
+  }
+  .moves {
+    flex: none;
+    display: flex;
+    gap: 4px;
+  }
+  .sequence {
+    margin: 8px 0 0;
   }
   .foot {
     display: flex;

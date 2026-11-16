@@ -252,8 +252,13 @@ A *project* is a named group of services and sites that belong together: for exa
 3. In the list, each project shows its status (*stopped*, *partly running*, *running*), how many of its services run and how many of its sites are on. Use **Start** and **Stop** in its row, or the same buttons in the **Projects** box on the dashboard.
 
 What the buttons do:
-- **Start** switches the project's sites on, makes sure the site server (Caddy or nginx) is running if the project has a site, and starts the project's services. Services that are already running are left alone. A service starts after the ones it needs: its database and the services it **starts after**, even if they are not in the project (see below).
-- **Stop** stops the project's services, in the opposite order (a service that others in the project depend on stops last). The sites, the site server and every other service keep running.
+- **Start** switches the project's sites on, makes sure the site server (Caddy or nginx) is running if the project has a site, and starts the project's services in the project's **start order** (below). Services that are already running are left alone. A service starts after the ones it needs: its database and the services it **starts after**, even if they are not in the project (see below).
+- **Stop** stops the project's services one at a time, from the bottom of the start order up. The sites, the site server and every other service keep running.
+
+**Start order.** Once a project has two or more services, its form shows them under **Start order**, in the order you ticked them. Use the arrows to move a service up or down.
+- Start goes down the list. It waits for each service to be running (or to fail) before it starts the next one.
+- A service always starts after the services it needs. If you put an API above its database, the row says *Starts after Postgres, which it needs.*, and the line under the list shows the real order, for example *Start runs Postgres, then API, then Web.*
+- A service that fails does not stop the ones after it, unless they need it.
 - The result is a message such as "Started 3 services." or the names of the ones that did not start, with the reason.
 
 A project only groups things. **Delete** (the bin icon) removes the group, not its services or sites, and deleting a service or a site just takes it out of the projects it was in. A service can be in several projects.

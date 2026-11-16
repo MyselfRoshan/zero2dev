@@ -1224,8 +1224,34 @@ await step("projects: create, Start and Stop, shown on the dashboard, delete", a
   await pick("project-services", "Order base");
   await pick("project-services", "Order web");
   await pick("project-sites", "docs.localhost");
+  // Start order: the ticked services in ticking order; a service that needs one below it says so
+  const order = page.getByTestId("project-order");
+  const orderNames = () =>
+    order.getByTestId("project-order-row").evaluateAll((rows) => rows.map((r) => r.dataset.service));
+  assert.deepEqual(await orderNames(), ["Order base", "Order web"]);
+  assert.ok(
+    await order.getByRole("button", { name: "Move Order base up" }).isDisabled(),
+    "the first row cannot move up",
+  );
+  await order.getByRole("button", { name: "Move Order base down" }).click();
+  assert.deepEqual(await orderNames(), ["Order web", "Order base"]);
+  await order.getByText("Starts after Order base, which it needs.").waitFor();
+  await page.getByTestId("project-sequence").getByText("Start runs Order base, then Order web.").waitFor();
+  assert.equal(
+    await page.evaluate(() => document.activeElement?.getAttribute("aria-label")),
+    "Move Order base up",
+    "focus stays on the row that moved",
+  );
+  await shot(page, "28-project-start-order");
   await page.getByRole("button", { name: "Create project" }).click();
   await page.getByText("Order stack created.").waitFor();
+  const saved = (await apiCall("GET", "/api/projects")).find((p) => p.name === "Order stack");
+  const names = new Map((await apiCall("GET", "/api/services")).map((s) => [s.id, s.name]));
+  assert.deepEqual(
+    saved.serviceIds.map((id) => names.get(id)),
+    ["Order web", "Order base"],
+    "the list order is saved",
+  );
   const row = page.locator('tr[data-project="Order stack"]');
   await row.waitFor();
   await row.getByTestId("project-services-count").getByText("0 of 2 services running").waitFor();
