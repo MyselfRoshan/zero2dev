@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"zero2dev/internal/apperr"
+	"zero2dev/internal/fsutil"
 )
 
 // maxEnvFile is the largest .env file that is read (a mistake guard, not a limit anyone hits).
@@ -153,7 +154,7 @@ func envFilePath(cwd, name string) (string, error) {
 		return "", nil
 	}
 	clean := filepath.Clean(name)
-	if filepath.IsAbs(clean) || filepath.VolumeName(clean) != "" || strings.HasPrefix(clean, string(filepath.Separator)) ||
+	if filepath.IsAbs(clean) || filepath.VolumeName(clean) != "" || fsutil.HasWindowsDrivePrefix(name) || strings.HasPrefix(name, `\`) || strings.HasPrefix(clean, string(filepath.Separator)) ||
 		clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
 		return "", apperr.BadRequest("the .env file must be a path inside the service folder")
 	}
