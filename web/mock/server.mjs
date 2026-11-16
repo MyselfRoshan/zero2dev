@@ -1099,12 +1099,13 @@ async function api(req, res, url) {
     const started = [];
     const failed = [];
     const failedIds = new Set();
-    const begin = (svc) => {
-      if (isActive(svc) || failedIds.has(svc.id) || started.includes(svc.id)) return;
+    const begin = async (svc) => {
+      while (svc.state === "starting") await sleep(25);
+      if (svc.state === "running" || failedIds.has(svc.id) || started.includes(svc.id)) return;
       for (const d of depsOf(svc)) {
         const dep = state.services.find((x) => x.id === d);
         if (!dep) continue;
-        begin(dep);
+        await begin(dep);
         if (failedIds.has(dep.id)) {
           failedIds.add(svc.id);
           failed.push({ id: svc.id, name: svc.name, error: `${dep.name} did not start` });
@@ -1118,14 +1119,19 @@ async function api(req, res, url) {
         return;
       }
       startProc(svc);
+      while (svc.state === "starting") await sleep(25);
+      if (svc.state !== "running") {
+        failedIds.add(svc.id);
+        failed.push({ id: svc.id, name: svc.name, error: svc.lastError || "service did not start" });
+        return;
+      }
       started.push(svc.id);
     };
     // A project starts in its own order (each member after the ones above it), dependencies first.
     const todo = pp.project
       ? startSequence(pp.project.serviceIds).map((sid) => state.services.find((x) => x.id === sid))
       : state.services.filter((x) => !want || want.has(x.id)).sort((a, b) => tierOf(b.kind) - tierOf(a.kind));
-    for (const svc of todo) begin(svc);
-    await new Promise((r) => setTimeout(r, 300));
+    for (const svc of todo) await begin(svc);
     return send(res, 200, { started: started.sort((a, b) => a.localeCompare(b)), failed });
   }
   if (m === "POST" && p === "/api/services/stop-all") {
@@ -1138,10 +1144,10 @@ async function api(req, res, url) {
       // A project stops from the bottom of its start order up, one service at a time.
       for (const sid of startSequence(pp.project.serviceIds).reverse()) {
         const svc = state.services.find((x) => x.id === sid);
-        if (!svc || !(svc.state === "running" || svc.state === "starting")) continue;
-        stopProc(svc);
-        stopped.push(svc.id);
-        await new Promise((r) => setTimeout(r, 250));
+        if (!svc || !(isActive(svc) || svc.state === "stopping")) continue;
+        if (svc.state !== "stopping") stopProc(svc);
+        while (svc.state === "stopping") await sleep(25);
+        if (svc.state === "stopped") stopped.push(svc.id);
       }
       return send(res, 200, { stopped: stopped.sort((a, b) => a.localeCompare(b)), failed: [] });
     }
