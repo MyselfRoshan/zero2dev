@@ -18,6 +18,7 @@ type Menu struct {
 	Tooltip    string
 	OnOpen     func() // left click, double click, "Open dashboard", balloon click
 	OnFolder   func() // "Open data folder"
+	OnStopAll  func() // "Stop all services" (Zero2Dev keeps running); no item when nil
 	OnQuit     func() // "Quit Zero2Dev"
 	FolderText string // menu text for OnFolder ("Open data folder")
 }

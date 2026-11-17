@@ -25,6 +25,7 @@ const state = {
   services: [],
   runtimes: [],
   sites: [],
+  projects: [],
   settings: {
     apiPort: PORT,
     homeDir: "D:\\zero2dev\\bin\\data",
@@ -38,6 +39,17 @@ const state = {
     theme: "system",
     accent: "#1677ff",
   },
+  // The user's environment choices (all off), and a fake HKCU\Environment: the folders Zero2Dev
+  // put on the user PATH, the variables it set, and the variables the user has of their own.
+  env: {
+    seeded: true,
+    path: [{ id: "envp_shims", source: "shims", enabled: false }],
+    vars: [
+      { id: "envv_java_home", name: "JAVA_HOME", source: "default", kind: "java", enabled: false },
+      { id: "envv_goroot", name: "GOROOT", source: "default", kind: "go", enabled: false },
+    ],
+  },
+  userEnv: { dirs: [], owned: [], vars: { GOROOT: "D:\\my\\go" }, ownedVars: {} },
 };
 const EXE_DIR = "D:\\zero2dev\\bin";
 const installerLog = [];
@@ -153,7 +165,7 @@ function ext(kind, version, line, channel, source, o = {}) {
   };
 }
 const BUILTIN = [
-  ext("node", "22.11.0", "22", "lts", "builtin"),
+  ext("node", "26.13.1", "26", "lts", "builtin"),
   ext("node", "20.18.0", "20", "lts", "builtin"),
   ext("go", "1.23.3", "1.23", "stable", "builtin"),
   ext("go", "1.23.3", "1.23", "stable", "builtin", { arch: "arm64" }),
@@ -177,7 +189,7 @@ const BUILTIN = [
   ext("dbeaver", "26.2.4", "", "", "builtin"),
 ];
 const REMOTE = [
-  ext("node", "22.12.0", "22", "lts", "remote"),
+  ext("node", "26.14.0", "26", "lts", "remote"),
   ext("go", "1.23.4", "1.23", "stable", "remote"),
   ext("caddy", "2.9.1", "2.9", "stable", "remote"),
   ext("php", "8.4.1", "8.4", "stable", "remote"),
@@ -267,9 +279,15 @@ function newService(input) {
     input.kind !== "custom" && (input.customArgs ?? (input.settings === undefined && (input.args ?? []).length > 0));
   return {
     settings: {},
+    dependsOn: [],
+    databaseId: "",
+    envFile: "",
+    restartOnCrash: false,
+    restartLimit: 5,
     ...input,
     customArgs,
     id: id("svc"),
+    restarts: 0,
     state: "stopped",
     pid: 0,
     startedAt: null,
@@ -342,6 +360,201 @@ function emit(type, data = {}) {
   const frame = `event: ${type}\ndata: ${JSON.stringify(data)}\n\n`;
   for (const c of clients) c.write(frame);
 }
+// ---- Environment page (the daemon's internal/envreg, in miniature) ----
+const ENV_RESERVED = new Set([
+  "PATH",
+  "PATHEXT",
+  "COMSPEC",
+  "SYSTEMROOT",
+  "WINDIR",
+  "TEMP",
+  "TMP",
+  "USERPROFILE",
+  "APPDATA",
+]);
+const dirName = (f) => f.replace(/[\\/][^\\/]*$/, "");
+function envRuntimeValue(rt) {
+  return rt.kind === "java" || rt.kind === "go" ? dirName(dirName(rt.binary)) : dirName(rt.binary);
+}
+function envDefaultOf(kind) {
+  const all = state.runtimes.filter((r) => r.kind === kind);
+  return all.find((r) => r.default) ?? all[0];
+}
+// The commands each kind's folder gives a terminal (envreg's shimmed list).
+const ENV_COMMANDS = {
+  node: ["node", "npm", "npx"],
+  php: ["php"],
+  java: ["java", "javac", "jar"],
+  go: ["go", "gofmt"],
+  mysql: ["mysql", "mysqldump"],
+  mariadb: ["mariadb", "mysql", "mariadb-dump"],
+  postgres: ["psql", "pg_dump", "pg_restore"],
+  redis: ["redis-cli"],
+};
+function envCommands(p) {
+  if (p.source === "shims") {
+    const kinds = Object.keys(ENV_COMMANDS).filter((k) => envDefaultOf(k));
+    return [...new Set(kinds.flatMap((k) => ENV_COMMANDS[k]))].sort((a, b) => a.localeCompare(b));
+  }
+  if (p.source === "runtime") {
+    const rt = state.runtimes.find((r) => r.id === p.runtimeId);
+    return rt ? [...(ENV_COMMANDS[rt.kind] ?? [])].sort((a, b) => a.localeCompare(b)) : [];
+  }
+  return /tools/i.test(p.dir ?? "") ? ["fd", "rg"] : [];
+}
+function envResolvePath(p) {
+  if (p.source === "shims") return { value: state.settings.homeDir + "\\shims" };
+  if (p.source === "custom") return { value: p.dir };
+  const rt = state.runtimes.find((r) => r.id === p.runtimeId);
+  return rt ? { value: dirName(rt.binary) } : { value: "", problem: "That runtime was removed." };
+}
+function envResolveVar(v) {
+  if (v.source === "custom") return { value: v.value ?? "" };
+  const rt = v.source === "default" ? envDefaultOf(v.kind) : state.runtimes.find((r) => r.id === v.runtimeId);
+  if (rt) return { value: envRuntimeValue(rt) };
+  return {
+    value: "",
+    problem: v.source === "default" ? `No ${v.kind} runtime is installed.` : "That runtime was removed.",
+  };
+}
+const sameDir = (a, b) => a.replace(/[\\/]+$/, "").toLowerCase() === b.replace(/[\\/]+$/, "").toLowerCase();
+function envView() {
+  const u = state.userEnv;
+  return {
+    config: state.env,
+    report: {
+      supported: true,
+      shimsDir: state.settings.homeDir + "\\shims",
+      path: state.env.path.map((p) => {
+        const r = envResolvePath(p);
+        return {
+          id: p.id,
+          dir: r.value,
+          present: !!r.value && u.dirs.some((d) => sameDir(d, r.value)),
+          owned: !!r.value && u.owned.some((d) => sameDir(d, r.value)),
+          ...(r.problem ? { problem: r.problem } : {}),
+          commands: envCommands(p),
+        };
+      }),
+      vars: state.env.vars.map((v) => {
+        const r = envResolveVar(v);
+        const has = Object.hasOwn(u.vars, v.name);
+        return {
+          id: v.id,
+          name: v.name,
+          value: r.value,
+          ...(has ? { current: u.vars[v.name] } : {}),
+          hasCurrent: has,
+          owned: has && u.ownedVars[v.name]?.toLowerCase() === u.vars[v.name].toLowerCase(),
+          ...(r.problem ? { problem: r.problem } : {}),
+        };
+      }),
+    },
+  };
+}
+// Validates like envreg.Validate, stores the config and applies it to the fake user environment.
+function envApply(body) {
+  const bad = (message) => ({ status: 400, code: "bad_request", message });
+  if (!body || !Array.isArray(body.path) || !Array.isArray(body.vars)) return bad("path and vars are required");
+  const ids = new Set();
+  const mk = (id, prefix) => {
+    id = id || `${prefix}_${randomBytes(4).toString("hex")}`;
+    if (!new RegExp(`^${prefix}_[A-Za-z0-9_]{1,40}$`).test(id) || ids.has(id)) return null;
+    ids.add(id);
+    return id;
+  };
+  const path = [];
+  const seenDirs = new Set();
+  for (const [i, p] of body.path.entries()) {
+    const item = { id: mk(p.id, "envp"), source: String(p.source ?? "").toLowerCase(), enabled: !!p.enabled };
+    if (!item.id) return bad(`folder ${i + 1}: not a valid item id`);
+    if (item.source === "shims") {
+      if (path.some((x) => x.source === "shims")) return bad("the shims folder is listed twice");
+    } else if (item.source === "runtime") {
+      item.runtimeId = String(p.runtimeId ?? "");
+      if (!item.runtimeId) return bad(`folder ${i + 1}: choose a runtime`);
+      if (item.enabled && !state.runtimes.some((r) => r.id === item.runtimeId))
+        return bad(`folder ${i + 1}: the runtime ${item.runtimeId} is not installed any more`);
+    } else if (item.source === "custom") {
+      item.dir = String(p.dir ?? "").trim();
+      if (!/^([A-Za-z]:[\\/]|\\\\[^\\])/.test(item.dir))
+        return bad(`folder ${i + 1}: "${item.dir}" is not a full path like C:\\tools\\bin`);
+      if (/[%;"]/.test(item.dir))
+        return bad(`folder ${i + 1}: the folder has a %, ; or " in its name and cannot go on PATH`);
+      const key = item.dir.replace(/[\\/]+$/, "").toLowerCase();
+      if (seenDirs.has(key)) return bad(`folder ${i + 1} is listed twice`);
+      seenDirs.add(key);
+    } else return bad(`folder ${i + 1}: the source must be shims, runtime or custom`);
+    path.push(item);
+  }
+  const vars = [];
+  const names = new Set();
+  for (const [i, v] of body.vars.entries()) {
+    const item = {
+      id: mk(v.id, "envv"),
+      name: String(v.name ?? "").trim(),
+      source: String(v.source ?? "").toLowerCase(),
+      enabled: !!v.enabled,
+    };
+    if (!item.id) return bad(`variable ${i + 1}: not a valid item id`);
+    if (!/^[A-Za-z_][A-Za-z0-9_]{0,63}$/.test(item.name))
+      return bad(`variable ${i + 1}: "${item.name}" is not a valid name`);
+    if (ENV_RESERVED.has(item.name.toUpperCase()))
+      return bad(`variable ${i + 1}: ${item.name} is used by Windows or Zero2Dev and cannot be set here`);
+    if (names.has(item.name.toUpperCase())) return bad(`the variable ${item.name} is listed twice`);
+    names.add(item.name.toUpperCase());
+    if (item.source === "default") {
+      if (!["node", "php", "java", "go", "mysql", "mariadb", "postgres", "redis"].includes(v.kind))
+        return bad(`variable ${item.name}: choose which runtime kind it follows`);
+      item.kind = v.kind;
+    } else if (item.source === "runtime") {
+      item.runtimeId = String(v.runtimeId ?? "");
+      if (!item.runtimeId) return bad(`variable ${item.name}: choose a runtime`);
+      if (item.enabled && !state.runtimes.some((r) => r.id === item.runtimeId))
+        return bad(`variable ${item.name}: the runtime ${item.runtimeId} is not installed any more`);
+    } else if (item.source === "custom") {
+      item.value = String(v.value ?? "");
+      if (item.enabled && !item.value.trim()) return bad(`variable ${item.name}: enter a value`);
+    } else return bad(`variable ${item.name}: the source must be default, runtime or custom`);
+    vars.push(item);
+  }
+  state.env = { seeded: true, path, vars };
+
+  // Apply to the fake user environment: what is on is added, what Zero2Dev added and is no longer wanted leaves.
+  const u = state.userEnv;
+  const want = path
+    .filter((p) => p.enabled)
+    .map((p) => envResolvePath(p).value)
+    .filter(Boolean);
+  // Like envreg.placeDirs: Zero2Dev's folders go back as one block, in the chosen order, where they were.
+  let at = u.dirs.findIndex((d) => u.owned.some((o) => sameDir(o, d)));
+  const kept = u.dirs.filter((d) => !u.owned.some((o) => sameDir(o, d)));
+  if (at < 0) at = 0;
+  const block = [];
+  for (const w of want) if (!kept.some((d) => sameDir(d, w)) && !block.some((b) => sameDir(b, w))) block.push(w);
+  u.dirs = [...kept.slice(0, at), ...block, ...kept.slice(at)];
+  u.owned = block;
+  const wantVars = {};
+  for (const v of vars)
+    if (v.enabled) {
+      const r = envResolveVar(v);
+      if (r.value) wantVars[v.name] = r.value;
+    }
+  for (const name of Object.keys(u.ownedVars)) {
+    if (u.vars[name]?.toLowerCase() === u.ownedVars[name].toLowerCase() && wantVars[name] === undefined) {
+      delete u.vars[name];
+      delete u.ownedVars[name];
+    }
+  }
+  for (const [name, value] of Object.entries(wantVars)) {
+    if (!Object.hasOwn(u.vars, name) || u.ownedVars[name]?.toLowerCase() === u.vars[name].toLowerCase()) {
+      u.vars[name] = value;
+      u.ownedVars[name] = value;
+    }
+  }
+  return null;
+}
+
 function addLog(svc, stream, text) {
   const line = { ts: now(), stream, text };
   const arr = logs.get(svc.id) ?? [];
@@ -352,7 +565,62 @@ function addLog(svc, stream, text) {
 }
 const isAbs = (p) => /^[A-Za-z]:[\\/]/.test(p) || p.startsWith("/") || p.startsWith("\\\\");
 
-function validateService(b) {
+const DB_KINDS = ["mariadb", "mysql", "postgres", "redis"];
+// Like the daemon: dependsOn / databaseId must exist, databaseId must be a database, no loops.
+function validateLinks(b, selfId) {
+  const byId = new Map(state.services.map((x) => [x.id, x]));
+  const deps = (x) => [...new Set([...(x.dependsOn ?? []), x.databaseId].filter(Boolean))];
+  if (b.dependsOn !== undefined && !Array.isArray(b.dependsOn)) return "dependsOn must be a list";
+  for (const d of b.dependsOn ?? []) {
+    if (selfId && d === selfId) return "a service cannot depend on itself";
+    if (!byId.has(d)) return `dependency ${d} not found`;
+  }
+  if (b.databaseId) {
+    if (selfId && b.databaseId === selfId) return "a service cannot use itself as its database";
+    const db = byId.get(b.databaseId);
+    if (!db) return `database ${b.databaseId} not found`;
+    if (!DB_KINDS.includes(db.kind)) return `service "${db.name}" is not a database`;
+  }
+  const limit = b.restartLimit ?? 0;
+  if (!Number.isInteger(limit) || limit < 0 || limit > 20) return "restartLimit must be 1-20";
+  const ef = String(b.envFile ?? "").trim();
+  if (ef) {
+    if (isAbs(ef) || ef.includes(":") || ef.startsWith("/") || ef.startsWith("\\"))
+      return "envFile must be a path relative to the service folder";
+    if (ef.split(/[\\/]/).includes("..")) return "envFile must stay inside the service folder (no ..)";
+  }
+  // loop check on the graph as it would be saved
+  const NEW = "(new)";
+  const nodes = new Map(state.services.filter((x) => x.id !== selfId).map((x) => [x.id, deps(x)]));
+  nodes.set(selfId || NEW, deps(b));
+  const colour = new Map();
+  const path = [];
+  const visit = (n) => {
+    colour.set(n, 1);
+    path.push(n);
+    for (const d of nodes.get(n) ?? []) {
+      if (!nodes.has(d)) continue;
+      if (colour.get(d) === 1) return [...path.slice(path.indexOf(d)), d];
+      if (!colour.has(d)) {
+        const c = visit(d);
+        if (c) return c;
+      }
+    }
+    path.pop();
+    colour.set(n, 2);
+    return null;
+  };
+  for (const n of nodes.keys()) {
+    if (colour.has(n)) continue;
+    const c = visit(n);
+    if (c) {
+      const nameOf = (x) => (x === NEW || x === selfId ? b.name : byId.get(x)?.name);
+      return `these services depend on each other in a loop: ${c.map(nameOf).join(" -> ")}`;
+    }
+  }
+  return null;
+}
+function validateService(b, selfId = "") {
   const kinds = ["custom", "node", "php", "go", "java", "caddy", "nginx", "mariadb", "mysql", "postgres", "redis"];
   const allowed = [
     "name",
@@ -367,6 +635,11 @@ function validateService(b) {
     "healthPath",
     "runtimeId",
     "autostart",
+    "dependsOn",
+    "databaseId",
+    "envFile",
+    "restartOnCrash",
+    "restartLimit",
     "id",
   ];
   if (!b || typeof b !== "object") return "invalid JSON body";
@@ -386,7 +659,7 @@ function validateService(b) {
     if (b.cwd.includes("nonexistent")) return `cwd ${b.cwd} does not exist`;
   }
   if (!Number.isInteger(b.port ?? 0) || (b.port ?? 0) < 0 || (b.port ?? 0) > 65535) return "port must be 0-65535";
-  return null;
+  return validateLinks(b, selfId);
 }
 function normalizeService(b) {
   const legacy = b.settings === undefined && (b.args || []).length > 0;
@@ -403,6 +676,11 @@ function normalizeService(b) {
     healthPath: b.healthPath || "",
     runtimeId: b.runtimeId || "",
     autostart: !!b.autostart,
+    dependsOn: [...new Set(b.dependsOn ?? [])],
+    databaseId: b.databaseId || "",
+    envFile: String(b.envFile ?? "").trim(),
+    restartOnCrash: !!b.restartOnCrash,
+    restartLimit: b.restartLimit || 5,
   };
 }
 
@@ -414,10 +692,59 @@ function setState(svc, st, extra = {}) {
     pid: svc.pid,
     startedAt: svc.startedAt,
     lastError: svc.lastError,
+    restarts: svc.restarts ?? 0,
   });
 }
 
+// Why a service cannot start right now (the daemon answers 409 with this), or "".
+function startProblem(svc) {
+  if (svc.port > 0) {
+    const other = state.services.find(
+      (s) => s !== svc && s.port === svc.port && (s.state === "running" || s.state === "starting"),
+    );
+    if (other) return `port ${svc.port} is already in use by ${other.name}`;
+  }
+  if (svc.kind !== "custom" && !svc.command && !state.runtimes.some((r) => r.kind === svc.kind) && svc.kind !== "node")
+    return `no ${svc.kind} runtime found: register or install one first`;
+  return "";
+}
+const isActive = (svc) => svc.state === "running" || svc.state === "starting";
+const tierOf = (k) => (DB_KINDS.includes(k) ? 1 : k === "caddy" || k === "nginx" ? 2 : 0);
+const depsOf = (svc) => [...new Set([...(svc.dependsOn ?? []), svc.databaseId].filter(Boolean))];
+// A project's start order, like supervisor.Sequence: the members as listed, except that a member
+// moves down to just after the last member it needs (transitively, also through non-members).
+function startSequence(memberIds) {
+  const byId = new Map(state.services.map((s) => [s.id, s]));
+  const list = [...new Set(memberIds)].filter((id) => byId.has(id));
+  const reach = (id) => {
+    const seen = new Set();
+    const walk = (x) => {
+      for (const d of depsOf(byId.get(x))) {
+        if (byId.has(d) && !seen.has(d)) {
+          seen.add(d);
+          walk(d);
+        }
+      }
+    };
+    walk(id);
+    return seen;
+  };
+  const needs = new Map(list.map((m) => [m, reach(m)]));
+  const out = [];
+  while (out.length < list.length) {
+    const next =
+      list.find(
+        (m) =>
+          !out.includes(m) &&
+          list.every((o) => o === m || out.includes(o) || !needs.get(m).has(o) || needs.get(o).has(m)),
+      ) ?? list.find((m) => !out.includes(m));
+    out.push(next);
+  }
+  return out;
+}
+
 function startProc(svc) {
+  svc.restarts = 0;
   svc.lastError = "";
   setState(svc, "starting", { pid: 0, startedAt: null, lastError: "" });
   addLog(svc, "system", `starting ${svc.command || svc.kind} ${svc.args.join(" ")}`.trim());
@@ -428,6 +755,16 @@ function startProc(svc) {
       addLog(svc, "stderr", "Error: listen EADDRINUSE: address already in use");
       clearInterval(entry.timer);
       procs.delete(svc.id);
+      // Like the daemon, an unexpected exit is announced (limit 0: no restart is planned; the mock never restarts).
+      emit("service.crashed", {
+        id: svc.id,
+        name: svc.name,
+        error: "exit status 1",
+        attempt: 1,
+        limit: 0,
+        retryInSec: 0,
+        gaveUp: false,
+      });
       return setState(svc, "failed", { pid: 0, lastError: "exit status 1" });
     }
     setState(svc, "running", { pid: 4000 + Math.floor(Math.random() * 5000), startedAt: now() });
@@ -630,7 +967,7 @@ async function api(req, res, url) {
   }
   if (m === "GET" && p === "/api/status") {
     return send(res, 200, {
-      version: "0.0.3",
+      version: "0.0.4",
       uptimeSeconds: Math.floor((Date.now() - started) / 1000),
       os: THIS_PC.os,
       arch: THIS_PC.arch,
@@ -739,6 +1076,158 @@ async function api(req, res, url) {
       return send(res, 201, svc);
     }
   }
+  // The literal bulk routes come before the generic /api/services/{id}... pattern below.
+  // ?project=id limits them to that project's services (or sites); an unknown id is a 404.
+  const projectParam = () => {
+    const pid = url.searchParams.get("project");
+    if (!pid) return { project: null };
+    const project = state.projects.find((x) => x.id === pid);
+    return project ? { project } : { error: true, pid };
+  };
+  if (m === "POST" && p === "/api/services/start-all") {
+    const pp = projectParam();
+    if (pp.error) return fail(res, 404, "not_found", `project ${pp.pid} not found`);
+    // Like the daemon: dependencies first, then databases before apps; failed dependencies fail their dependents.
+    const want = pp.project ? new Set(pp.project.serviceIds) : null;
+    if (pp.project) {
+      for (const sid of pp.project.siteIds) {
+        const site = state.sites.find((x) => x.id === sid);
+        if (site) site.enabled = true;
+      }
+      if (pp.project.siteIds.length) emit("sites.changed");
+    }
+    const started = [];
+    const failed = [];
+    const failedIds = new Set();
+    const begin = async (svc) => {
+      while (svc.state === "starting") await sleep(25);
+      if (svc.state === "running" || failedIds.has(svc.id) || started.includes(svc.id)) return;
+      for (const d of depsOf(svc)) {
+        const dep = state.services.find((x) => x.id === d);
+        if (!dep) continue;
+        await begin(dep);
+        if (failedIds.has(dep.id)) {
+          failedIds.add(svc.id);
+          failed.push({ id: svc.id, name: svc.name, error: `${dep.name} did not start` });
+          return;
+        }
+      }
+      const problem = startProblem(svc);
+      if (problem) {
+        failedIds.add(svc.id);
+        failed.push({ id: svc.id, name: svc.name, error: problem });
+        return;
+      }
+      startProc(svc);
+      while (svc.state === "starting") await sleep(25);
+      if (svc.state !== "running") {
+        failedIds.add(svc.id);
+        failed.push({ id: svc.id, name: svc.name, error: svc.lastError || "service did not start" });
+        return;
+      }
+      started.push(svc.id);
+    };
+    // A project starts in its own order (each member after the ones above it), dependencies first.
+    const todo = pp.project
+      ? startSequence(pp.project.serviceIds).map((sid) => state.services.find((x) => x.id === sid))
+      : state.services.filter((x) => !want || want.has(x.id)).sort((a, b) => tierOf(b.kind) - tierOf(a.kind));
+    for (const svc of todo) await begin(svc);
+    return send(res, 200, { started: started.sort((a, b) => a.localeCompare(b)), failed });
+  }
+  if (m === "POST" && p === "/api/services/stop-all") {
+    const pp = projectParam();
+    if (pp.error) return fail(res, 404, "not_found", `project ${pp.pid} not found`);
+    // Like the daemon: apps first, then databases, then the site server; answers when they are down.
+    const want = pp.project ? new Set(pp.project.serviceIds) : null;
+    const stopped = [];
+    if (pp.project) {
+      // A project stops from the bottom of its start order up, one service at a time.
+      for (const sid of startSequence(pp.project.serviceIds).reverse()) {
+        const svc = state.services.find((x) => x.id === sid);
+        if (!svc || !(isActive(svc) || svc.state === "stopping")) continue;
+        if (svc.state !== "stopping") stopProc(svc);
+        while (svc.state === "stopping") await sleep(25);
+        if (svc.state === "stopped") stopped.push(svc.id);
+      }
+      return send(res, 200, { stopped: stopped.sort((a, b) => a.localeCompare(b)), failed: [] });
+    }
+    for (let t = 0; t <= 2; t++) {
+      const group = state.services.filter(
+        (s) => (s.state === "running" || s.state === "starting") && tierOf(s.kind) === t && (!want || want.has(s.id)),
+      );
+      for (const svc of group) {
+        stopProc(svc);
+        stopped.push(svc.id);
+      }
+      if (group.length) await new Promise((r) => setTimeout(r, 700));
+    }
+    return send(res, 200, { stopped: stopped.sort((a, b) => a.localeCompare(b)), failed: [] });
+  }
+  if (m === "POST" && (p === "/api/sites/enable-all" || p === "/api/sites/disable-all")) {
+    const pp = projectParam();
+    if (pp.error) return fail(res, 404, "not_found", `project ${pp.pid} not found`);
+    const on = p.endsWith("/enable-all");
+    const want = pp.project ? new Set(pp.project.siteIds) : null;
+    let changed = 0;
+    for (const site of state.sites)
+      if ((!want || want.has(site.id)) && site.enabled !== on) {
+        site.enabled = on;
+        changed++;
+      }
+    if (changed) emit("sites.changed");
+    return send(res, 200, { changed });
+  }
+  if (m === "POST" && (m2 = p.match(/^\/api\/services\/([^/]+)\/terminal$/))) {
+    const svc = state.services.find((s) => s.id === m2[1]);
+    if (!svc) return fail(res, 404, "not_found", `service ${m2[1]} not found`);
+    state.launches.push({ terminal: svc.id, dir: svc.cwd });
+    return send(res, 204);
+  }
+
+  // projects: groups of services and sites
+  const projectBody = () => {
+    const b = body;
+    if (!b || typeof b !== "object") return "invalid JSON body";
+    for (const k of Object.keys(b)) if (!["name", "serviceIds", "siteIds"].includes(k)) return `unknown field ${k}`;
+    if (typeof b.name !== "string" || b.name.trim().length < 1 || b.name.trim().length > 64)
+      return "name must be 1-64 characters";
+    for (const sid of b.serviceIds ?? [])
+      if (!state.services.some((x) => x.id === sid)) return `service ${sid} not found`;
+    for (const sid of b.siteIds ?? []) if (!state.sites.some((x) => x.id === sid)) return `site ${sid} not found`;
+    return null;
+  };
+  const projectOf = (b) => ({
+    name: b.name.trim(),
+    serviceIds: [...new Set(b.serviceIds ?? [])],
+    siteIds: [...new Set(b.siteIds ?? [])],
+  });
+  if (p === "/api/projects") {
+    if (m === "GET") return send(res, 200, state.projects);
+    if (m === "POST") {
+      const err = projectBody();
+      if (err) return fail(res, 400, "bad_request", err);
+      const project = { id: id("prj"), ...projectOf(body) };
+      state.projects.push(project);
+      emit("projects.changed");
+      return send(res, 201, project);
+    }
+  }
+  if ((m2 = p.match(/^\/api\/projects\/([^/]+)$/))) {
+    const project = state.projects.find((x) => x.id === m2[1]);
+    if (!project) return fail(res, 404, "not_found", `project ${m2[1]} not found`);
+    if (m === "PUT") {
+      const err = projectBody();
+      if (err) return fail(res, 400, "bad_request", err);
+      Object.assign(project, projectOf(body));
+      emit("projects.changed");
+      return send(res, 200, project);
+    }
+    if (m === "DELETE") {
+      state.projects = state.projects.filter((x) => x !== project);
+      emit("projects.changed");
+      return send(res, 204);
+    }
+  }
   if ((m2 = p.match(/^\/api\/services\/([^/]+)(?:\/(start|stop|restart|logs))?$/))) {
     const svc = state.services.find((s) => s.id === m2[1]);
     if (!svc) return fail(res, 404, "not_found", `service ${m2[1]} not found`);
@@ -748,7 +1237,7 @@ async function api(req, res, url) {
       if (m === "PUT") {
         if (svc.state !== "stopped" && svc.state !== "failed")
           return fail(res, 409, "conflict", "cannot update a running service; stop it first");
-        const err = validateService(body);
+        const err = validateService(body, svc.id);
         if (err) return fail(res, 400, "bad_request", err);
         Object.assign(svc, normalizeService(body));
         emit("services.changed");
@@ -761,8 +1250,14 @@ async function api(req, res, url) {
           procs.delete(svc.id);
         }
         state.services = state.services.filter((s) => s !== svc);
+        for (const o of state.services) {
+          o.dependsOn = (o.dependsOn ?? []).filter((d) => d !== svc.id);
+          if (o.databaseId === svc.id) o.databaseId = "";
+        }
+        for (const pr of state.projects) pr.serviceIds = pr.serviceIds.filter((x) => x !== svc.id);
         logs.delete(svc.id);
         emit("services.changed");
+        emit("projects.changed");
         return send(res, 204);
       }
     }
@@ -778,19 +1273,14 @@ async function api(req, res, url) {
         clearInterval(procs.get(svc.id).timer);
         procs.delete(svc.id);
       }
-      if (svc.port > 0) {
-        const other = state.services.find(
-          (s) => s !== svc && s.port === svc.port && (s.state === "running" || s.state === "starting"),
-        );
-        if (other) return fail(res, 409, "conflict", `port ${svc.port} is already in use by ${other.name}`);
-      }
-      if (
-        svc.kind !== "custom" &&
-        !svc.command &&
-        !state.runtimes.some((r) => r.kind === svc.kind) &&
-        svc.kind !== "node"
-      ) {
-        return fail(res, 409, "conflict", `no ${svc.kind} runtime found: register or install one first`);
+      const problem = startProblem(svc);
+      if (problem) return fail(res, 409, "conflict", problem);
+      if (action === "start") {
+        // Inactive dependencies start first, like the daemon.
+        for (const d of depsOf(svc)) {
+          const dep = state.services.find((x) => x.id === d);
+          if (dep && !isActive(dep) && !startProblem(dep)) startProc(dep);
+        }
       }
       startProc(svc);
       return send(res, 202, svc);
@@ -1027,6 +1517,15 @@ async function api(req, res, url) {
     await new Promise((r) => setTimeout(r, 400));
     if (/cancel/i.test(body.start || "")) return send(res, 200, { path: "", cancelled: true });
     return send(res, 200, { path: body.start || "C:\\work\\picked", cancelled: false });
+  }
+  if (p === "/api/environment") {
+    if (m === "GET") return send(res, 200, envView());
+    if (m === "PUT") {
+      const err = envApply(body);
+      if (err) return fail(res, err.status, err.code, err.message);
+      emit("environment.changed");
+      return send(res, 200, envView());
+    }
   }
   if (p === "/api/settings") {
     if (m === "GET") return send(res, 200, state.settings);

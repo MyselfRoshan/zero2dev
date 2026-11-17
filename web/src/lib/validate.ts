@@ -26,7 +26,28 @@ export function runtimeKindsFor(kind: ServiceKind): RuntimeKind[] {
   return kind === "custom" ? [] : [kind];
 }
 
-export type ServiceField = "name" | "kind" | "command" | "args" | "cwd" | "env" | "port" | "healthPath";
+export type ServiceField =
+  | "name"
+  | "kind"
+  | "command"
+  | "args"
+  | "cwd"
+  | "env"
+  | "port"
+  | "healthPath"
+  | "dependsOn"
+  | "envFile"
+  | "restartLimit";
+
+/** The .env path must stay inside the service folder: relative, no drive or ":" anywhere, no "..". */
+export function envFileProblem(p: string): string {
+  const t = p.trim();
+  if (!t) return "";
+  if (isAbsolutePath(t) || t.includes(":") || t.startsWith("\\"))
+    return "Use a path relative to the folder, for example .env.";
+  if (t.split(/[\\/]/).includes("..")) return "The file must be inside the folder (no ..).";
+  return "";
+}
 
 /** What the service's type asks for (from its profile, GET /api/kinds). */
 export interface ServiceRules {
@@ -53,6 +74,10 @@ export function validateService(
   const hp = v.healthPath.trim();
   if (hp && !hp.startsWith("/")) e.healthPath = "Health path must start with /.";
   else if (hp && v.port === 0) e.healthPath = "A health path needs a port. Set a port or clear this field.";
+  if (!Number.isInteger(v.restartLimit) || v.restartLimit < 1 || v.restartLimit > 20)
+    e.restartLimit = "Use a whole number from 1 to 20.";
+  const envFile = envFileProblem(v.envFile);
+  if (envFile) e.envFile = envFile;
   const keys = Object.keys(v.env);
   if (keys.some((k) => !k.trim() || k.includes("="))) e.env = "Environment names cannot be empty or contain =.";
   return e;

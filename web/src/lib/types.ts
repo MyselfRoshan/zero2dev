@@ -15,6 +15,23 @@ export const SERVICE_KINDS: ServiceKind[] = [
 ];
 export type ServiceState = "stopped" | "starting" | "running" | "stopping" | "failed";
 
+/** The answer of POST /api/services/start-all. */
+export interface StartAllResult {
+  started: string[];
+  failed: { id: string; name: string; error: string }[];
+}
+
+/** The answer of POST /api/sites/enable-all and /disable-all: how many sites changed. */
+export interface SitesBulkResult {
+  changed: number;
+}
+
+/** The answer of POST /api/services/stop-all. */
+export interface StopAllResult {
+  stopped: string[];
+  failed: { id: string; name: string; error: string }[];
+}
+
 export interface Service {
   id: string;
   name: string;
@@ -31,6 +48,18 @@ export interface Service {
   healthPath: string;
   runtimeId: string;
   autostart: boolean;
+  /** Services that must be running before this one starts (and stop after it). */
+  dependsOn: string[];
+  /** A database service this one uses; it is a dependency too. "" for none. */
+  databaseId: string;
+  /** A .env file, relative to the folder, whose variables the service gets. "" for none. */
+  envFile: string;
+  /** Start the service again after it exits unexpectedly. */
+  restartOnCrash: boolean;
+  /** At most this many restarts in a row, 1-20 (default 5). */
+  restartLimit: number;
+  /** Crash restarts since the last manual start (filled in by the daemon). */
+  restarts: number;
   state: ServiceState;
   pid: number;
   startedAt: string | null;
@@ -50,6 +79,25 @@ export interface ServiceInput {
   healthPath: string;
   runtimeId: string;
   autostart: boolean;
+  dependsOn: string[];
+  databaseId: string;
+  envFile: string;
+  restartOnCrash: boolean;
+  restartLimit: number;
+}
+
+/** A group of services and sites that are started and stopped together. */
+export interface Project {
+  id: string;
+  name: string;
+  serviceIds: string[];
+  siteIds: string[];
+}
+
+export interface ProjectInput {
+  name: string;
+  serviceIds: string[];
+  siteIds: string[];
 }
 
 /** What a service runs (POST /api/services/preview, GET /api/services/{id}/command). */
@@ -231,6 +279,73 @@ export interface Settings {
   accent?: string;
 }
 
+/** A folder on the Windows user PATH, switched on or off on its own. */
+export interface EnvPath {
+  id: string;
+  source: "shims" | "runtime" | "custom";
+  /** runtime: the folder of this runtime's program. */
+  runtimeId?: string;
+  /** custom: a full path. */
+  dir?: string;
+  enabled: boolean;
+}
+/** A Windows user environment variable, switched on or off on its own. */
+export interface EnvVar {
+  id: string;
+  name: string;
+  source: "default" | "runtime" | "custom";
+  /** default: the runtime kind whose default version is used. */
+  kind?: string;
+  /** runtime: one specific version. */
+  runtimeId?: string;
+  /** custom: the value. */
+  value?: string;
+  enabled: boolean;
+}
+export interface EnvConfig {
+  seeded?: boolean;
+  path: EnvPath[];
+  vars: EnvVar[];
+}
+/** What the user environment holds for one folder item. */
+export interface EnvPathStatus {
+  id: string;
+  /** The folder the item stands for ("" when it cannot be worked out). */
+  dir: string;
+  /** On the user PATH now. */
+  present: boolean;
+  /** Zero2Dev added it and takes it off again. */
+  owned: boolean;
+  problem?: string;
+  /** The commands the folder gives a terminal (node, npm ...), sorted. Missing on older daemons. */
+  commands?: string[];
+}
+/** What the user environment holds for one variable item. */
+export interface EnvVarStatus {
+  id: string;
+  name: string;
+  /** The value the item stands for ("" when it cannot be worked out). */
+  value: string;
+  current?: string;
+  hasCurrent: boolean;
+  /** The current value is the one Zero2Dev set. */
+  owned: boolean;
+  problem?: string;
+}
+export interface EnvReport {
+  /** False off Windows: nothing can be changed. */
+  supported: boolean;
+  shimsDir: string;
+  error?: string;
+  path: EnvPathStatus[];
+  vars: EnvVarStatus[];
+}
+/** GET and PUT /api/environment. */
+export interface Environment {
+  config: EnvConfig;
+  report: EnvReport;
+}
+
 export type SiteServer = "caddy" | "nginx";
 
 export type HomeSource = "env" | "cwd" | "exe";
@@ -270,6 +385,7 @@ export type ErrorCode =
   | "conflict"
   | "unverified"
   | "internal"
+  | "not_supported"
   // client-side only
   | "network"
   | "unknown";
@@ -280,6 +396,21 @@ export interface ServiceStatusEvent {
   pid: number;
   startedAt: string | null;
   lastError: string;
+  /** Crash restarts since the last manual start. Missing on older daemons. */
+  restarts?: number;
+}
+/** `service.crashed`: a service with restart on crash exited unexpectedly. */
+export interface ServiceCrashedEvent {
+  id: string;
+  name: string;
+  error: string;
+  /** 1-based number of this crash since the last manual start. */
+  attempt: number;
+  limit: number;
+  /** Seconds until the next start; 0 when gaveUp. */
+  retryInSec: number;
+  /** The limit is reached: the service is not restarted again. */
+  gaveUp: boolean;
 }
 export interface LogLineEvent extends LogLine {
   serviceId: string;

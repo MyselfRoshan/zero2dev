@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { api } from "../lib/api";
-  import { deleteService, isActive, serviceUrl } from "../lib/actions";
+  import { deleteService, isActive, openTerminal, serviceUrl } from "../lib/actions";
   import { serviceRuntimeLabel } from "../lib/catalog";
   import { connectionInfo, dbToolsFor, deleteServiceMessage, editorsFor, serviceKindLabel } from "../lib/ux";
   import { dbDataPath } from "../lib/installer";
@@ -12,6 +12,7 @@
   import { navigate } from "../lib/router.svelte";
   import { app, attempt, clearLogs, lists, logs, seedLogs, toast, upsertService } from "../lib/store.svelte";
   import ConfirmDialog from "../ui/ConfirmDialog.svelte";
+  import CrashBanner from "../ui/CrashBanner.svelte";
   import Icon from "../ui/Icon.svelte";
   import KindIcon from "../ui/KindIcon.svelte";
   import LogViewer from "../ui/LogViewer.svelte";
@@ -64,7 +65,11 @@
 
   function inputOf(s: Service): ServiceInput {
     const { name, kind, command, args, settings, customArgs, cwd, env, port, healthPath, runtimeId, autostart } = s;
-    return { name, kind, command, args, settings, customArgs, cwd, env, port, healthPath, runtimeId, autostart };
+    const { dependsOn, databaseId, envFile, restartOnCrash, restartLimit } = s;
+    return {
+      name, kind, command, args, settings, customArgs, cwd, env, port, healthPath, runtimeId, autostart,
+      dependsOn, databaseId, envFile, restartOnCrash, restartLimit,
+    };
   }
   // A service from before settings existed runs its own command line; offer the guided settings.
   let guided = $state<CommandPreview | null>(null);
@@ -137,6 +142,11 @@
         {/each}
       </div>
     {/if}
+    <div class="row wrap open-terminal" data-testid="open-terminal">
+      <button class="btn sm" type="button" onclick={() => openTerminal(service)}><Icon name="terminal" size={14} /> Open terminal</button>
+      <span class="muted small">The terminal uses the same runtime versions and variables as this service.</span>
+    </div>
+    <CrashBanner serviceId={service.id} />
     {#if service.state === "failed" && service.lastError}
       <div class="notice bad" role="alert"><Icon name="alert" /><span>{service.lastError}</span></div>
     {/if}

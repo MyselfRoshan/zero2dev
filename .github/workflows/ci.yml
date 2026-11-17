@@ -1,0 +1,164 @@
+name: ci
+
+# Every check the project has, on every pull request and on pushes to main and develop.
+# The release workflow calls this same workflow first, so nothing is released unless all
+# of it passes.
+#
+#   web      format, lint, types, unit tests and the production build of the dashboard
+#   go       gofmt, go vet (Linux and Windows) and go test -race on Linux
+#   windows  go vet, go test and the GUI build on a real Windows runner
+#   e2e      the dashboard driven by Playwright against the mock daemon
+#   release-ready (pull requests into release only) VERSION is new and consistent
+
+on:
+  pull_request:
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  NODE_VERSION: "26"
+
+jobs:
+  web:
+    name: web (check, test, build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # pnpm version comes from "packageManager" in web/package.json.
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - name: Install
+        working-directory: web
+        run: pnpm install --frozen-lockfile
+      - name: Format, lint and types
+        working-directory: web
+        run: pnpm run check
+      - name: Unit tests
+        working-directory: web
+        run: pnpm test
+      - name: Build (embedded into the executable)
+        working-directory: web
+        run: pnpm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: webui-dist
+          path: internal/webui/dist
+          if-no-files-found: error
+          retention-days: 3
+
+  go:
+    name: go (Linux)
+    needs: web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false # no dependencies, so no go.sum to key a cache on
+      - uses: actions/download-artifact@v4
+        with:
+          name: webui-dist
+          path: internal/webui/dist
+      - name: gofmt
+        run: |
+          unformatted="$(gofmt -l cmd internal)"
+          if [[ -n "$unformatted" ]]; then
+            echo "::error::These files need gofmt:"
+            echo "$unformatted"
+            exit 1
+          fi
+      - name: go vet
+        run: |
+          go vet ./cmd/... ./internal/...
+          GOOS=windows GOARCH=amd64 go vet ./cmd/... ./internal/...
+      - name: go test
+        run: go test -race -count=1 ./cmd/... ./internal/...
+
+  windows:
+    name: go (Windows)
+    needs: web
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: webui-dist
+          path: internal/webui/dist
+      - name: go vet
+        run: go vet ./cmd/... ./internal/...
+      - name: go test
+        # Process tests on a busy shared runner can be slow to release files; one retry keeps
+        # a timing hiccup from blocking a release, while a real failure fails twice.
+        run: |
+          go test -count=1 ./cmd/... ./internal/... || {
+            echo "::warning::go test failed on Windows, running it once more"
+            go test -count=1 ./cmd/... ./internal/...
+          }
+      - name: Build the GUI executable
+        env:
+          CGO_ENABLED: "0"
+        run: go build -trimpath -ldflags "-s -w -H windowsgui" -o "$RUNNER_TEMP/zero2dev.exe" ./cmd/zero2dev
+
+  e2e:
+    name: e2e (Playwright against the mock)
+    needs: web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: webui-dist
+          path: internal/webui/dist
+      # Playwright is not a project dependency: it is installed next to the test, on its own.
+      - name: Install Playwright and Chromium
+        run: |
+          npm install --no-save --no-package-lock --prefix "$RUNNER_TEMP/pw" playwright@1.64.0
+          "$RUNNER_TEMP/pw/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Smoke test
+        working-directory: web
+        env:
+          NODE_PATH: ${{ runner.temp }}/pw/node_modules
+          SHOTS_DIR: ${{ runner.temp }}/shots
+        run: node e2e/smoke.mjs
+      - name: Screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screenshots
+          path: ${{ runner.temp }}/shots
+          retention-days: 7
+
+  release-ready:
+    name: release-ready (VERSION is new)
+    if: github.event_name == 'pull_request' && github.base_ref == 'release'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check VERSION, CHANGELOG.md and the tag
+        run: bash scripts/release-check.sh --require-new

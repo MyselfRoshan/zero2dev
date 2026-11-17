@@ -30,6 +30,9 @@ func Start(bin string, args []string, dir string, env []string) error {
 	return cmd.Process.Release()
 }
 
+// ErrNoTerminal: this system has no terminal Zero2Dev can open (the API answers 501).
+var ErrNoTerminal = errors.New("opening a terminal is only supported on Windows")
+
 // DBUser is the administrator account Zero2Dev's databases are set up with
 // (no password; they only listen on 127.0.0.1).
 func DBUser(kind string) string {

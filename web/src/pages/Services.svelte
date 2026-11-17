@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { deleteService, isActive, serviceUrl } from "../lib/actions";
+  import { deleteService, isActive, serviceUrl, startAll, stopAll } from "../lib/actions";
   import { consumeNewFlag, navigate } from "../lib/router.svelte";
   import { serviceRuntimeLabel } from "../lib/catalog";
   import { deleteServiceMessage, serviceKindLabel } from "../lib/ux";
@@ -18,6 +18,20 @@
   let deleting = $state<Service | null>(null);
   let busy = $state(false);
 
+  // Start all and Stop all: the daemon orders them (databases before the apps that need them).
+  const startable = $derived(lists.services.filter((s) => !isActive(s) && s.state !== "stopping"));
+  const stoppable = $derived(lists.services.filter((s) => isActive(s)));
+  let bulk = $state(false);
+  async function all(start: boolean) {
+    bulk = true;
+    try {
+      if (start) await startAll();
+      else await stopAll();
+    } finally {
+      bulk = false;
+    }
+  }
+
   onMount(() => {
     if (consumeNewFlag()) navigate("#/services/new?back=list"); // old quick links
   });
@@ -32,6 +46,10 @@
 </script>
 
 <PageHead sub="Your apps. Zero2Dev starts them, checks their port and keeps their logs.">
+  {#if lists.services.length > 0}
+    <button class="btn" type="button" disabled={bulk || startable.length === 0} onclick={() => all(true)} aria-label="Start all services" title="Starts every service that is not running, databases first" data-testid="start-all"><Icon name="play" size={14} /> Start all</button>
+    <button class="btn" type="button" disabled={bulk || stoppable.length === 0} onclick={() => all(false)} aria-label="Stop all services" title="Stops every running service, apps first. Zero2Dev keeps running" data-testid="stop-all"><Icon name="stop" size={14} /> Stop all</button>
+  {/if}
   <button class="btn primary" onclick={() => navigate("#/services/new?back=list")} data-tour="new-service"><Icon name="plus" /> New service</button>
 </PageHead>
 

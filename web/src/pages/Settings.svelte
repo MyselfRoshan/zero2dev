@@ -7,6 +7,7 @@
   import KindIcon from "../ui/KindIcon.svelte";
   import UnsavedBar from "../ui/UnsavedBar.svelte";
   import { nginxCaPath, serverLabel, siteServer } from "../lib/sites";
+  import { cmdActivateLine, psActivateLine, shimsDir } from "../lib/shims";
   import type { SiteServer } from "../lib/types";
 
   let suffix = $state("");
@@ -83,6 +84,9 @@
   const dataDir = $derived(app.status?.homeDir ?? app.settings?.homeDir ?? "");
   const rootCert = $derived(dataDir ? caRootPath(dataDir) : "<data folder>\\caddy\\data\\caddy\\pki\\authorities\\local\\root.crt");
   const nginxCert = $derived(dataDir ? nginxCaPath(dataDir) : "<data folder>\\nginx\\certs\\ca.crt");
+  const shims = $derived(dataDir ? shimsDir(dataDir) : "<data folder>\\shims");
+  const cmdLine = $derived(cmdActivateLine(dataDir || "<data folder>"));
+  const psLine = $derived(psActivateLine(dataDir || "<data folder>"));
   const switching = $derived(!!app.settings && server !== siteServer(app.settings));
 
   /** Puts every field back to the saved settings. */
@@ -97,6 +101,7 @@
     { id: "set-https", label: "HTTPS" },
     { id: "set-downloads", label: "Downloads" },
     { id: "set-startup", label: "Startup" },
+    { id: "set-cli", label: "Command line" },
     { id: "set-pc", label: "This PC" },
     { id: "set-access", label: "Access" },
   ];
@@ -246,6 +251,36 @@
             <label for="open-browser" class="grow"><span class="label">Open this dashboard when Zero2Dev starts</span>
               <span class="hint">Opens your browser on the dashboard each time zero2dev.exe starts.</span></label>
             <input id="open-browser" type="checkbox" role="switch" class="switch" bind:checked={openBrowser} />
+          </div>
+        </div>
+      </section>
+
+      <section class="section-card" id="set-cli" aria-labelledby="h-cli" data-testid="cli-section">
+        <header><h2 id="h-cli">Command line</h2><p>Use the runtimes Zero2Dev installed (<code>node</code>, <code>npm</code>, <code>php</code>, <code>java</code>, <code>go</code> ...) from your own terminals.</p></header>
+        <div class="body">
+          <div class="field">
+            <span class="label" id="shims-l">Shims folder</span>
+            <div class="row">
+              <code class="dir grow" aria-labelledby="shims-l" data-testid="shims-dir">{shims}</code>
+              <button class="btn sm" type="button" onclick={() => copyText(shims, "Shims folder path")} disabled={!dataDir}><Icon name="copy" size={14} /> Copy</button>
+            </div>
+            <span class="hint">One small <code>.cmd</code> per command, pointing at the default runtime of each kind. They are rewritten when you install, remove or Make default a runtime.</span>
+          </div>
+          <div class="field">
+            <span class="label" id="act-l">Use them in one terminal, once</span>
+            <div class="row">
+              <code class="dir grow" aria-labelledby="act-l" data-testid="activate-cmd">{cmdLine}</code>
+              <button class="btn sm" type="button" onclick={() => copyText(cmdLine, "Command")} disabled={!dataDir}><Icon name="copy" size={14} /> Copy</button>
+            </div>
+            <div class="row">
+              <code class="dir grow" data-testid="activate-ps1">{psLine}</code>
+              <button class="btn sm" type="button" onclick={() => copyText(psLine, "Command")} disabled={!dataDir}><Icon name="copy" size={14} /> Copy</button>
+            </div>
+            <span class="hint">The first line is for Command Prompt, the second for PowerShell. They put the default runtimes first on PATH and set <code>JAVA_HOME</code> and <code>GOROOT</code> for that terminal only. If PowerShell blocks the script, run <code>Set-ExecutionPolicy -Scope Process Bypass</code> first.</span>
+          </div>
+          <div class="notice" data-testid="env-link">
+            <Icon name="variable" />
+            <span>To have these tools in every terminal without running a script, choose which folders go on your Windows PATH and which variables (<code>JAVA_HOME</code>, <code>GOROOT</code> ...) get set, one by one, on the <a href="#/environment">Environment page</a>. Nothing there is on by default.</span>
           </div>
         </div>
       </section>

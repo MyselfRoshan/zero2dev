@@ -79,7 +79,7 @@ type Options struct {
 // New creates an Installer.
 func New(home string, st *store.Store, rt *runtimes.Manager, em Emitter) *Installer {
 	return &Installer{
-		home: home, Bin: filepath.Join(home, "bin"), st: st, rt: rt, em: em, Version: "0.0.3",
+		home: home, Bin: filepath.Join(home, "bin"), st: st, rt: rt, em: em, Version: "0.0.4",
 		log:     &fileLog{path: filepath.Join(home, "logs", "installer.log")},
 		Catalog: func() ([]model.CatalogEntry, error) { return catalog.Load(home) },
 		Rename:  os.Rename, Sleep: time.Sleep, RenameAttempts: 20,

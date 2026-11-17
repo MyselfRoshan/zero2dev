@@ -19,6 +19,7 @@ import (
 	"zero2dev/internal/apperr"
 	"zero2dev/internal/catalog"
 	"zero2dev/internal/config"
+	"zero2dev/internal/envreg"
 	"zero2dev/internal/events"
 	"zero2dev/internal/installer"
 	"zero2dev/internal/model"
@@ -50,6 +51,15 @@ type Deps struct {
 	// Quit stops the daemon (POST /api/shutdown): the same path as Ctrl+C or the
 	// tray's Quit. nil disables the endpoint.
 	Quit func()
+	// Terminal opens a console window in dir with the environment env (launch.OpenTerminal); nil
+	// disables POST /api/services/{id}/terminal. Replaced in tests.
+	Terminal func(dir string, env []string) error
+	// EnvApply brings the Windows user environment in line with d.Env (envreg.Apply); d is
+	// the state being saved. An error is answered with 409 and nothing is saved. nil only
+	// stores the config. EnvReport reads what the user environment holds now (envreg.Inspect);
+	// nil answers an empty report.
+	EnvApply  func(d store.Data) error
+	EnvReport func(d store.Data) envreg.Report
 }
 
 // Server is the http.Handler for the whole daemon.
@@ -100,6 +110,13 @@ func (s *Server) routes() {
 	s.handle("GET /api/services/{id}/logs", s.serviceLogs)
 	s.handle("GET /api/services/{id}/command", s.serviceCommand)
 	s.handle("POST /api/services/preview", s.previewService)
+	s.handle("POST /api/services/start-all", s.startAllServices)
+	s.handle("POST /api/services/stop-all", s.stopAllServices)
+	s.handle("POST /api/services/{id}/terminal", s.openTerminal)
+	s.handle("GET /api/projects", s.listProjects)
+	s.handle("POST /api/projects", s.createProject)
+	s.handle("PUT /api/projects/{id}", s.updateProject)
+	s.handle("DELETE /api/projects/{id}", s.deleteProject)
 	s.handle("GET /api/kinds", s.listKinds)
 	s.handle("GET /api/project/scripts", s.projectScripts)
 	s.handle("GET /api/runtimes", s.listRuntimes)
@@ -120,9 +137,13 @@ func (s *Server) routes() {
 	s.handle("POST /api/sites", s.createSite)
 	s.handle("PUT /api/sites/{id}", s.updateSite)
 	s.handle("DELETE /api/sites/{id}", s.deleteSite)
+	s.handle("POST /api/sites/enable-all", s.enableAllSites)
+	s.handle("POST /api/sites/disable-all", s.disableAllSites)
 	s.handle("POST /api/sites/{id}/enable", s.enableSite)
 	s.handle("POST /api/sites/{id}/disable", s.disableSite)
 	s.handle("GET /api/jobs/{id}", s.getJob)
+	s.handle("GET /api/environment", s.getEnvironment)
+	s.handle("PUT /api/environment", s.putEnvironment)
 	s.handle("GET /api/settings", s.getSettings)
 	s.handle("PUT /api/settings", s.putSettings)
 	s.handle("POST /api/events/ticket", s.eventTicket)

@@ -32,9 +32,22 @@ type Supervisor struct {
 	KillGrace     time.Duration
 	DBGrace       time.Duration // databases get longer to shut down cleanly
 
+	// Restart on crash (restart.go): the first delay (doubled for every
+	// further attempt), the longest delay, and how long a service has to stay
+	// up before its attempt counter starts again at zero.
+	RestartBase   time.Duration
+	RestartMax    time.Duration
+	RestartStable time.Duration
+
+	// OnCrash is called (from a goroutine of the supervisor) for every
+	// unexpected exit of a service, see restart.go. May be nil. Set it before
+	// the first Start.
+	OnCrash func(Crash)
+
 	mu      sync.Mutex
 	procs   map[string]*proc
 	logs    map[string]*svcLog
+	crash   map[string]*crashState // restart bookkeeping per service, see restart.go
 	closing bool
 }
 
@@ -67,7 +80,8 @@ func New(home string, st *store.Store, em Emitter) *Supervisor {
 	return &Supervisor{
 		home: home, st: st, em: em,
 		HealthTimeout: 30 * time.Second, KillGrace: 5 * time.Second, DBGrace: DBGrace,
-		procs: map[string]*proc{}, logs: map[string]*svcLog{},
+		RestartBase: time.Second, RestartMax: time.Minute, RestartStable: time.Minute,
+		procs: map[string]*proc{}, logs: map[string]*svcLog{}, crash: map[string]*crashState{},
 	}
 }
 
@@ -124,19 +138,27 @@ func (s *Supervisor) Apply(svc model.Service) model.Service {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	svc.State, svc.Pid, svc.StartedAt, svc.LastError = s.statusLocked(svc.ID)
+	svc.Restarts = s.restartsLocked(svc.ID)
 	return svc
 }
 
 func (s *Supervisor) emitStatus(id string) {
 	s.mu.Lock()
 	st, pid, started, le := s.statusLocked(id)
+	restarts := s.restartsLocked(id)
 	s.mu.Unlock()
-	s.em.Publish("service.status", map[string]any{"id": id, "state": st, "pid": pid, "startedAt": started, "lastError": le})
+	s.em.Publish("service.status", map[string]any{"id": id, "state": st, "pid": pid, "startedAt": started, "lastError": le, "restarts": restarts})
 }
 
-// Start launches a service. It returns once the process is spawned (state
-// "starting"); health checks move it to "running" asynchronously.
-func (s *Supervisor) Start(id string) error {
+// Start launches a service by hand. It returns once the process is spawned
+// (state "starting"); health checks move it to "running" asynchronously. A
+// manual start cancels a pending crash restart and resets its counter.
+func (s *Supervisor) Start(id string) error { return s.start(id, nil) }
+
+// start is Start; auto is the crash-restart record of a start made by the
+// restart timer (nil for a start by hand). An automatic start gives up quietly
+// when that record was cancelled in the meantime (Stop, Stop all, shutdown).
+func (s *Supervisor) start(id string, auto *crashState) error {
 	d := s.st.Snapshot()
 	var svc *model.Service
 	for i := range d.Services {
@@ -154,11 +176,18 @@ func (s *Supervisor) Start(id string) error {
 		s.mu.Unlock()
 		return apperr.Conflict("daemon is shutting down")
 	}
+	if auto != nil && s.crash[id] != auto {
+		s.mu.Unlock()
+		return errRestartCancelled
+	}
 	prev := s.procs[id]
 	if prev != nil && active(prev.state) {
 		st := prev.state
 		s.mu.Unlock()
 		return apperr.Conflict("service is already %s", st)
+	}
+	if auto == nil {
+		s.cancelRestartLocked(id) // a start by hand ends the crash streak
 	}
 	p := &proc{state: model.StateStarting, done: make(chan struct{})}
 	s.procs[id] = p
@@ -258,13 +287,19 @@ func (s *Supervisor) wait(id string, p *proc, cmd *exec.Cmd, outW, errW *lineWri
 		p.state, p.lastErr = model.StateFailed, msg
 	}
 	final := p.state
+	ran := time.Duration(0)
+	if !p.startedAt.IsZero() {
+		ran = time.Since(p.startedAt)
+	}
 	close(p.done)
 	s.mu.Unlock()
 	if final == model.StateStopped {
 		s.logLine(id, "system", "stopped")
-	} else {
-		s.logLine(id, "system", "exited unexpectedly: "+msg)
+		s.emitStatus(id)
+		return
 	}
+	s.logLine(id, "system", "exited unexpectedly: "+msg)
+	s.crashed(id, p, msg, ran, nil) // may schedule a restart; counts the restart in the status below
 	s.emitStatus(id)
 }
 
@@ -346,6 +381,7 @@ func probe(port int, healthPath string) bool {
 // Stop requests termination and returns immediately (state "stopping").
 func (s *Supervisor) Stop(id string) error {
 	s.mu.Lock()
+	s.cancelRestartLocked(id) // also for a failed service that is waiting for its restart
 	p := s.procs[id]
 	if p == nil || !active(p.state) || p.state == model.StateStopping {
 		s.mu.Unlock()
@@ -432,6 +468,7 @@ func (s *Supervisor) Remove(id string) error {
 	l := s.logs[id]
 	delete(s.logs, id)
 	delete(s.procs, id)
+	s.cancelRestartLocked(id)
 	s.mu.Unlock()
 	if l != nil {
 		l.close()
@@ -445,6 +482,9 @@ func (s *Supervisor) Remove(id string) error {
 func (s *Supervisor) StopAll(ctx context.Context) {
 	s.mu.Lock()
 	s.closing = true
+	for id := range s.crash {
+		s.cancelRestartLocked(id) // nothing may start again while the daemon closes
+	}
 	var ids []string
 	for id, p := range s.procs {
 		if active(p.state) {

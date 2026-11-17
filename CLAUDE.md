@@ -29,4 +29,5 @@ A portable local development environment for Windows: one Go daemon that downloa
 - **Go:** `go vet ./...`, `go test ./internal/... ./cmd/...`, and `GOOS=linux go vet ./...` for the non-Windows build.
 - **Web (in `web/`):** `pnpm run check` (format, lint, types), `pnpm test`, `pnpm run build`.
 - **e2e:** `node e2e/smoke.mjs` drives the mock with Playwright, which is not a project dependency. Install it separately and point `NODE_PATH` at it.
+- **Screenshots:** `node e2e/screenshots.mjs` (same Playwright setup) shoots every page in light and dark, desktop and mobile, into `docs/screenshots/pages/`. That folder is gitignored: never commit its images. Run the script again after a UI change, so the images stay current for design reviews.
 - **Windows build:** `build.ps1` builds a GUI-subsystem exe (`-H windowsgui`).

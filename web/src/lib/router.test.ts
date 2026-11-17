@@ -70,3 +70,14 @@ it("keeps Settings mounted on declined hash navigation and allows confirmed navi
   change();
   expect(router.route.name).toBe("help");
 });
+
+it("parses the project routes", async () => {
+  vi.stubGlobal("location", { hash: "#/projects", pathname: "/", search: "" });
+  vi.stubGlobal("history", { replaceState: vi.fn() });
+  vi.stubGlobal("window", { addEventListener: () => {} });
+  const { parseHash } = await import("./router.svelte");
+  expect(parseHash("#/projects")).toEqual({ name: "projects" });
+  expect(parseHash("#/projects/new")).toEqual({ name: "projectNew" });
+  expect(parseHash("#/projects/prj_1/edit")).toEqual({ name: "projectEdit", id: "prj_1" });
+  expect(parseHash("#/projects/prj_1")).toEqual({ name: "projects" });
+});
