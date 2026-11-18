@@ -137,3 +137,51 @@ describe("consumeTokenFromHash", () => {
     expect(replaceState).not.toHaveBeenCalled();
   });
 });
+
+describe("bulk, project and terminal endpoints", () => {
+  const calls = async (fn: () => Promise<unknown>, body?: unknown) => {
+    const f = vi.fn().mockResolvedValue(res(200, body ?? {}));
+    setFetch(f as never);
+    await fn();
+    const [url, init] = f.mock.calls[0] as [string, RequestInit];
+    return { url, method: init.method, body: init.body };
+  };
+
+  it("start-all and stop-all name the project only when given one", async () => {
+    expect(await calls(() => api.startAllServices())).toMatchObject({ url: "/api/services/start-all", method: "POST" });
+    expect(await calls(() => api.startAllServices("prj 1"))).toMatchObject({
+      url: "/api/services/start-all?project=prj%201",
+    });
+    expect(await calls(() => api.stopAllServices())).toMatchObject({ url: "/api/services/stop-all" });
+    expect(await calls(() => api.stopAllServices("prj_1"))).toMatchObject({
+      url: "/api/services/stop-all?project=prj_1",
+    });
+  });
+  it("enables and disables all sites", async () => {
+    expect(await calls(() => api.enableAllSites())).toMatchObject({ url: "/api/sites/enable-all", method: "POST" });
+    expect(await calls(() => api.disableAllSites("prj_1"))).toMatchObject({
+      url: "/api/sites/disable-all?project=prj_1",
+    });
+  });
+  it("manages projects", async () => {
+    const input = { name: "Shop", serviceIds: ["svc_1"], siteIds: [] };
+    expect(await calls(() => api.listProjects())).toMatchObject({ url: "/api/projects", method: "GET" });
+    expect(await calls(() => api.createProject(input))).toMatchObject({ method: "POST", body: JSON.stringify(input) });
+    expect(await calls(() => api.updateProject("prj_1", input))).toMatchObject({
+      url: "/api/projects/prj_1",
+      method: "PUT",
+    });
+    const f = vi.fn().mockResolvedValue(res(204));
+    setFetch(f as never);
+    await api.deleteProject("prj_1");
+    expect(f.mock.calls[0][0]).toBe("/api/projects/prj_1");
+    expect((f.mock.calls[0][1] as RequestInit).method).toBe("DELETE");
+  });
+  it("opens a terminal with POST and no body", async () => {
+    const f = vi.fn().mockResolvedValue(res(204));
+    setFetch(f as never);
+    await api.openTerminal("svc 1");
+    expect(f.mock.calls[0][0]).toBe("/api/services/svc%201/terminal");
+    expect((f.mock.calls[0][1] as RequestInit).body).toBeUndefined();
+  });
+});

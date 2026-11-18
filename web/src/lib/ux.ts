@@ -1,7 +1,7 @@
 // Pure helpers behind the simplified UI: the getting-started checklist, friendly service
 // kinds, the readable command line and the "points to" choice of the site form.
 import { isDatabase, kindLabel } from "./catalog";
-import type { Runtime, Service, Site, SiteType } from "./types";
+import type { Runtime, Service, Site, SiteType, SitesBulkResult, StartAllResult, StopAllResult } from "./types";
 
 // ---- getting started ----
 
@@ -189,4 +189,39 @@ export function setRuntimeView(v: RuntimeView, storage?: Pick<Storage, "setItem"
   } catch {
     /* private mode: the choice lasts for this page only */
   }
+}
+
+// ---- stop all ----
+
+/** What to tell the user after "Stop all": a toast kind and its sentence. */
+export function stopAllMessage(r: StopAllResult): { kind: "info" | "success" | "error"; text: string } {
+  const n = r.stopped.length;
+  if (r.failed.length > 0) {
+    const names = r.failed.slice(0, 3).map((f) => f.name);
+    if (r.failed.length > 3) names.push(`${r.failed.length - 3} more`);
+    return { kind: "error", text: `${n} stopped. Could not stop: ${names.join(", ")}. ${r.failed[0].error}` };
+  }
+  if (n === 0) return { kind: "info", text: "No services were running." };
+  return { kind: "success", text: n === 1 ? "Stopped 1 service." : `Stopped ${n} services.` };
+}
+
+// ---- start all, enable all ----
+
+/** What to tell the user after "Start all": a toast kind and its sentence. */
+export function startAllMessage(r: StartAllResult): { kind: "info" | "success" | "error"; text: string } {
+  const n = r.started.length;
+  if (r.failed.length > 0) {
+    const names = r.failed.slice(0, 3).map((f) => f.name);
+    if (r.failed.length > 3) names.push(`${r.failed.length - 3} more`);
+    return { kind: "error", text: `${n} started. Could not start: ${names.join(", ")}. ${r.failed[0].error}` };
+  }
+  if (n === 0) return { kind: "info", text: "Every service is already running." };
+  return { kind: "success", text: n === 1 ? "Started 1 service." : `Started ${n} services.` };
+}
+
+/** What to tell the user after "Enable all" / "Disable all" on the sites. */
+export function sitesBulkMessage(r: SitesBulkResult, on: boolean): { kind: "info" | "success"; text: string } {
+  if (r.changed === 0) return { kind: "info", text: `All sites are already ${on ? "enabled" : "disabled"}.` };
+  const what = r.changed === 1 ? "1 site" : `${r.changed} sites`;
+  return { kind: "success", text: `${on ? "Enabled" : "Disabled"} ${what}.` };
 }

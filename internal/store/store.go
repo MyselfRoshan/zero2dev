@@ -19,6 +19,8 @@ type Data struct {
 	Runtimes []model.Runtime `json:"runtimes"`
 	Sites    []model.Site    `json:"sites"`
 	Settings model.Settings  `json:"settings"`
+	Projects []model.Project `json:"projects"`
+	Env      model.EnvConfig `json:"env"`
 }
 
 // Store guards Data with a mutex and persists every successful Update.
@@ -30,7 +32,7 @@ type Store struct {
 
 func defaults() Data {
 	return Data{
-		Services: []model.Service{}, Runtimes: []model.Runtime{}, Sites: []model.Site{},
+		Services: []model.Service{}, Runtimes: []model.Runtime{}, Sites: []model.Site{}, Projects: []model.Project{},
 		Settings: model.Settings{DomainSuffix: "localhost", ProxyHTTPPort: 8080, ProxyHTTPSPort: 8443, OpenBrowserOnStart: true, SiteServer: "caddy",
 			Theme: model.DefaultTheme, Accent: model.DefaultAccent},
 	}
@@ -42,6 +44,7 @@ func Open(path string) (*Store, error) {
 	s := &Store{path: path, data: defaults()}
 	b, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
+		s.normalize(&s.data)
 		return s, nil
 	}
 	if err != nil {
@@ -77,6 +80,25 @@ func (s *Store) normalize(d *Data) {
 	if d.Sites == nil {
 		d.Sites = []model.Site{}
 	}
+	if d.Projects == nil {
+		d.Projects = []model.Project{}
+	}
+	// The suggested environment items, once: switched off, so nothing changes in Windows
+	// until the user turns one on.
+	if !d.Env.Seeded {
+		d.Env.Seeded = true
+		d.Env.Path = append([]model.EnvPath{{ID: "envp_shims", Source: model.EnvShims}}, d.Env.Path...)
+		d.Env.Vars = append([]model.EnvVar{
+			{ID: "envv_java_home", Name: "JAVA_HOME", Source: model.EnvDefault, Kind: "java"},
+			{ID: "envv_goroot", Name: "GOROOT", Source: model.EnvDefault, Kind: "go"},
+		}, d.Env.Vars...)
+	}
+	if d.Env.Path == nil {
+		d.Env.Path = []model.EnvPath{}
+	}
+	if d.Env.Vars == nil {
+		d.Env.Vars = []model.EnvVar{}
+	}
 	// state written before appearance settings existed
 	if d.Settings.Theme == "" {
 		d.Settings.Theme = model.DefaultTheme
@@ -97,6 +119,64 @@ func (s *Store) normalize(d *Data) {
 		}
 		// runtime fields are never persisted meaningfully
 		sv.State, sv.Pid, sv.StartedAt, sv.LastError = model.StateStopped, 0, nil, ""
+		sv.Restarts = 0
+		if sv.RestartLimit < 1 {
+			sv.RestartLimit = model.DefaultRestartLimit
+		}
+		sv.RestartLimit = min(sv.RestartLimit, model.MaxRestartLimit)
+		// 0.0.3 kept the .env file of a Node service in its settings
+		if v, ok := sv.Settings["envFile"]; ok && sv.Kind == "node" {
+			if sv.EnvFile == "" {
+				sv.EnvFile = v
+			}
+			settings := make(map[string]string, len(sv.Settings))
+			for k, val := range sv.Settings {
+				if k != "envFile" {
+					settings[k] = val
+				}
+			}
+			sv.Settings = settings
+		}
+	}
+	pruneLinks(d)
+}
+
+// pruneLinks makes every reference between records point at something that
+// exists: dependsOn and projects lose ids of deleted services and sites, and a
+// databaseId that is not a database service (or is the service itself) is
+// cleared. New slices are made, never edited in place, because clone shares
+// the old ones with the live state.
+func pruneLinks(d *Data) {
+	svc := map[string]model.Service{}
+	for _, sv := range d.Services {
+		svc[sv.ID] = sv
+	}
+	site := map[string]bool{}
+	for _, s := range d.Sites {
+		site[s.ID] = true
+	}
+	keep := func(ids []string, ok func(string) bool) []string {
+		out := make([]string, 0, len(ids))
+		seen := map[string]bool{}
+		for _, id := range ids {
+			if ok(id) && !seen[id] {
+				seen[id] = true
+				out = append(out, id)
+			}
+		}
+		return out
+	}
+	for i := range d.Services {
+		sv := &d.Services[i]
+		sv.DependsOn = keep(sv.DependsOn, func(id string) bool { _, ok := svc[id]; return ok && id != sv.ID })
+		if t, ok := svc[sv.DatabaseID]; !ok || sv.DatabaseID == sv.ID || !model.IsDatabase(t.Kind) {
+			sv.DatabaseID = ""
+		}
+	}
+	for i := range d.Projects {
+		p := &d.Projects[i]
+		p.ServiceIDs = keep(p.ServiceIDs, func(id string) bool { _, ok := svc[id]; return ok })
+		p.SiteIDs = keep(p.SiteIDs, func(id string) bool { return site[id] })
 	}
 }
 
@@ -105,6 +185,8 @@ func clone(d Data) Data {
 		Services: append([]model.Service{}, d.Services...),
 		Runtimes: append([]model.Runtime{}, d.Runtimes...),
 		Sites:    append([]model.Site{}, d.Sites...),
+		Projects: append([]model.Project{}, d.Projects...),
+		Env:      model.EnvConfig{Seeded: d.Env.Seeded, Path: append([]model.EnvPath{}, d.Env.Path...), Vars: append([]model.EnvVar{}, d.Env.Vars...)},
 		Settings: d.Settings,
 	}
 }

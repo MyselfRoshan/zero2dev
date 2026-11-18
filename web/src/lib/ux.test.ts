@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
+import { sitesBulkMessage, startAllMessage, stopAllMessage } from "./ux";
 import type { Runtime, Service } from "./types";
 import {
   connectionInfo,
@@ -27,6 +28,12 @@ const svc = (over: Partial<Service>): Service => ({
   healthPath: "",
   runtimeId: "",
   autostart: false,
+  dependsOn: [],
+  databaseId: "",
+  envFile: "",
+  restartOnCrash: false,
+  restartLimit: 5,
+  restarts: 0,
   state: "stopped",
   pid: 0,
   startedAt: null,
@@ -66,7 +73,7 @@ describe("services", () => {
   it("finds the runtime a service uses", () => {
     const runtimes = [
       rt({ id: "a", binary: "C:\\bin\\node-20\\node.exe" }),
-      rt({ id: "b", binary: "C:\\bin\\node-22\\node.exe", default: true }),
+      rt({ id: "b", binary: "C:\\bin\\node-26\\node.exe", default: true }),
     ];
     expect(serviceRuntime(svc({}), runtimes)?.id).toBe("b");
     expect(serviceRuntime(svc({ runtimeId: "a" }), runtimes)?.id).toBe("a");
@@ -161,5 +168,57 @@ describe("runtime view preference", () => {
     };
     expect(getRuntimeView(broken)).toBe("list");
     expect(() => setRuntimeView("grid", broken)).not.toThrow();
+  });
+});
+
+describe("stopAllMessage", () => {
+  it("says so when nothing ran", () => {
+    expect(stopAllMessage({ stopped: [], failed: [] })).toEqual({ kind: "info", text: "No services were running." });
+  });
+  it("counts what stopped", () => {
+    expect(stopAllMessage({ stopped: ["a"], failed: [] }).text).toBe("Stopped 1 service.");
+    expect(stopAllMessage({ stopped: ["a", "b"], failed: [] })).toEqual({
+      kind: "success",
+      text: "Stopped 2 services.",
+    });
+  });
+  it("names the services that did not stop, at most three", () => {
+    const f = (name: string) => ({ id: `svc_${name}`, name, error: "did not stop in time" });
+    const m = stopAllMessage({ stopped: ["x"], failed: ["a", "b", "c", "d", "e"].map(f) });
+    expect(m.kind).toBe("error");
+    expect(m.text).toBe("1 stopped. Could not stop: a, b, c, 2 more. did not stop in time");
+  });
+});
+
+describe("startAllMessage", () => {
+  it("says so when everything already runs", () => {
+    expect(startAllMessage({ started: [], failed: [] })).toEqual({
+      kind: "info",
+      text: "Every service is already running.",
+    });
+  });
+  it("counts what started", () => {
+    expect(startAllMessage({ started: ["a"], failed: [] }).text).toBe("Started 1 service.");
+    expect(startAllMessage({ started: ["a", "b", "c"], failed: [] })).toEqual({
+      kind: "success",
+      text: "Started 3 services.",
+    });
+  });
+  it("names the services that did not start, at most three", () => {
+    const f = (name: string) => ({ id: `svc_${name}`, name, error: "port 5432 is already in use" });
+    const m = startAllMessage({ started: ["x"], failed: ["db", "api", "web", "w2", "w3"].map(f) });
+    expect(m.kind).toBe("error");
+    expect(m.text).toBe("1 started. Could not start: db, api, web, 2 more. port 5432 is already in use");
+  });
+});
+
+describe("sitesBulkMessage", () => {
+  it("says so when nothing changed", () => {
+    expect(sitesBulkMessage({ changed: 0 }, true)).toEqual({ kind: "info", text: "All sites are already enabled." });
+    expect(sitesBulkMessage({ changed: 0 }, false).text).toBe("All sites are already disabled.");
+  });
+  it("counts the sites that changed", () => {
+    expect(sitesBulkMessage({ changed: 1 }, true)).toEqual({ kind: "success", text: "Enabled 1 site." });
+    expect(sitesBulkMessage({ changed: 4 }, false)).toEqual({ kind: "success", text: "Disabled 4 sites." });
   });
 });

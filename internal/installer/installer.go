@@ -79,7 +79,7 @@ type Options struct {
 // New creates an Installer.
 func New(home string, st *store.Store, rt *runtimes.Manager, em Emitter) *Installer {
 	return &Installer{
-		home: home, Bin: filepath.Join(home, "bin"), st: st, rt: rt, em: em, Version: "0.0.3",
+		home: home, Bin: filepath.Join(home, "bin"), st: st, rt: rt, em: em, Version: "0.0.4",
 		log:     &fileLog{path: filepath.Join(home, "logs", "installer.log")},
 		Catalog: func() ([]model.CatalogEntry, error) { return catalog.Load(home) },
 		Rename:  os.Rename, Sleep: time.Sleep, RenameAttempts: 20,
@@ -284,14 +284,15 @@ func (in *Installer) run(j *job, e model.CatalogEntry, acq acquire) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 	archive, want, got, err := acq(ctx)
+	rid := ""
+	if err == nil {
+		rid, err = in.process(j, e, archive, want, got)
+	}
+	// Remove the download before the job is reported finished, so whoever
+	// sees "done" or "failed" also sees an empty tmp folder.
 	if archive != "" {
-		defer os.Remove(archive)
+		_ = os.Remove(archive)
 	}
-	if err != nil {
-		in.finish(j, err, "")
-		return
-	}
-	rid, err := in.process(j, e, archive, want, got)
 	in.finish(j, err, rid)
 }
 

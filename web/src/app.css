@@ -785,6 +785,14 @@ table.t {
   border-color: var(--line-strong);
   color: var(--muted);
 }
+.badge.warn {
+  background: var(--warn-soft);
+  border-color: var(--warn-border);
+  color: var(--warn);
+}
+.badge.warn .dot {
+  background: var(--warn-fill);
+}
 .badge.accent {
   background: var(--accent-soft);
   border-color: var(--accent-border);

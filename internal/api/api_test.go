@@ -763,3 +763,53 @@ func blockForever() {
 		time.Sleep(time.Hour)
 	}
 }
+
+func TestStopAllServicesOverAPI(t *testing.T) {
+	e := newEnv(t)
+
+	// Nothing running: two empty lists, never null (the UI loops over them).
+	var raw map[string]json.RawMessage
+	if resp := e.do("POST", "/api/services/stop-all", nil, &raw); resp.StatusCode != 200 ||
+		string(raw["stopped"]) != "[]" || string(raw["failed"]) != "[]" {
+		t.Fatalf("empty stop-all: %d %s", resp.StatusCode, raw)
+	}
+
+	a, b, idle := helperService(t, e, 0), helperService(t, e, 0), helperService(t, e, 0)
+	for _, sv := range []model.Service{a, b} {
+		e.do("POST", "/api/services/"+sv.ID+"/start", nil, nil)
+	}
+	for _, sv := range []model.Service{a, b} {
+		waitFor(t, func() bool {
+			var cur model.Service
+			e.do("GET", "/api/services/"+sv.ID, nil, &cur)
+			return cur.State == "running"
+		})
+	}
+
+	var rep struct {
+		Stopped []string `json:"stopped"`
+		Failed  []struct{ ID, Name, Error string }
+	}
+	if resp := e.do("POST", "/api/services/stop-all", nil, &rep); resp.StatusCode != 200 {
+		t.Fatalf("stop-all: %d", resp.StatusCode)
+	}
+	got := map[string]bool{}
+	for _, id := range rep.Stopped {
+		got[id] = true
+	}
+	if len(rep.Failed) != 0 || len(got) != 2 || !got[a.ID] || !got[b.ID] || got[idle.ID] {
+		t.Fatalf("report %+v, want exactly %s and %s stopped", rep, a.ID, b.ID)
+	}
+	// The call answers once they have stopped, so no waiting is needed here.
+	for _, sv := range []model.Service{a, b} {
+		var cur model.Service
+		e.do("GET", "/api/services/"+sv.ID, nil, &cur)
+		if cur.State != "stopped" {
+			t.Fatalf("%s is %s after stop-all", sv.ID, cur.State)
+		}
+	}
+	// Zero2Dev keeps running and a service can be started again.
+	if resp := e.do("POST", "/api/services/"+a.ID+"/start", nil, nil); resp.StatusCode != 202 {
+		t.Fatalf("start after stop-all: %d", resp.StatusCode)
+	}
+}

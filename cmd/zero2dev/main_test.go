@@ -17,7 +17,9 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+
 	"time"
+	"zero2dev/internal/supervisor"
 )
 
 // TestNoWritesOutsideHome builds the real daemon, copies it to a temp
@@ -41,7 +43,7 @@ func TestNoWritesOutsideHome(t *testing.T) {
 	if out, err := exec.Command(goBin, "build", "-o", exe, ".").CombinedOutput(); err != nil {
 		t.Fatalf("build: %v\n%s", err, out)
 	}
-	if out, err := exec.Command(exe, "-version").CombinedOutput(); err != nil || strings.TrimSpace(string(out)) != "zero2dev 0.0.3" {
+	if out, err := exec.Command(exe, "-version").CombinedOutput(); err != nil || strings.TrimSpace(string(out)) != "zero2dev 0.0.4" {
 		t.Fatalf("version: %q %v", out, err)
 	}
 
@@ -250,4 +252,30 @@ func mustReal(t *testing.T, p string) string {
 		t.Fatal(err)
 	}
 	return r
+}
+
+func TestStopAllNotice(t *testing.T) {
+	fail := func(names ...string) []supervisor.StopFailure {
+		var f []supervisor.StopFailure
+		for _, n := range names {
+			f = append(f, supervisor.StopFailure{ID: "svc_" + n, Name: n, Error: "did not stop"})
+		}
+		return f
+	}
+	for _, c := range []struct {
+		name         string
+		rep          supervisor.StopReport
+		title, wants string
+	}{
+		{"none", supervisor.StopReport{}, "Nothing to stop", "No services were running."},
+		{"one", supervisor.StopReport{Stopped: []string{"a"}}, "Services stopped", "Stopped 1 service. Zero2Dev is still running."},
+		{"many", supervisor.StopReport{Stopped: []string{"a", "b", "c"}}, "Services stopped", "Stopped 3 services. Zero2Dev is still running."},
+		{"failed", supervisor.StopReport{Stopped: []string{"a"}, Failed: fail("api")}, "Some services did not stop", "Stopped 1. Still running: api."},
+		{"many failed", supervisor.StopReport{Failed: fail("a", "b", "c", "d", "e")}, "Some services did not stop", "Stopped 0. Still running: a, b, c, and 2 more."},
+	} {
+		title, text := stopAllNotice(c.rep)
+		if title != c.title || text != c.wants {
+			t.Errorf("%s: got %q / %q, want %q / %q", c.name, title, text, c.title, c.wants)
+		}
+	}
 }

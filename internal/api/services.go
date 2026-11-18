@@ -4,14 +4,17 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 
 	"zero2dev/internal/apperr"
+	"zero2dev/internal/fsutil"
 	"zero2dev/internal/kinds"
 	"zero2dev/internal/model"
 	"zero2dev/internal/store"
+	"zero2dev/internal/supervisor"
 )
 
 func lower(s string) string { return strings.ToLower(strings.TrimSpace(s)) }
@@ -53,7 +56,7 @@ func (s *Server) createService(w http.ResponseWriter, r *http.Request) error {
 	}
 	var created model.Service
 	err := s.Store.Update(func(d *store.Data) error {
-		sv, err := validateService(in, *d)
+		sv, err := validateService(in, *d, "")
 		if err != nil {
 			return err
 		}
@@ -88,7 +91,7 @@ func (s *Server) updateService(w http.ResponseWriter, r *http.Request) error {
 			if d.Services[i].ID != id {
 				continue
 			}
-			sv, err := validateService(in, *d)
+			sv, err := validateService(in, *d, id)
 			if err != nil {
 				return err
 			}
@@ -148,11 +151,46 @@ func (s *Server) action(w http.ResponseWriter, r *http.Request, f func(string) e
 }
 
 func (s *Server) startService(w http.ResponseWriter, r *http.Request) error {
-	return s.action(w, r, s.Sup.Start)
+	return s.action(w, r, s.Sup.StartWithDeps) // starts inactive dependencies first
 }
 func (s *Server) stopService(w http.ResponseWriter, r *http.Request) error {
 	return s.action(w, r, s.Sup.Stop)
 }
+
+// POST /api/services/start-all[?project=id]: start every service that is not
+// running (or the services of one project), dependencies first. Answers when
+// they are running, failed or timed out with {"started": [ids], "failed":
+// [{id, name, error}]}.
+func (s *Server) startAllServices(w http.ResponseWriter, r *http.Request) error {
+	p, err := s.projectParam(r)
+	if err != nil {
+		return err
+	}
+	if p != nil {
+		writeJSON(w, http.StatusOK, s.startProject(*p))
+		return nil
+	}
+	writeJSON(w, http.StatusOK, s.Sup.StartOrdered(nil))
+	return nil
+}
+
+// POST /api/services/stop-all[?project=id]: stop every running service,
+// dependents first (apps, then databases, then the site server), or only the
+// services of one project. Answers when they have stopped (or timed out) with
+// {"stopped": [ids], "failed": [{id, name, error}]}; Zero2Dev keeps running.
+func (s *Server) stopAllServices(w http.ResponseWriter, r *http.Request) error {
+	p, err := s.projectParam(r)
+	if err != nil {
+		return err
+	}
+	if p != nil {
+		writeJSON(w, http.StatusOK, s.stopProject(*p))
+		return nil
+	}
+	writeJSON(w, http.StatusOK, s.Sup.StopAllOrdered())
+	return nil
+}
+
 func (s *Server) restartService(w http.ResponseWriter, r *http.Request) error {
 	return s.action(w, r, s.Sup.Restart)
 }
@@ -174,8 +212,9 @@ func (s *Server) serviceLogs(w http.ResponseWriter, r *http.Request) error {
 }
 
 // validateService normalises and checks a ServiceInput (docs/API.md
-// "ServiceInput" and "Auth and request hygiene" rule 8).
-func validateService(in model.ServiceInput, d store.Data) (model.Service, error) {
+// "ServiceInput" and "Auth and request hygiene" rule 8). selfID is the service
+// being updated ("" when creating).
+func validateService(in model.ServiceInput, d store.Data, selfID string) (model.Service, error) {
 	sv := model.Service{
 		Name: strings.TrimSpace(in.Name), Kind: in.Kind, Command: strings.TrimSpace(in.Command),
 		Args: append([]string{}, in.Args...), Env: map[string]string{}, Port: in.Port,
@@ -250,5 +289,100 @@ func validateService(in model.ServiceInput, d store.Data) (model.Service, error)
 			return sv, apperr.BadRequest("runtime %s not found", sv.RuntimeID)
 		}
 	}
+	if err := validateLinks(&sv, in, d, selfID); err != nil {
+		return sv, err
+	}
 	return sv, nil
+}
+
+// validateLinks checks the fields that tie a service to others and to its
+// folder: dependsOn, databaseId (a database service), the dependency loop,
+// envFile (relative, inside the folder) and the crash restart limit.
+func validateLinks(sv *model.Service, in model.ServiceInput, d store.Data, selfID string) error {
+	byID := make(map[string]model.Service, len(d.Services))
+	for _, o := range d.Services {
+		byID[o.ID] = o
+	}
+	sv.DependsOn = []string{}
+	if len(in.DependsOn) > 64 {
+		return apperr.BadRequest("too many dependencies (max 64)")
+	}
+	for _, id := range in.DependsOn {
+		if selfID != "" && id == selfID {
+			return apperr.BadRequest("a service cannot depend on itself")
+		}
+		if _, ok := byID[id]; !ok {
+			return apperr.BadRequest("dependency %s not found", id)
+		}
+		if !slices.Contains(sv.DependsOn, id) {
+			sv.DependsOn = append(sv.DependsOn, id)
+		}
+	}
+	if id := in.DatabaseID; id != "" {
+		if selfID != "" && id == selfID {
+			return apperr.BadRequest("a service cannot use itself as its database")
+		}
+		db, ok := byID[id]
+		if !ok {
+			return apperr.BadRequest("database %s not found", id)
+		}
+		if !model.IsDatabase(db.Kind) {
+			return apperr.BadRequest("service %q is not a database", db.Name)
+		}
+		sv.DatabaseID = id
+	}
+
+	// The loop check sees the service as it will be saved (a new one has no id yet).
+	probe := *sv
+	probe.ID = selfID
+	if probe.ID == "" {
+		probe.ID = "\x00new"
+	}
+	all := make([]model.Service, 0, len(d.Services)+1)
+	for _, o := range d.Services {
+		if o.ID != selfID {
+			all = append(all, o)
+		}
+	}
+	all = append(all, probe)
+	if cyc := supervisor.FindCycle(all); cyc != nil {
+		names := make([]string, 0, len(cyc))
+		for _, id := range cyc {
+			if id == probe.ID {
+				names = append(names, sv.Name)
+			} else {
+				names = append(names, byID[id].Name)
+			}
+		}
+		return apperr.BadRequest("these services depend on each other in a loop: %s", strings.Join(names, " -> "))
+	}
+
+	if ef := strings.TrimSpace(in.EnvFile); ef != "" {
+		// Reject parent segments before cleaning can erase them.
+		if slices.Contains(strings.FieldsFunc(ef, func(r rune) bool { return r == '/' || r == '\\' }), "..") {
+			return apperr.BadRequest("envFile must stay inside the service folder (no ..)")
+		}
+		// A colon anywhere is a drive ("C:.env", also "./C:.env", which Windows' Clean keeps as
+		// `.\C:.env`) or an NTFS stream (".env:x"); neither is a file inside the folder. Checked
+		// before cleaning, so the answer is the same on every OS.
+		if strings.ContainsRune(ef, ':') {
+			return apperr.BadRequest("envFile must be a path relative to the service folder")
+		}
+		ef = filepath.Clean(ef)
+		if strings.ContainsRune(ef, 0) || filepath.IsAbs(ef) || filepath.VolumeName(ef) != "" || fsutil.HasWindowsDrivePrefix(ef) || strings.HasPrefix(ef, "/") || strings.HasPrefix(ef, `\`) {
+			return apperr.BadRequest("envFile must be a path relative to the service folder")
+		}
+		sv.EnvFile = ef
+	}
+
+	sv.RestartOnCrash = in.RestartOnCrash
+	switch {
+	case in.RestartLimit == 0:
+		sv.RestartLimit = model.DefaultRestartLimit
+	case in.RestartLimit < 1 || in.RestartLimit > model.MaxRestartLimit:
+		return apperr.BadRequest("restartLimit must be 1-%d", model.MaxRestartLimit)
+	default:
+		sv.RestartLimit = in.RestartLimit
+	}
+	return nil
 }

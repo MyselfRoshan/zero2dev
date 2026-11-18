@@ -37,6 +37,7 @@ func (s *Server) previewService(w http.ResponseWriter, r *http.Request) error {
 	svc := model.Service{
 		ID: in.ID, Name: in.Name, Kind: in.Kind, Command: strings.TrimSpace(in.Command), Args: in.Args,
 		Settings: in.Settings, CustomArgs: in.CustomArgs, Env: in.Env, Port: in.Port, RuntimeID: in.RuntimeID,
+		DependsOn: in.DependsOn, DatabaseID: in.DatabaseID, EnvFile: in.EnvFile, // the preview shows the variables they add
 	}
 	if svc.ID == "" || strings.ContainsAny(svc.ID, `/\:.`) {
 		svc.ID = "svc_new"

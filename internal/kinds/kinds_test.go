@@ -247,16 +247,32 @@ func TestBuildEnv(t *testing.T) {
 func TestBuildMinVersion(t *testing.T) {
 	c := ctx()
 	c.Version = "18.0.0"
-	pl := Build("node", map[string]string{"script": "a.js", "watch": "true", "envFile": ".env"}, nil, c)
-	if slices.Contains(pl.Args, "--watch") || slices.Contains(pl.Args, "--env-file=.env") {
-		t.Errorf("old node must not get --watch/--env-file: %q", pl.Args)
+	pl := Build("node", map[string]string{"script": "a.js", "watch": "true"}, nil, c)
+	if slices.Contains(pl.Args, "--watch") {
+		t.Errorf("old node must not get --watch: %q", pl.Args)
 	}
-	if len(pl.Warnings) != 2 {
+	if len(pl.Warnings) != 1 {
 		t.Errorf("warnings %q", pl.Warnings)
 	}
 	c.Version = "22.11.0"
 	if pl := Build("node", map[string]string{"script": "a.js", "watch": "true"}, nil, c); !slices.Contains(pl.Args, "--watch") || len(pl.Warnings) != 0 {
 		t.Errorf("new node: %q %q", pl.Args, pl.Warnings)
+	}
+}
+
+func TestNodeHasNoEnvFileSetting(t *testing.T) {
+	// The .env file is a service field now (Service.EnvFile, any kind), not a Node setting.
+	p, ok := Lookup("node")
+	if !ok {
+		t.Fatal("no node profile")
+	}
+	for _, f := range p.Options {
+		if f.Key == "envFile" {
+			t.Error("node still has the envFile setting")
+		}
+	}
+	if pl := Build("node", map[string]string{"script": "a.js", "envFile": ".env"}, nil, ctx()); slices.ContainsFunc(pl.Args, func(a string) bool { return strings.HasPrefix(a, "--env-file") }) {
+		t.Errorf("--env-file must not be emitted any more: %q", pl.Args)
 	}
 }
 

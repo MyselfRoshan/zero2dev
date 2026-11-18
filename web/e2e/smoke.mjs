@@ -3,6 +3,7 @@
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import assert from "node:assert/strict";
 
@@ -11,8 +12,7 @@ const { chromium } = require("playwright");
 
 const PORT = 7101;
 const BASE = `http://127.0.0.1:${PORT}`;
-const SHOTS =
-  process.env.SHOTS_DIR || "/tmp/claude-0/-home-claude/b6d8e937-98d5-5283-884d-6cc8e920e246/scratchpad/shots";
+const SHOTS = process.env.SHOTS_DIR || path.join(os.tmpdir(), "zero2dev-e2e-shots");
 fs.mkdirSync(SHOTS, { recursive: true });
 // The service editor's type cards are radio buttons named after the type.
 const pickType = (label) => page.getByRole("radio", { name: label, exact: true }).click();
@@ -142,7 +142,7 @@ await step("install shows progress; a second version installs side by side; upda
   await expand("node");
   const node = card("node");
   await expand("node");
-  await picker("node").selectOption("node-22.11.0");
+  await picker("node").selectOption("node-26.13.1");
   await node.getByRole("button", { name: "Install", exact: true }).click();
   const bar = node.getByRole("progressbar");
   await bar.waitFor();
@@ -152,37 +152,37 @@ await step("install shows progress; a second version installs side by side; upda
     const v = await bar.getAttribute("aria-valuenow", { timeout: 300 }).catch(() => null);
     if (v) seen.add(Number(v));
     await expand("node");
-    if (await li("node", "22.11.0").isVisible()) break;
+    if (await li("node", "26.13.1").isVisible()) break;
     await page.waitForTimeout(100);
   }
   await expand("node");
-  await li("node", "22.11.0").waitFor();
-  await page.getByText("Node.js 22.11.0 installed.").waitFor();
+  await li("node", "26.13.1").waitFor();
+  await page.getByText("Node.js 26.13.1 installed.").waitFor();
   assert.ok(seen.size >= 2, "progress advanced: " + [...seen]);
   // first runtime of a kind is the default; with one version there is no Make default
   await expand("node");
-  await li("node", "22.11.0").getByTestId("default-badge").waitFor();
+  await li("node", "26.13.1").getByTestId("default-badge").waitFor();
   assert.equal(await node.getByRole("button", { name: /Make .* the default/ }).count(), 0);
   assert.ok(await node.getByRole("button", { name: "Installed", exact: true }).isDisabled());
-  // update hint for the 22 line; selecting it and installing keeps the old version
+  // update hint for the 26 line; selecting it and installing keeps the old version
   await node.getByTestId("update-node").getByText("Update available:").waitFor();
-  await node.getByTestId("update-node").locator("b", { hasText: "22.12.0" }).waitFor();
-  await node.getByRole("button", { name: /^Select 22\.12\.0/ }).click();
+  await node.getByTestId("update-node").locator("b", { hasText: "26.14.0" }).waitFor();
+  await node.getByRole("button", { name: /^Select 26.14.0/ }).click();
   await expand("node");
-  assert.equal(await picker("node").inputValue(), "node-22.12.0");
+  assert.equal(await picker("node").inputValue(), "node-26.14.0");
   await node.getByRole("button", { name: "Install", exact: true }).click();
   await expand("node");
-  await li("node", "22.12.0").waitFor({ timeout: 15000 });
+  await li("node", "26.14.0").waitFor({ timeout: 15000 });
   await expand("node");
-  await li("node", "22.11.0").waitFor();
+  await li("node", "26.13.1").waitFor();
   assert.equal(await node.locator("li[data-runtime]").count(), 2);
-  // newest first; the default (22.11.0) stays on top and 22.12.0 can be made default
+  // newest first; the default (26.13.1) stays on top and 26.14.0 can be made default
   await expand("node");
-  assert.equal(await li("node", "22.11.0").getByTestId("default-badge").count(), 1);
+  assert.equal(await li("node", "26.13.1").getByTestId("default-badge").count(), 1);
   await expand("node");
-  assert.equal(await li("node", "22.12.0").getByTestId("default-badge").count(), 0);
+  assert.equal(await li("node", "26.14.0").getByTestId("default-badge").count(), 0);
   await expand("node");
-  await li("node", "22.12.0").getByRole("button", { name: "Make Node.js 22.12.0 the default" }).waitFor();
+  await li("node", "26.14.0").getByRole("button", { name: "Make Node.js 26.14.0 the default" }).waitFor();
   assert.equal(await node.getByTestId("update-node").count(), 0);
   assert.ok(await node.getByRole("button", { name: "Installed", exact: true }).isDisabled());
 });
@@ -372,26 +372,27 @@ await step("create a service (validation first, then success)", async () => {
   await shot(page, "04c-service-form-settings");
   await page.getByLabel("Run", { exact: true }).selectOption("script");
   // the rest of the settings are one click away; a changed one stays up front
-  assert.equal(await page.getByRole("textbox", { name: /^.env file/ }).count(), 0, "uncommon settings start folded");
+  const debuggerSwitch = page.getByRole("switch", { name: "Allow a debugger to attach" });
+  assert.equal(await debuggerSwitch.count(), 0, "uncommon settings start folded");
   await page.getByRole("button", { name: /More settings/ }).click();
-  await page.getByRole("textbox", { name: /^.env file/ }).fill(".env.local");
-  await page.locator('[data-option="envFile"]').getByText("Edited").waitFor();
+  await debuggerSwitch.check();
+  await page.locator('[data-option="inspect"]').getByText("Edited").waitFor();
   await page.getByRole("button", { name: "Fewer settings" }).click();
-  await page.getByRole("textbox", { name: /^.env file/ }).waitFor(); // still shown: it was changed
+  await debuggerSwitch.waitFor(); // still shown: it was changed
   await page
     .getByTestId("changed-summary")
-    .getByText(/2 settings changed/) // the script and the .env file
+    .getByText(/2 settings changed/) // the script and the debugger
     .waitFor();
   await page
     .getByTestId("preview-command")
-    .getByText(/--env-file=\.env\.local/)
+    .getByText(/--inspect=127\.0\.0\.1:9229/)
     .waitFor();
-  await page.getByRole("button", { name: "Reset .env file to its default" }).click();
+  await page.getByRole("button", { name: "Reset Allow a debugger to attach to its default" }).click();
   await page
     .getByTestId("changed-summary")
     .getByText(/1 setting changed/)
     .waitFor();
-  assert.equal(await page.getByRole("textbox", { name: /^.env file/ }).count(), 0, "a reset setting folds away again");
+  assert.equal(await debuggerSwitch.count(), 0, "a reset setting folds away again");
   // the command panel stays in view while the form scrolls
   await page.evaluate(() => document.querySelector("#main")?.scrollTo(0, 2000));
   assert.ok(await page.getByTestId("preview-command").isVisible(), "the command line stays visible");
@@ -404,7 +405,7 @@ await step("create a service (validation first, then success)", async () => {
   // runtime select is filtered by kind: only the node runtime is offered
   const opts = await page.getByLabel("Version").locator("option").allTextContents();
   assert.ok(opts.some((o) => o.includes("Node.js")) && !opts.some((o) => o.includes("PHP")), opts.join("|"));
-  assert.deepEqual(opts, ["Default (Node.js 22.11.0)", "Node.js 22.11.0 (default)", "Node.js 22.12.0"]);
+  assert.deepEqual(opts, ["Default (Node.js 26.13.1)", "Node.js 26.13.1 (default)", "Node.js 26.14.0"]);
   await page.getByRole("button", { name: "Create service" }).click();
   await page.locator('tr[data-service="Demo API"]').waitFor();
 });
@@ -689,7 +690,7 @@ await step("settings: change and persist", async () => {
   // portable block
   assert.equal(await page.getByTestId("data-folder").textContent(), "D:\\zero2dev\\bin\\data");
   await page.getByText(/Move the whole folder to move Zero2Dev/).waitFor();
-  await page.getByRole("button", { name: "Copy", exact: true }).click();
+  await page.getByRole("region", { name: "This PC" }).getByRole("button", { name: "Copy", exact: true }).click();
   await page.getByText("Data folder path copied.").waitFor();
   assert.equal(await page.evaluate(() => navigator.clipboard.readText()), "D:\\zero2dev\\bin\\data");
   await page.getByRole("button", { name: "Copy access token" }).click();
@@ -731,7 +732,7 @@ await step("reconnect: daemon outage shows banner, recovers with fresh ticket", 
 await step("dashboard with data + dark mode + narrow width", async () => {
   await page.goto(BASE + "/#/dashboard");
   await page.locator(".svc").first().waitFor();
-  await page.getByText("v0.0.3").waitFor();
+  await page.getByText("v0.0.4").waitFor();
   await shot(page, "01-dashboard");
   await page.emulateMedia({ colorScheme: "dark" });
   await shot(page, "09-dashboard-dark");
@@ -1117,6 +1118,373 @@ await step(
     const s = await settings();
     assert.equal(s.theme, "system");
     assert.equal(s.accent, "#1677ff");
+  },
+);
+
+// ---- 0.0.4: bulk buttons, projects, start order, crash restart, .env file, terminal, command line ----
+// Setup that the UI has no button for goes straight to the API, with the same token the page uses.
+const apiCall = (method, route, body) =>
+  page.evaluate(
+    async ([method, route, body]) => {
+      const r = await fetch(route, {
+        method,
+        headers: { Authorization: "Bearer devtoken", "Content-Type": "application/json" },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+      return r.status === 204 ? null : r.json();
+    },
+    [method, route, body],
+  );
+const customService = (name, extra = {}) => ({
+  name,
+  kind: "custom",
+  command: "C:\\tools\\x.exe",
+  args: [],
+  cwd: "C:\\work\\" + name.toLowerCase().replaceAll(" ", "-"),
+  env: {},
+  port: 0,
+  healthPath: "",
+  runtimeId: "",
+  autostart: false,
+  ...extra,
+});
+const serviceRow = (name) => page.locator(`tr[data-service="${name}"]`);
+
+await step("services: Start all and Stop all, dependencies first", async () => {
+  const base = await apiCall("POST", "/api/services", customService("Order base"));
+  const web = await apiCall("POST", "/api/services", customService("Order web", { dependsOn: [base.id] }));
+  assert.deepEqual(web.dependsOn, [base.id]);
+  // a dependency loop is refused and the message names it
+  const loop = await apiCall("PUT", `/api/services/${base.id}`, customService("Order base", { dependsOn: [web.id] }));
+  assert.match(loop.error.message, /depend on each other in a loop/);
+  await page.goto(BASE + "/#/services");
+  await serviceRow("Order web").waitFor();
+  await page.getByRole("button", { name: "Start all services" }).click();
+  await page
+    .getByText(/Started \d+ services?\.|\d+ started\. Could not start/)
+    .first()
+    .waitFor();
+  for (const name of ["Order base", "Order web"])
+    await serviceRow(name).getByText("running", { exact: true }).waitFor({ timeout: 10000 });
+  await shot(page, "26-services-start-all");
+  await page.getByRole("button", { name: "Stop all services" }).click();
+  await page
+    .getByText(/Stopped \d+ services?\./)
+    .first()
+    .waitFor();
+  for (const name of ["Order base", "Order web"])
+    await serviceRow(name).getByText("stopped", { exact: true }).waitFor({ timeout: 10000 });
+});
+
+await step("sites: Enable all and Disable all", async () => {
+  await apiCall("POST", "/api/sites", {
+    name: "Docs",
+    domain: "docs.localhost",
+    type: "static",
+    root: "C:\\work\\docs",
+    https: false,
+    enabled: false,
+  });
+  await page.goto(BASE + "/#/sites");
+  const docs = page.locator('tr[data-site="docs.localhost"]');
+  await docs.getByText("disabled", { exact: true }).waitFor();
+  await page.getByRole("button", { name: "Enable all sites" }).click();
+  await page
+    .getByText(/Enabled \d+ sites?\./)
+    .first()
+    .waitFor();
+  await docs.getByText("enabled", { exact: true }).waitFor();
+  assert.equal(await page.locator("tr[data-site] .badge.stopped").count(), 0, "every site is on");
+  assert.ok(await page.getByRole("button", { name: "Enable all sites" }).isDisabled(), "nothing left to enable");
+  await page.getByRole("button", { name: "Disable all sites" }).click();
+  await page
+    .getByText(/Disabled \d+ sites?\./)
+    .first()
+    .waitFor();
+  await docs.getByText("disabled", { exact: true }).waitFor();
+  assert.equal(await page.locator("tr[data-site] .badge.running").count(), 0, "every site is off");
+  assert.ok(await page.getByRole("button", { name: "Disable all sites" }).isDisabled(), "nothing left to disable");
+  await shot(page, "27-sites-disabled");
+  await page.getByRole("button", { name: "Enable all sites" }).click();
+  await docs.getByText("enabled", { exact: true }).waitFor();
+});
+
+await step("projects: create, Start and Stop, shown on the dashboard, delete", async () => {
+  // start with the project's site off, to see Start switch it on
+  const docs = (await apiCall("GET", "/api/sites")).find((s) => s.domain === "docs.localhost");
+  await apiCall("POST", `/api/sites/${docs.id}/disable`);
+  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Projects" }).click();
+  await page.getByRole("heading", { level: 1, name: "Projects" }).waitFor();
+  await page.getByTestId("projects-empty").waitFor();
+  await page.getByRole("button", { name: "Create your first project" }).click();
+  await page.getByRole("button", { name: "Create project" }).click();
+  await page.getByText("Enter a name.").waitFor();
+  await page.getByLabel("Project name").fill("Order stack");
+  const pick = (box, text) => page.getByTestId(box).locator("label.check", { hasText: text }).locator("input").check();
+  await pick("project-services", "Order base");
+  await pick("project-services", "Order web");
+  await pick("project-sites", "docs.localhost");
+  // Start order: the ticked services in ticking order; a service that needs one below it says so
+  const order = page.getByTestId("project-order");
+  const orderNames = () =>
+    order.getByTestId("project-order-row").evaluateAll((rows) => rows.map((r) => r.dataset.service));
+  assert.deepEqual(await orderNames(), ["Order base", "Order web"]);
+  assert.ok(
+    await order.getByRole("button", { name: "Move Order base up" }).isDisabled(),
+    "the first row cannot move up",
+  );
+  await order.getByRole("button", { name: "Move Order base down" }).click();
+  assert.deepEqual(await orderNames(), ["Order web", "Order base"]);
+  await order.getByText("Starts after Order base, which it needs.").waitFor();
+  await page.getByTestId("project-sequence").getByText("Start runs Order base, then Order web.").waitFor();
+  assert.equal(
+    await page.evaluate(() => document.activeElement?.getAttribute("aria-label")),
+    "Move Order base up",
+    "focus stays on the row that moved",
+  );
+  await shot(page, "28-project-start-order");
+  await page.getByRole("button", { name: "Create project" }).click();
+  await page.getByText("Order stack created.").waitFor();
+  const saved = (await apiCall("GET", "/api/projects")).find((p) => p.name === "Order stack");
+  const names = new Map((await apiCall("GET", "/api/services")).map((s) => [s.id, s.name]));
+  assert.deepEqual(
+    saved.serviceIds.map((id) => names.get(id)),
+    ["Order web", "Order base"],
+    "the list order is saved",
+  );
+  const row = page.locator('tr[data-project="Order stack"]');
+  await row.waitFor();
+  await row.getByTestId("project-services-count").getByText("0 of 2 services running").waitFor();
+  await row.getByTestId("project-sites-count").getByText("0 of 1 site on").waitFor();
+  await shot(page, "28-projects");
+  // Start: the site goes on, the services start (the one that waits for the other after it)
+  await row.getByRole("button", { name: "Start Order stack" }).click();
+  await row.locator('.badge[data-state="running"]').waitFor({ timeout: 10000 });
+  await row.getByTestId("project-services-count").getByText("2 of 2 services running").waitFor();
+  await row.getByTestId("project-sites-count").getByText("1 of 1 site on").waitFor();
+  // Stop: the services stop, the site stays on
+  await row.getByRole("button", { name: "Stop Order stack" }).click();
+  await row.locator('.badge[data-state="stopped"]').waitFor({ timeout: 10000 });
+  await row.getByTestId("project-services-count").getByText("0 of 2 services running").waitFor();
+  await row.getByTestId("project-sites-count").getByText("1 of 1 site on").waitFor();
+  // the dashboard lists it with the same buttons
+  await page.goto(BASE + "/#/dashboard");
+  const dash = page.getByTestId("dash-projects");
+  await dash.getByText("Order stack").waitFor();
+  await dash.getByRole("button", { name: "Start Order stack" }).waitFor();
+  // deleting removes the group only
+  await page.goto(BASE + "/#/projects");
+  await row.getByRole("button", { name: "Delete Order stack" }).click();
+  await page.getByRole("dialog").getByText("Delete Order stack?").waitFor();
+  await page.getByRole("button", { name: "Delete project" }).click();
+  await page.getByTestId("projects-empty").waitFor();
+  assert.ok(
+    (await apiCall("GET", "/api/services")).some((s) => s.name === "Order web"),
+    "the services are not touched",
+  );
+});
+
+await step("service form: Starts after, Restart if it crashes and the .env file", async () => {
+  await page.goto(BASE + "/#/services");
+  await page.getByRole("button", { name: "New service" }).click();
+  await pickType("Custom command");
+  await page.getByLabel("Name", { exact: true }).fill("Env app");
+  await page.getByLabel("Program").fill("C:\\tools\\env.exe");
+  await page.getByLabel("Working folder", { exact: true }).fill("C:\\work\\env-app");
+  await advanced();
+  const after = page.getByTestId("depends-on");
+  await after.getByText("Starts after").waitFor();
+  await after.locator("label.check", { hasText: "Order base" }).locator("input").check();
+  await page.getByTestId("restart-fields").getByText("Restart if it crashes").waitFor();
+  assert.equal(await page.getByTestId("restart-limit").count(), 0, "the limit shows with the switch");
+  await page.getByTestId("restart-on-crash").check();
+  await page.getByTestId("restart-limit").fill("25");
+  const envFile = page.getByTestId("env-file-field").getByRole("textbox");
+  await envFile.fill("C:\\secrets\\.env");
+  await page.getByRole("button", { name: "Create service" }).click();
+  await page.getByText("Use a whole number from 1 to 20.").waitFor();
+  await page.getByText("Use a path relative to the folder, for example .env.").waitFor();
+  await page.getByTestId("restart-limit").fill("3");
+  await envFile.fill(".env.local");
+  await shot(page, "29-service-form-advanced");
+  await page.getByRole("button", { name: "Create service" }).click();
+  await serviceRow("Env app").waitFor();
+  const list = await apiCall("GET", "/api/services");
+  const saved = list.find((s) => s.name === "Env app");
+  assert.deepEqual(saved.dependsOn, [list.find((s) => s.name === "Order base").id]);
+  assert.equal(saved.restartOnCrash, true);
+  assert.equal(saved.restartLimit, 3);
+  assert.equal(saved.envFile, ".env.local");
+  // Edit shows what was saved, with Advanced already open
+  await serviceRow("Env app").getByRole("link", { name: "Env app", exact: true }).click();
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await after.getByText("Starts after").waitFor();
+  assert.ok(await after.locator("label.check", { hasText: "Order base" }).locator("input").isChecked());
+  assert.ok(await page.getByTestId("restart-on-crash").isChecked());
+  assert.equal(await page.getByTestId("restart-limit").inputValue(), "3");
+  assert.equal(await envFile.inputValue(), ".env.local");
+  await page.getByRole("button", { name: "Cancel" }).click();
+});
+
+await step("service page: Open terminal", async () => {
+  await page.goto(BASE + "/#/services");
+  await serviceRow("Order web").getByRole("link", { name: "Order web", exact: true }).click();
+  const box = page.getByTestId("open-terminal");
+  await box.getByText(/same runtime versions and variables as this service/).waitFor();
+  const opened = page.waitForResponse(
+    (r) => /\/api\/services\/[^/]+\/terminal$/.test(r.url()) && r.request().method() === "POST",
+  );
+  await box.getByRole("button", { name: "Open terminal" }).click();
+  assert.equal((await opened).status(), 204);
+  await page.getByText("Terminal opened.").waitFor();
+});
+
+await step("a crashed service shows a notice on the dashboard", async () => {
+  await page.goto(BASE + "/#/dashboard");
+  const svc = await apiCall("POST", "/api/services", customService("Crash demo"));
+  await apiCall("POST", `/api/services/${svc.id}/start`);
+  const banner = page.getByTestId("crash-banner");
+  await banner.getByText("Crash demo stopped unexpectedly").waitFor({ timeout: 10000 });
+  await banner
+    .getByText(/exit status 1/)
+    .first()
+    .waitFor();
+  await banner.getByRole("link", { name: "See logs" }).waitFor();
+  await shot(page, "30-crash-banner");
+  await banner.getByRole("button", { name: "Dismiss" }).click();
+  await banner.waitFor({ state: "detached" });
+  await apiCall("DELETE", `/api/services/${svc.id}`);
+});
+
+await step("settings: Command line shows the shims folder and points at the Environment page", async () => {
+  await page.goto(BASE + "/#/settings");
+  const cli = page.getByTestId("cli-section");
+  await cli.waitFor();
+  const text = async (id) => (await cli.getByTestId(id).textContent()).trim();
+  assert.equal(await text("shims-dir"), "D:\\zero2dev\\bin\\data\\shims");
+  assert.equal(await text("activate-cmd"), 'call "D:\\zero2dev\\bin\\data\\shims\\activate.cmd"');
+  assert.equal(await text("activate-ps1"), ". 'D:\\zero2dev\\bin\\data\\shims\\activate.ps1'");
+  assert.equal(await page.getByTestId("register-path").count(), 0, "the single switch is gone");
+  await cli.getByTestId("env-link").getByRole("link", { name: "Environment page" }).click();
+  await page.getByTestId("env-path-card").waitFor();
+});
+
+await step("environment: nothing is on by default, Quick start stages the default versions for review", async () => {
+  await page.goto(BASE + "/#/environment");
+  await page.getByTestId("env-path-card").waitFor();
+  assert.equal(await page.getByTestId("env-path-row").count(), 1, "the Default versions folder is suggested");
+  assert.equal(await page.getByTestId("env-var-row").count(), 2, "JAVA_HOME and GOROOT are suggested");
+  for (const sw of await page.getByRole("switch").all()) assert.equal(await sw.isChecked(), false);
+  await page.getByTestId("env-now").getByText("Right now Zero2Dev adds nothing to your Windows environment.").waitFor();
+  await page.getByTestId("env-quick-setup").click();
+  const review = page.getByTestId("env-review");
+  await review.waitFor();
+  await review.getByText("Add D:\\zero2dev\\bin\\data\\shims to your PATH").waitFor();
+  assert.ok(await page.getByRole("switch", { name: "Default versions on your PATH" }).isChecked());
+  await page.getByTestId("env-path-row").first().getByText("Will be added to your PATH when you apply.").waitFor();
+  await review.getByRole("button", { name: "Discard" }).click();
+  await review.waitFor({ state: "detached" });
+  await page.getByTestId("env-quick").waitFor();
+});
+
+await step("environment: add a folder and a variable, put the folder first, apply what the review lists", async () => {
+  await page.goto(BASE + "/#/environment");
+  await page.getByTestId("env-path-card").waitFor();
+  // a folder that is not a full path is refused before anything is sent
+  await page.getByTestId("env-add-folder-open").click();
+  const dir = page.getByRole("textbox", { name: "Folder to put on PATH" });
+  await dir.fill("tools");
+  await page.getByTestId("env-path-add").click();
+  await page.getByText("Use a full path such as C:\\tools\\bin.").waitFor();
+  await dir.fill("C:\\tools\\bin");
+  await page.getByTestId("env-path-add").click();
+  assert.equal(await page.getByTestId("env-path-row").count(), 2);
+  await page.getByRole("switch", { name: "Default versions on your PATH" }).check();
+  await page.getByRole("button", { name: "Move Your folder up" }).click();
+  assert.equal(await page.getByTestId("env-path-row").first().getByText("Your folder").count(), 1, "moved to the top");
+  // a variable of your own, with a live preview
+  await page.getByTestId("env-var-add").click();
+  await page.getByTestId("env-var-name").fill("PATH");
+  await page.getByTestId("env-var-source").getByText("Your own value").click();
+  await page.getByTestId("env-var-value").fill("1");
+  await page.getByTestId("env-var-save").click();
+  await page.getByText("PATH is edited through the folders above.").waitFor();
+  await page.getByTestId("env-var-name").fill("MY_FLAG");
+  await page.getByTestId("env-var-preview").getByText("MY_FLAG = 1").waitFor();
+  await page.getByTestId("env-var-save").click();
+  assert.equal(await page.getByTestId("env-var-row").count(), 3);
+  const review = page.getByTestId("env-changes");
+  await review.getByText("Add C:\\tools\\bin to your PATH").waitFor();
+  await review.getByText("Add D:\\zero2dev\\bin\\data\\shims to your PATH").waitFor();
+  await review.getByText("Set MY_FLAG = 1").waitFor();
+  await page.getByRole("button", { name: "Apply 3 changes" }).click();
+  const result = page.getByTestId("env-result");
+  await result.getByText("Added C:\\tools\\bin to your PATH").waitFor();
+  await page.getByTestId("env-review").waitFor({ state: "detached" });
+  const env = await apiCall("GET", "/api/environment");
+  assert.deepEqual(
+    env.config.path.filter((p) => p.enabled).map((p) => p.source),
+    ["custom", "shims"],
+    "the order of the list is the order on PATH",
+  );
+  assert.ok(
+    env.report.path.every((p) => p.present),
+    "both folders are on the PATH",
+  );
+  const flag = env.report.vars.find((v) => v.name === "MY_FLAG");
+  assert.equal(flag.current, "1");
+  assert.equal(flag.owned, true);
+  assert.equal(env.report.vars.find((v) => v.name === "JAVA_HOME").hasCurrent, false, "an item that is off is not set");
+  await page.getByTestId("env-var-row").filter({ hasText: "MY_FLAG" }).getByText("Set", { exact: true }).waitFor();
+  await page
+    .getByTestId("env-now")
+    .getByText(/adds 2 folders and 1 variable/)
+    .waitFor();
+  await shot(page, "31-environment");
+});
+
+await step(
+  "environment: a variable you have is kept, one item off takes only that back, then remove everything",
+  async () => {
+    await page.goto(BASE + "/#/environment");
+    await page.getByTestId("env-var-row").first().waitFor();
+    // GOROOT already exists as the user's own value: it is never overwritten, and the row says why
+    await page.getByRole("switch", { name: "Set GOROOT" }).check();
+    await page
+      .getByTestId("env-var-row")
+      .filter({ hasText: "GOROOT" })
+      .getByText(/You already have GOROOT = D:\\my\\go|No Go runtime is installed/)
+      .waitFor();
+    await page.getByRole("switch", { name: "Your folder on your PATH" }).uncheck();
+    await page.getByTestId("env-changes").getByText("Remove C:\\tools\\bin from your PATH").waitFor();
+    await page.getByRole("button", { name: /^Apply \d+ changes?$/ }).click();
+    await page.getByTestId("env-result").waitFor();
+    let env = await apiCall("GET", "/api/environment");
+    assert.deepEqual(
+      env.report.path.filter((p) => p.present).map((p) => p.dir),
+      ["D:\\zero2dev\\bin\\data\\shims"],
+      "only the Default versions folder is left on PATH",
+    );
+    assert.equal(env.report.vars.find((v) => v.name === "MY_FLAG").current, "1", "MY_FLAG stays");
+    const goroot = env.report.vars.find((v) => v.name === "GOROOT");
+    assert.equal(goroot.current, "D:\\my\\go");
+    assert.equal(goroot.owned, false);
+    // Remove everything gives back what Zero2Dev added and leaves the user's own variable
+    await page.getByTestId("env-undo").getByRole("button", { name: "Remove everything" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Remove everything" }).click();
+    await page.getByTestId("env-result").waitFor();
+    env = await apiCall("GET", "/api/environment");
+    assert.ok(env.report.path.every((p) => !p.present));
+    assert.equal(env.report.vars.find((v) => v.name === "MY_FLAG").hasCurrent, false);
+    assert.equal(env.report.vars.find((v) => v.name === "GOROOT").current, "D:\\my\\go");
+    assert.ok(
+      env.config.path.every((p) => !p.enabled) && env.config.vars.every((v) => !v.enabled),
+      "the list stays, all off",
+    );
+    await page
+      .getByTestId("env-now")
+      .getByText(/adds nothing/)
+      .waitFor();
   },
 );
 

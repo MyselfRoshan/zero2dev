@@ -2,16 +2,18 @@
   // The dashboard: what runs right now and what to do next, every part clickable.
   import { onMount } from "svelte";
   import { api } from "../lib/api";
-  import { isActive, serviceUrl, startService, stopService } from "../lib/actions";
+  import { isActive, serviceUrl, startAll, stopAll } from "../lib/actions";
   import { lastLine, overview, recentActivity, statusSentence } from "../lib/dashboard";
+  import { projectStatus, servicesLine, sitesLine } from "../lib/projects";
   import { fmtTime, since } from "../lib/format";
   import { navigate } from "../lib/router.svelte";
   import { isSiteServerService, siteServer } from "../lib/sites";
   import { app, attempt, lists, loadSites, logs, seedLogs } from "../lib/store.svelte";
   import { startTour } from "../lib/tour.svelte";
   import { SETUP_TOUR } from "../lib/tours";
-  import type { Service, Site } from "../lib/types";
+  import type { Project, Service, Site } from "../lib/types";
   import { serviceKindLabel, setupSteps } from "../lib/ux";
+  import CrashBanner from "../ui/CrashBanner.svelte";
   import Icon from "../ui/Icon.svelte";
   import KindIcon from "../ui/KindIcon.svelte";
   import ServiceControls from "../ui/ServiceControls.svelte";
@@ -46,8 +48,26 @@
   let bulk = $state(false);
   async function all(start: boolean) {
     bulk = true;
-    for (const s of start ? startable : stoppable) await (start ? startService(s) : stopService(s));
-    bulk = false;
+    try {
+      if (start) await startAll();
+      else await stopAll();
+    } finally {
+      bulk = false;
+    }
+  }
+
+  // Projects: one Start / Stop per group. Shown only when at least one project exists.
+  let projectBusy = $state<string | null>(null);
+  async function projectAction(p: Project, start: boolean) {
+    projectBusy = p.id;
+    try {
+      if (start) {
+        await startAll(p.id);
+        void loadSites(); // a project start also switches its sites on
+      } else await stopAll(p.id);
+    } finally {
+      projectBusy = null;
+    }
   }
 
   function siteLive(s: Site): boolean {
@@ -76,6 +96,8 @@
       <a class="btn" href="#/runtimes"><Icon name="download" /> Install a runtime</a>
     </div>
   </div>
+
+  <CrashBanner />
 
   {#if fresh}
     <section class="card welcome" aria-labelledby="welcome-h" data-tour="overview">
@@ -157,8 +179,8 @@
         <h2 id="svc-h">Services</h2>
         <span class="spacer"></span>
         {#if lists.services.length > 1}
-          <button class="btn sm ghost" type="button" disabled={bulk || startable.length === 0} onclick={() => all(true)}><Icon name="play" size={14} /> Start all</button>
-          <button class="btn sm ghost" type="button" disabled={bulk || stoppable.length === 0} onclick={() => all(false)}><Icon name="stop" size={14} /> Stop all</button>
+          <button class="btn sm ghost" type="button" disabled={bulk || startable.length === 0} onclick={() => all(true)} aria-label="Start all services"><Icon name="play" size={14} /> Start all</button>
+          <button class="btn sm ghost" type="button" disabled={bulk || stoppable.length === 0} onclick={() => all(false)} aria-label="Stop all services"><Icon name="stop" size={14} /> Stop all</button>
         {/if}
         <a class="small" href="#/services">Manage services</a>
       </div>
@@ -210,6 +232,30 @@
     </section>
 
     <aside class="col-side">
+      {#if lists.projects.length > 0}
+        <section aria-labelledby="prj-h" data-testid="dash-projects">
+          <div class="sect-head">
+            <h2 id="prj-h">Projects</h2>
+            <span class="spacer"></span>
+            <a class="small" href="#/projects">Manage projects</a>
+          </div>
+          <div class="card list">
+            {#each lists.projects as p (p.id)}
+              {@const st = projectStatus(p, lists.services, lists.sites)}
+              <div class="site" data-project={p.name}>
+                <span class="d {st.state === 'running' ? 'ok' : st.failed ? 'bad' : st.state === 'partial' ? 'warn' : 'idle'}" aria-hidden="true"></span>
+                <div class="grow site-t">
+                  <span class="nm">{p.name}</span>
+                  <span class="small muted" title="{servicesLine(st)}, {sitesLine(st)}">{servicesLine(st)}</span>
+                </div>
+                <button class="btn sm ghost" type="button" disabled={projectBusy !== null || !st.canStart} onclick={() => projectAction(p, true)} aria-label="Start {p.name}"><Icon name="play" size={14} /> Start</button>
+                <button class="btn sm ghost" type="button" disabled={projectBusy !== null || !st.canStop} onclick={() => projectAction(p, false)} aria-label="Stop {p.name}"><Icon name="stop" size={14} /> Stop</button>
+              </div>
+            {/each}
+          </div>
+        </section>
+      {/if}
+
       <section aria-labelledby="site-h">
         <div class="sect-head">
           <h2 id="site-h">Sites</h2>

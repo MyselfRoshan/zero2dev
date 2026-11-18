@@ -2,15 +2,24 @@
   import { beforeNavigate, router } from "../lib/router.svelte";
 
   // A bar pinned to the bottom of the page while a form has unsaved changes: Discard or Save.
-  type Props = { formId: string; saving: boolean; ondiscard: () => void; label?: string };
-  let { formId, saving, ondiscard, label = "Save settings" }: Props = $props();
+  type Props = {
+    formId: string;
+    saving: boolean;
+    ondiscard: () => void;
+    label?: string;
+    /** The route (name) of the page the form is on; leaving it asks first. */
+    page?: string;
+    /** What the confirmation says is lost. */
+    what?: string;
+  };
+  let { formId, saving, ondiscard, label = "Save settings", page = "settings", what = "settings" }: Props = $props();
 
   // Leaving or reloading the page asks first.
   $effect(() => {
     const warn = (e: BeforeUnloadEvent) => e.preventDefault();
     window.addEventListener("beforeunload", warn);
     const unguard = beforeNavigate((to) =>
-      router.route.name !== "settings" || to.name === "settings" || window.confirm("Discard unsaved settings changes?"),
+      router.route.name !== page || to.name === page || window.confirm(`Discard unsaved ${what} changes?`),
     );
     return () => {
       unguard();

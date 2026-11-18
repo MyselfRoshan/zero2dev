@@ -6,6 +6,11 @@ import (
 	"path/filepath"
 )
 
+// HasWindowsDrivePrefix recognizes drive-relative and drive-absolute paths on any OS.
+func HasWindowsDrivePrefix(path string) bool {
+	return len(path) >= 2 && path[1] == ':' && (path[0] >= 'A' && path[0] <= 'Z' || path[0] >= 'a' && path[0] <= 'z')
+}
+
 // WriteFileAtomic writes data to a temp file in the same directory, fsyncs
 // it and renames it over path, so readers never see a half-written file.
 func WriteFileAtomic(path string, data []byte, perm os.FileMode) error {

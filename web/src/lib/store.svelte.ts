@@ -10,8 +10,10 @@ import type {
   JobProgressEvent,
   LogLine,
   LogLineEvent,
+  Project,
   Runtime,
   Service,
+  ServiceCrashedEvent,
   ServiceStatusEvent,
   Settings,
   Site,
@@ -46,7 +48,7 @@ export const app = $state({
   stream: "idle" as StreamState,
   status: null as Status | null,
   settings: null as Settings | null,
-  loaded: { services: false, runtimes: false, sites: false, catalog: false },
+  loaded: { services: false, runtimes: false, sites: false, catalog: false, projects: false },
   /** Set after Quit Zero2Dev: the daemon is gone on purpose, not offline. */
   stopped: false,
   reconnects: 0,
@@ -57,10 +59,24 @@ export const lists = $state({
   services: [] as Service[],
   runtimes: [] as Runtime[],
   sites: [] as Site[],
+  /** Groups of services and sites (GET /api/projects). */
+  projects: [] as Project[],
   catalog: [] as CatalogEntry[],
   /** What each service type needs (GET /api/kinds); loaded once. */
   kinds: [] as KindProfile[],
 });
+
+/**
+ * The last crash of each service that crashed (`service.crashed`), by service id. An entry stays
+ * until the user starts the service again by hand (or dismisses it): crash restarts keep it.
+ */
+export const crashes = $state<Record<string, ServiceCrashedEvent>>({});
+
+/** Bumped on every `environment.changed` event: the Environment page reloads when it changes. */
+export const envSignal = $state({ n: 0 });
+export function dismissCrash(id: string): void {
+  delete crashes[id];
+}
 
 export const jobs = $state<Record<string, Job>>({});
 /** catalog id -> job id for installs started from this page */
@@ -162,6 +178,7 @@ async function load<T>(fn: () => Promise<T>, apply: (v: T) => void, key?: keyof 
 export const loadServices = () => load(api.listServices, (v) => (lists.services = v), "services");
 export const loadRuntimes = () => load(api.listRuntimes, (v) => (lists.runtimes = v), "runtimes");
 export const loadSites = () => load(api.listSites, (v) => (lists.sites = v), "sites");
+export const loadProjects = () => load(api.listProjects, (v) => (lists.projects = v), "projects");
 export const loadCatalog = () => load(api.catalog, (v) => (lists.catalog = v), "catalog");
 export const loadStatus = () => load(api.status, (v) => (app.status = v));
 export const loadSettings = () => load(api.getSettings, (v) => (app.settings = v));
@@ -174,6 +191,7 @@ export function loadAll(): Promise<unknown> {
     loadServices(),
     loadRuntimes(),
     loadSites(),
+    loadProjects(),
     loadCatalog(),
     loadKinds(),
   ]);
@@ -368,6 +386,9 @@ function onEvent(type: EventType, d: unknown) {
         s.pid = e.pid;
         s.startedAt = e.startedAt;
         s.lastError = e.lastError;
+        s.restarts = e.restarts ?? s.restarts;
+        // A start that is not a crash restart (restarts is back at 0) clears the crash badge.
+        if ((e.state === "starting" || e.state === "running") && (e.restarts ?? 0) === 0) delete crashes[e.id];
         if (e.state === "failed" && e.lastError) toast("error", `${s.name} failed: ${e.lastError}`);
       }
       void loadStatus();
@@ -382,9 +403,23 @@ function onEvent(type: EventType, d: unknown) {
     case "job.done":
       onJobDone(d as JobDoneEvent);
       break;
+    case "service.crashed": {
+      const e = d as ServiceCrashedEvent;
+      crashes[e.id] = e;
+      break;
+    }
     case "services.changed":
-      void loadServices();
+      void loadServices().then(() => {
+        // A deleted service has nothing left to warn about.
+        for (const id of Object.keys(crashes)) if (!lists.services.some((s) => s.id === id)) delete crashes[id];
+      });
       void loadStatus();
+      break;
+    case "projects.changed":
+      void loadProjects();
+      break;
+    case "environment.changed":
+      envSignal.n++;
       break;
     case "runtimes.changed":
       void loadRuntimes();

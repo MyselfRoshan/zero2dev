@@ -1,82 +1,93 @@
 name: release
 
-# Builds the Windows executable, zips it with the docs, writes a SHA-256 checksum file,
-# and attaches everything to a GitHub release.
+# Merging into the `release` branch publishes the version in VERSION:
 #
-# Release:  bump VERSION and CHANGELOG.md, commit, then push a tag that matches VERSION:
-#             git tag v0.0.1 && git push origin v0.0.1
-# Dry run:  Actions tab -> release -> Run workflow (builds and uploads the files as a
-#           workflow artifact, no release is created).
+#   1. plan     reads VERSION, checks CHANGELOG.md and the other version strings, and looks
+#               for the tag v<VERSION>. If it already exists there is nothing to release and
+#               the run stops there (a notice says so); nothing fails.
+#   2. test     the whole ci workflow (web, go on Linux and Windows, e2e). Any failure stops
+#               the release: no tag, no release.
+#   3. build    the Windows executable, the zip, the checksum file, the notes, the attestation.
+#   4. publish  creates the tag v<VERSION> on the merged commit and the GitHub release.
+#
+# To release:  scripts/bump-version.sh 0.0.5, write the CHANGELOG.md section, open a pull
+#              request into `release` (ci checks that the version is new), merge it.
+# Dry run:     Actions tab -> release -> Run workflow. Runs plan, test and build and keeps the
+#              files as a workflow artifact; nothing is tagged or released.
 
 on:
   push:
-    tags: ["v*"]
+    branches: [release]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release
   cancel-in-progress: false
 
 jobs:
-  build:
+  plan:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write # create the release and upload assets
-      id-token: write # build provenance attestation
-      attestations: write
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      publish: ${{ steps.decide.outputs.publish }}
+      build: ${{ steps.decide.outputs.build }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Read version
-        id: v
-        shell: bash
+      - name: Check VERSION, CHANGELOG.md and the tag
+        id: check
+        run: bash scripts/release-check.sh | tee -a "$GITHUB_OUTPUT"
+      - name: Decide
+        id: decide
+        env:
+          VERSION: ${{ steps.check.outputs.version }}
+          RELEASED: ${{ steps.check.outputs.released }}
         run: |
-          VERSION="$(tr -d ' \r\n' < VERSION)"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          if [[ "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" != "v${VERSION}" ]]; then
-            echo "::error::Tag ${GITHUB_REF_NAME} does not match VERSION (v${VERSION}). Fix VERSION or retag."
-            exit 1
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo "Dry run of ${VERSION}: build only, nothing is tagged or released."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          elif [[ "$RELEASED" == "true" ]]; then
+            echo "::notice::v${VERSION} is already released, so this merge publishes nothing. Bump VERSION (scripts/bump-version.sh) to release again."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Releasing v${VERSION}."
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            echo "build=true" >> "$GITHUB_OUTPUT"
           fi
-          echo "Building Zero2Dev ${VERSION}"
 
+  test:
+    needs: plan
+    if: needs.plan.outputs.build == 'true'
+    uses: ./.github/workflows/ci.yml
+
+  build:
+    needs: [plan, test]
+    if: needs.plan.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # build provenance attestation
+      attestations: write
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-
-      # pnpm version comes from "packageManager" in web/package.json.
-      - uses: pnpm/action-setup@v4
+          cache: false
+      # The dashboard the ci run built and tested is the one that is embedded.
+      - uses: actions/download-artifact@v4
         with:
-          package_json_file: web/package.json
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: pnpm
-          cache-dependency-path: web/pnpm-lock.yaml
-
-      - name: Check and test the UI
-        working-directory: web
-        run: |
-          pnpm install --frozen-lockfile
-          pnpm run check
-          pnpm test
-
-      - name: Build the UI (embedded into the executable)
-        working-directory: web
-        run: pnpm run build
-
-      - name: Vet and test the daemon
-        run: |
-          go vet ./cmd/... ./internal/...
-          GOOS=windows GOARCH=amd64 go vet ./cmd/... ./internal/...
-          go test -race -count=1 ./cmd/... ./internal/...
+          name: webui-dist
+          path: internal/webui/dist
 
       - name: Build the Windows executable
         env:
-          VERSION: ${{ steps.v.outputs.version }}
           CGO_ENABLED: "0"
           GOOS: windows
           GOARCH: amd64
@@ -85,10 +96,7 @@ jobs:
           go build -trimpath -ldflags "-s -w -H windowsgui -X main.version=${VERSION}" -o dist/stage/zero2dev.exe ./cmd/zero2dev
 
       - name: Package and checksum
-        env:
-          VERSION: ${{ steps.v.outputs.version }}
         working-directory: dist
-        shell: bash
         run: |
           NAME="zero2dev_${VERSION}_windows_amd64"
           cp stage/zero2dev.exe "${NAME}.exe"
@@ -102,19 +110,12 @@ jobs:
           rm -rf stage
 
       - name: Release notes from CHANGELOG.md
-        env:
-          VERSION: ${{ steps.v.outputs.version }}
-        shell: bash
         run: |
           awk -v v="$VERSION" '
             $0 ~ "^## " v "$" { on = 1; next }
             /^## / && on      { exit }
             on                { print }
           ' CHANGELOG.md > dist/notes.md
-          if [[ ! -s dist/notes.md ]]; then
-            echo "::warning::No '## ${VERSION}' section found in CHANGELOG.md; the release will have no notes."
-            echo "Zero2Dev ${VERSION}" > dist/notes.md
-          fi
           {
             echo
             echo "### Verify the download"
@@ -127,7 +128,7 @@ jobs:
           } >> dist/notes.md
 
       - name: Attest build provenance
-        if: github.ref_type == 'tag'
+        if: needs.plan.outputs.publish == 'true'
         uses: actions/attest-build-provenance@v2
         with:
           subject-path: |
@@ -136,26 +137,40 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: zero2dev-${{ steps.v.outputs.version }}-windows-amd64
+          name: zero2dev-${{ env.VERSION }}-windows-amd64
           path: |
             dist/zero2dev_*_windows_amd64.zip
             dist/zero2dev_*_windows_amd64.exe
             dist/zero2dev_*_checksums.txt
+            dist/notes.md
           if-no-files-found: error
 
-      - name: Create the GitHub release
-        if: github.ref_type == 'tag'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ steps.v.outputs.version }}
-        shell: bash
+  publish:
+    needs: [plan, build]
+    if: needs.plan.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the tag and the release
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: zero2dev-${{ env.VERSION }}-windows-amd64
+          path: dist
+      - name: Create the tag and the GitHub release
         run: |
           PRERELEASE=""
-          [[ "$VERSION" == 0.* ]] && PRERELEASE="--prerelease"
-          gh release create "${GITHUB_REF_NAME}" \
-            --verify-tag $PRERELEASE \
+          [[ "$VERSION" == 0.* || "$VERSION" == *-* ]] && PRERELEASE="--prerelease"
+          # --target makes gh create the tag v<VERSION> on the commit that was merged and tested.
+          gh release create "v${VERSION}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            $PRERELEASE \
             --title "Zero2Dev ${VERSION}" \
             --notes-file dist/notes.md \
-            dist/zero2dev_${VERSION}_windows_amd64.zip \
-            dist/zero2dev_${VERSION}_windows_amd64.exe \
-            dist/zero2dev_${VERSION}_checksums.txt
+            "dist/zero2dev_${VERSION}_windows_amd64.zip" \
+            "dist/zero2dev_${VERSION}_windows_amd64.exe" \
+            "dist/zero2dev_${VERSION}_checksums.txt"
+          echo "::notice::Released v${VERSION}: https://github.com/${GITHUB_REPOSITORY}/releases/tag/v${VERSION}"

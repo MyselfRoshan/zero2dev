@@ -6,7 +6,7 @@
   import { app, lists, toast, upsertService, loadStatus, loadKinds } from "../lib/store.svelte";
   import type { CommandPreview, Service, ServiceInput, ServiceKind } from "../lib/types";
   import { serviceKindLabel } from "../lib/ux";
-  import { defaultOptionLabel, defaultRuntime, RUNTIME_GROUPS, runtimeOptionLabel, SERVICE_GROUP_IDS } from "../lib/catalog";
+  import { defaultOptionLabel, defaultRuntime, isDatabase, RUNTIME_GROUPS, runtimeOptionLabel, SERVICE_GROUP_IDS } from "../lib/catalog";
   import { envRowsToMap, hasErrors, isAbsolutePath, parsePort, runtimeKindsFor, validateService, type ServiceField } from "../lib/validate";
   import {
     changedKeys,
@@ -29,6 +29,9 @@
   import FolderInput from "../ui/FolderInput.svelte";
   import OptionField from "../ui/OptionField.svelte";
   import ExtensionPicker from "../ui/ExtensionPicker.svelte";
+  import ServiceOrderFields from "../ui/ServiceOrderFields.svelte";
+  import ServiceRestartFields from "../ui/ServiceRestartFields.svelte";
+  import ServiceEnvFields from "../ui/ServiceEnvFields.svelte";
 
   type Props = { service?: Service; onsaved: (s: Service) => void; oncancel: () => void };
   let { service, onsaved, oncancel }: Props = $props();
@@ -52,6 +55,11 @@
   let healthPath = $state(init?.healthPath ?? "");
   let runtimeId = $state(init?.runtimeId ?? "");
   let autostart = $state(init?.autostart ?? false);
+  let dependsOn = $state<string[]>([...(init?.dependsOn ?? [])]);
+  let databaseId = $state(init?.databaseId ?? "");
+  let envFile = $state(init?.envFile ?? "");
+  let restartOnCrash = $state(init?.restartOnCrash ?? false);
+  let restartLimit = $state(init?.restartLimit || 5);
   let settings = $state<Settings>({ ...init?.settings });
   let customArgs = $state(init?.kind !== "custom" && !!init?.customArgs);
 
@@ -132,10 +140,20 @@
   // Rarely needed fields live under "Advanced"; it starts open when they hold something.
   // svelte-ignore state_referenced_locally
   let advancedOpen = $state(
-    !!(init && (init.customArgs || (init.kind !== "custom" && init.args.length) || init.healthPath || Object.keys(init.env ?? {}).length)),
+    !!(
+      init &&
+      (init.customArgs ||
+        (init.kind !== "custom" && init.args.length) ||
+        init.healthPath ||
+        Object.keys(init.env ?? {}).length ||
+        init.dependsOn?.length ||
+        init.databaseId ||
+        init.envFile ||
+        init.restartOnCrash)
+    ),
   );
   $effect(() => {
-    if (errors.healthPath || errors.env || (kind !== "custom" && errors.command)) advancedOpen = true;
+    if (errors.healthPath || errors.env || errors.envFile || errors.restartLimit || (kind !== "custom" && errors.command)) advancedOpen = true;
   });
 
   // npm scripts of the project, as suggestions.
@@ -171,6 +189,11 @@
         healthPath: profile && !profile.health ? "" : healthPath.trim(),
         runtimeId: k === "custom" ? "" : runtimeId,
         autostart,
+        dependsOn,
+        databaseId: isDatabase(k) ? "" : databaseId, // a database has no database of its own
+        envFile: envFile.trim(),
+        restartOnCrash,
+        restartLimit: Number.isInteger(restartLimit) ? restartLimit : 0,
       },
     };
   }
@@ -271,7 +294,7 @@
     const parts: string[] = [];
     if (kind && kind !== "custom") parts.push(customArgs ? "your own command line" : (profile?.extraArgs || "extra arguments").toLowerCase());
     if (profile?.health !== false) parts.push("health check");
-    parts.push("environment variables");
+    parts.push("start order", "restart on crash", ".env file", "environment variables");
     const t = parts.join(", ");
     return t.charAt(0).toUpperCase() + t.slice(1);
   });
@@ -424,6 +447,9 @@
               {#if errors.healthPath}<span class="err">{errors.healthPath}</span>{:else}<span class="hint">A page that answers when the app is ready. Without it, Zero2Dev waits until the port accepts connections.</span>{/if}
             </div>
           {/if}
+          <ServiceOrderFields bind:dependsOn bind:databaseId {kind} selfId={service?.id} error={errors.dependsOn} />
+          <ServiceRestartFields bind:restartOnCrash bind:restartLimit error={errors.restartLimit} />
+          <ServiceEnvFields bind:envFile cwd={cwd.trim()} {kind} error={errors.envFile} />
           <div class="field" role="group" aria-labelledby="env-l">
             <span class="label" id="env-l">Environment variables</span>
             {#each env as r, i (r.id)}

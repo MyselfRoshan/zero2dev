@@ -5,6 +5,7 @@ package model
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"path/filepath"
 	"time"
 )
 
@@ -42,10 +43,64 @@ type Service struct {
 	HealthPath string            `json:"healthPath"`
 	RuntimeID  string            `json:"runtimeId"`
 	Autostart  bool              `json:"autostart"`
-	State      string            `json:"state"`
-	Pid        int               `json:"pid"`
-	StartedAt  *time.Time        `json:"startedAt"`
-	LastError  string            `json:"lastError"`
+	// DependsOn are the services that must be running before this one starts
+	// (and stop after it). DatabaseID is a database service this one uses; it is
+	// an implicit dependency too (see Deps).
+	DependsOn  []string `json:"dependsOn"`
+	DatabaseID string   `json:"databaseId"`
+	// EnvFile is a .env file, relative to Cwd, whose variables are added to the
+	// service's environment (any kind).
+	EnvFile string `json:"envFile"`
+	// RestartOnCrash restarts the service after it exits unexpectedly, at most
+	// RestartLimit times in a row (1-20, default DefaultRestartLimit).
+	RestartOnCrash bool `json:"restartOnCrash"`
+	RestartLimit   int  `json:"restartLimit"`
+	// Restarts is how many crash restarts happened since the last manual start
+	// (filled in by the supervisor, never stored or accepted as input).
+	Restarts  int        `json:"restarts"`
+	State     string     `json:"state"`
+	Pid       int        `json:"pid"`
+	StartedAt *time.Time `json:"startedAt"`
+	LastError string     `json:"lastError"`
+}
+
+// Restart-on-crash limits.
+const (
+	DefaultRestartLimit = 5
+	MaxRestartLimit     = 20
+)
+
+// Deps returns the ids of the services sv needs running: DependsOn plus
+// DatabaseID, without duplicates, in that order.
+func Deps(sv Service) []string {
+	out := make([]string, 0, len(sv.DependsOn)+1)
+	seen := map[string]bool{}
+	for _, id := range append(append([]string{}, sv.DependsOn...), sv.DatabaseID) {
+		if id != "" && !seen[id] {
+			seen[id] = true
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
+// RuntimeHome is the environment variable that points at a runtime's install
+// folder (JAVA_HOME for java, GOROOT for go) and its value: the folder two
+// levels above the binary (<home>/bin/java -> <home>). name is "" for every
+// other kind.
+func RuntimeHome(rt Runtime) (name, dir string) {
+	switch rt.Kind {
+	case "java":
+		name = "JAVA_HOME"
+	case "go":
+		name = "GOROOT"
+	default:
+		return "", ""
+	}
+	if rt.Binary == "" {
+		return "", ""
+	}
+	return name, filepath.Dir(filepath.Dir(rt.Binary))
 }
 
 // ServiceInput is the body of create/update.
@@ -62,6 +117,27 @@ type ServiceInput struct {
 	HealthPath string            `json:"healthPath"`
 	RuntimeID  string            `json:"runtimeId"`
 	Autostart  bool              `json:"autostart"`
+	// See Service; RestartLimit 0 means the default.
+	DependsOn      []string `json:"dependsOn"`
+	DatabaseID     string   `json:"databaseId"`
+	EnvFile        string   `json:"envFile"`
+	RestartOnCrash bool     `json:"restartOnCrash"`
+	RestartLimit   int      `json:"restartLimit"`
+}
+
+// Project groups services and sites that are started and stopped together.
+type Project struct {
+	ID         string   `json:"id"` // prj_xxxxxxxx
+	Name       string   `json:"name"`
+	ServiceIDs []string `json:"serviceIds"`
+	SiteIDs    []string `json:"siteIds"`
+}
+
+// ProjectInput is the body of project create/update.
+type ProjectInput struct {
+	Name       string   `json:"name"`
+	ServiceIDs []string `json:"serviceIds"`
+	SiteIDs    []string `json:"siteIds"`
 }
 
 // Runtime is an installed or registered language runtime / tool.
@@ -163,6 +239,46 @@ type Settings struct {
 	SiteServer         string `json:"siteServer"` // caddy (default) | nginx: which program serves the sites
 	Theme              string `json:"theme"`      // system (default) | light | dark: the dashboard's colour scheme
 	Accent             string `json:"accent"`     // #rrggbb: the dashboard's accent colour (default #1677ff)
+}
+
+// EnvConfig is what the user chose to put in their Windows user environment (the one
+// opt-in registry change; HKCU only, reversible, see internal/envreg). Every item is
+// switched on or off on its own and nothing is on by default.
+type EnvConfig struct {
+	// Seeded is set once the suggested items were added, so that items the user
+	// deleted do not come back.
+	Seeded bool      `json:"seeded"`
+	Path   []EnvPath `json:"path"`
+	Vars   []EnvVar  `json:"vars"`
+}
+
+// Sources of an EnvPath and an EnvVar.
+const (
+	EnvShims   = "shims"   // EnvPath: Zero2Dev's shims folder
+	EnvDefault = "default" // EnvVar: the default runtime of Kind
+	EnvRuntime = "runtime" // the folder of one runtime (one specific version)
+	EnvCustom  = "custom"  // EnvPath: Dir, EnvVar: Value
+)
+
+// EnvPath is one folder on the user PATH.
+type EnvPath struct {
+	ID        string `json:"id"`
+	Source    string `json:"source"`              // shims | runtime | custom
+	RuntimeID string `json:"runtimeId,omitempty"` // runtime: the folder of its program
+	Dir       string `json:"dir,omitempty"`       // custom
+	Enabled   bool   `json:"enabled"`
+}
+
+// EnvVar is one user environment variable. Zero2Dev only sets it when the user has no
+// variable of that name.
+type EnvVar struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Source    string `json:"source"`              // default | runtime | custom
+	Kind      string `json:"kind,omitempty"`      // default: the runtime kind whose default is used
+	RuntimeID string `json:"runtimeId,omitempty"` // runtime: one specific version
+	Value     string `json:"value,omitempty"`     // custom
+	Enabled   bool   `json:"enabled"`
 }
 
 // Appearance defaults and accepted values.

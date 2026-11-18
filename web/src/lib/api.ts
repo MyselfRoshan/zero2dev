@@ -5,18 +5,25 @@ import type {
   CommandPreview,
   InstallOptions,
   DetectedRuntime,
+  EnvConfig,
+  Environment,
   ErrorCode,
   FolderPick,
   Job,
   LogLine,
+  Project,
+  ProjectInput,
   PHPExtensions,
   Runtime,
   RuntimeKind,
   Service,
+  StartAllResult,
+  StopAllResult,
   ServiceInput,
   Settings,
   Site,
   SiteInput,
+  SitesBulkResult,
   Status,
 } from "./types";
 import type { KindProfile } from "./kinds";
@@ -151,6 +158,11 @@ export async function request<T>(method: string, path: string, body?: unknown): 
 
 const enc = encodeURIComponent;
 
+/** `?project=id` for the bulk routes, or nothing: without a project they act on everything. */
+export function projectQuery(projectId?: string): string {
+  return projectId ? `?project=${enc(projectId)}` : "";
+}
+
 /** Only fields listed in the contract are sent: the daemon rejects unknown fields. */
 export function installBody(catalogId: string, opts: InstallOptions = {}): Record<string, unknown> {
   const b: Record<string, unknown> = { catalogId };
@@ -178,6 +190,23 @@ export const api = {
   startService: (id: string) => request<Service>("POST", `/api/services/${enc(id)}/start`),
   stopService: (id: string) => request<Service>("POST", `/api/services/${enc(id)}/stop`),
   restartService: (id: string) => request<Service>("POST", `/api/services/${enc(id)}/restart`),
+  /** Starts every service that is not running (or those of one project), dependencies first. */
+  startAllServices: (projectId?: string) =>
+    request<StartAllResult>("POST", `/api/services/start-all${projectQuery(projectId)}`),
+  /** Stops every running service (or those of one project), dependents first. */
+  stopAllServices: (projectId?: string) =>
+    request<StopAllResult>("POST", `/api/services/stop-all${projectQuery(projectId)}`),
+  /** Opens a console in the service's folder with its environment (204; 501 where unsupported). */
+  openTerminal: (id: string) => request<void>("POST", `/api/services/${enc(id)}/terminal`),
+
+  listProjects: () => request<Project[]>("GET", "/api/projects"),
+  createProject: (b: ProjectInput) => request<Project>("POST", "/api/projects", b),
+  updateProject: (id: string, b: ProjectInput) => request<Project>("PUT", `/api/projects/${enc(id)}`, b),
+  deleteProject: (id: string) => request<void>("DELETE", `/api/projects/${enc(id)}`),
+  /** The folders and variables the user chose for the Windows user environment, and what is there now. */
+  getEnvironment: () => request<Environment>("GET", "/api/environment"),
+  /** Saves the whole config and applies it (409 with the reason when Windows refuses). */
+  putEnvironment: (c: EnvConfig) => request<Environment>("PUT", "/api/environment", { path: c.path, vars: c.vars }),
   serviceCommand: (id: string) => request<CommandPreview>("GET", `/api/services/${enc(id)}/command`),
   previewService: (b: ServiceInput & { id?: string }) => request<CommandPreview>("POST", "/api/services/preview", b),
   kinds: () => request<KindProfile[]>("GET", "/api/kinds"),
@@ -213,6 +242,11 @@ export const api = {
   deleteSite: (id: string) => request<void>("DELETE", `/api/sites/${enc(id)}`),
   enableSite: (id: string) => request<Site>("POST", `/api/sites/${enc(id)}/enable`),
   disableSite: (id: string) => request<Site>("POST", `/api/sites/${enc(id)}/disable`),
+  /** One config write and one site server restart for all sites (or those of one project). */
+  enableAllSites: (projectId?: string) =>
+    request<SitesBulkResult>("POST", `/api/sites/enable-all${projectQuery(projectId)}`),
+  disableAllSites: (projectId?: string) =>
+    request<SitesBulkResult>("POST", `/api/sites/disable-all${projectQuery(projectId)}`),
 
   getSettings: () => request<Settings>("GET", "/api/settings"),
   putSettings: (b: Settings) => request<Settings>("PUT", "/api/settings", b),

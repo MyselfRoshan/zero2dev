@@ -9,6 +9,9 @@ export const EVENT_TYPES = [
   "services.changed",
   "runtimes.changed",
   "sites.changed",
+  "projects.changed",
+  "environment.changed",
+  "service.crashed",
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
