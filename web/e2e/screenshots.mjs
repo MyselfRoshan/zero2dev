@@ -64,7 +64,7 @@ try {
   } else {
     const dist = path.resolve(import.meta.dirname, "../../internal/webui/dist/index.html");
     if (!fs.existsSync(dist)) throw new Error("build the dashboard first: pnpm run build");
-    const port = 7102;
+    const port = Number(process.env.E2E_PORT) || 7102;
     BASE = `http://127.0.0.1:${port}`;
     TOKEN = "devtoken";
     mock = spawn(process.execPath, [path.resolve(import.meta.dirname, "../mock/server.mjs")], {

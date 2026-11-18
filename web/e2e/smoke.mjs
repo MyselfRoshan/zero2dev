@@ -10,7 +10,8 @@ import assert from "node:assert/strict";
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
 
-const PORT = 7101;
+// E2E_PORT lets several checkouts run the test at the same time.
+const PORT = Number(process.env.E2E_PORT) || 7101;
 const BASE = `http://127.0.0.1:${PORT}`;
 const SHOTS = process.env.SHOTS_DIR || path.join(os.tmpdir(), "zero2dev-e2e-shots");
 fs.mkdirSync(SHOTS, { recursive: true });
