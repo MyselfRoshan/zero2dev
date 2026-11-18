@@ -27,6 +27,11 @@ type svcLog struct {
 	f     *os.File
 	size  int64
 	max   int64
+	// closed is set by close: later lines stay in memory but never reopen the
+	// file. A line that arrives after shutdown (the "stopped" line is written
+	// after the process is reaped) would otherwise hold the file open, and
+	// Windows cannot delete an open file.
+	closed bool
 }
 
 func newSvcLog(path string) *svcLog {
@@ -54,6 +59,9 @@ func (l *svcLog) writeFile(line model.LogLine) {
 		_ = os.Rename(l.path, l.path+".1")
 	}
 	if l.f == nil {
+		if l.closed {
+			return
+		}
 		if err := os.MkdirAll(filepath.Dir(l.path), 0o755); err != nil {
 			return
 		}
@@ -99,6 +107,7 @@ func (l *svcLog) tail(n int) []model.LogLine {
 func (l *svcLog) close() {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	l.closed = true
 	if l.f != nil {
 		l.f.Close()
 		l.f = nil

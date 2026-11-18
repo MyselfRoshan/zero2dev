@@ -1098,40 +1098,51 @@ async function api(req, res, url) {
     }
     const started = [];
     const failed = [];
-    const failedIds = new Set();
-    const begin = async (svc) => {
+    // Like the daemon: a service starts once what it needs is running. One promise per service,
+    // so a dependency shared by several services starts once.
+    const settle = async (svc) => {
       while (svc.state === "starting") await sleep(25);
-      if (svc.state === "running" || failedIds.has(svc.id) || started.includes(svc.id)) return;
+      return svc.state === "running";
+    };
+    const runs = new Map();
+    const begin = (svc) => {
+      if (!runs.has(svc.id)) runs.set(svc.id, run(svc));
+      return runs.get(svc.id);
+    };
+    const run = async (svc) => {
+      if (svc.state === "running") return true;
+      if (svc.state === "starting") return settle(svc); // already coming up: not started by this call
       for (const d of depsOf(svc)) {
         const dep = state.services.find((x) => x.id === d);
         if (!dep) continue;
-        await begin(dep);
-        if (failedIds.has(dep.id)) {
-          failedIds.add(svc.id);
+        if (!(await begin(dep))) {
           failed.push({ id: svc.id, name: svc.name, error: `${dep.name} did not start` });
-          return;
+          return false;
         }
       }
       const problem = startProblem(svc);
       if (problem) {
-        failedIds.add(svc.id);
         failed.push({ id: svc.id, name: svc.name, error: problem });
-        return;
+        return false;
       }
       startProc(svc);
-      while (svc.state === "starting") await sleep(25);
-      if (svc.state !== "running") {
-        failedIds.add(svc.id);
-        failed.push({ id: svc.id, name: svc.name, error: svc.lastError || "service did not start" });
-        return;
+      if (!(await settle(svc))) {
+        failed.push({ id: svc.id, name: svc.name, error: svc.lastError || "it stopped before it was ready" });
+        return false;
       }
       started.push(svc.id);
+      return true;
     };
-    // A project starts in its own order (each member after the ones above it), dependencies first.
-    const todo = pp.project
-      ? startSequence(pp.project.serviceIds).map((sid) => state.services.find((x) => x.id === sid))
-      : state.services.filter((x) => !want || want.has(x.id)).sort((a, b) => tierOf(b.kind) - tierOf(a.kind));
-    for (const svc of todo) await begin(svc);
+    if (pp.project) {
+      // A project starts in its own order: each member once the one above it is running or failed.
+      for (const sid of startSequence(pp.project.serviceIds)) await begin(state.services.find((x) => x.id === sid));
+    } else {
+      // Everything at once; each service waits only for what it needs.
+      const todo = state.services
+        .filter((x) => !want || want.has(x.id))
+        .sort((a, b) => tierOf(b.kind) - tierOf(a.kind));
+      await Promise.all(todo.map(begin));
+    }
     return send(res, 200, { started: started.sort((a, b) => a.localeCompare(b)), failed });
   }
   if (m === "POST" && p === "/api/services/stop-all") {
