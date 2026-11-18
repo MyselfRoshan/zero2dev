@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.0.5
+
+<!-- Each part writes its bullets between its own markers; the markers go when 0.0.5 is finished. -->
+
+<!-- db-backend + db-ui: databases (create, users, import, export, reset, password) -->
+
+<!-- /databases -->
+
+<!-- snapshot-backend + snapshot-ui: snapshots, restore, clone, offers before risky actions -->
+
+<!-- /snapshots -->
+
+<!-- mailpit -->
+
+<!-- /mailpit -->
+
+<!-- migrate-backend + migrate-ui: Bring in -->
+
+<!-- /migrate -->
+
 ## 0.0.4
 
 - **Stop all stops things in a safe order.** One request to the daemon (`POST /api/services/stop-all`) stops apps first, then databases, then the web server (Caddy or nginx), so an app never loses its database while it is still running. Services in the same group stop at the same time, and the answer lists what stopped and what did not. Before, the dashboard stopped services one by one in list order, and only while the page was open.

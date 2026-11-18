@@ -25,6 +25,21 @@ import type {
   SiteInput,
   SitesBulkResult,
   Status,
+  CloneSnapshotInput,
+  DatabaseInfo,
+  DbDatabase,
+  DbExportInput,
+  DbImportInput,
+  FilePickInput,
+  MigrateDatabase,
+  MigrateRequest,
+  MigrateSource,
+  Migration,
+  RevertHow,
+  Snapshot,
+  SnapshotDetail,
+  SnapshotScope,
+  TakeSnapshotInput,
 } from "./types";
 import type { KindProfile } from "./kinds";
 
@@ -260,4 +275,40 @@ export const api = {
 
   /** Opens the native folder dialog on the daemon's PC; resolves when the user closes it. */
   pickFolder: (title: string, start: string) => request<FolderPick>("POST", "/api/dialog/folder", { title, start }),
+
+  // ---- 0.0.5: databases, snapshots, Bring in (docs/API.md, the 0.0.5 amendment) ----
+
+  /** The native Open / Save as dialog on the daemon's PC. */
+  pickFile: (b: FilePickInput) => request<FolderPick>("POST", "/api/dialog/file", b),
+
+  databaseInfo: (id: string) => request<DatabaseInfo>("GET", `/api/services/${enc(id)}/database`),
+  createDatabase: (id: string, name: string) =>
+    request<{ name: string }>("POST", `/api/services/${enc(id)}/database/databases`, { name }),
+  createDatabaseUser: (id: string, b: { user: string; password: string; database?: string }) =>
+    request<{ user: string; database: string }>("POST", `/api/services/${enc(id)}/database/users`, b),
+  importDatabase: (id: string, b: DbImportInput) => request<Job>("POST", `/api/services/${enc(id)}/database/import`, b),
+  exportDatabase: (id: string, b: DbExportInput) => request<Job>("POST", `/api/services/${enc(id)}/database/export`, b),
+  /** Deletes the data folder (the service must be stopped); the next start sets it up again. */
+  resetDatabase: (id: string) => request<Service>("POST", `/api/services/${enc(id)}/database/reset`),
+  /** "" removes the password. The server must be running. */
+  setDatabasePassword: (id: string, password: string) =>
+    request<Service>("PUT", `/api/services/${enc(id)}/database/password`, { password }),
+
+  listSnapshots: (scope: SnapshotScope, ownerId: string) =>
+    request<Snapshot[]>("GET", `/api/${scope === "project" ? "projects" : "services"}/${enc(ownerId)}/snapshots`),
+  takeSnapshot: (scope: SnapshotScope, ownerId: string, b: TakeSnapshotInput) =>
+    request<Job>("POST", `/api/${scope === "project" ? "projects" : "services"}/${enc(ownerId)}/snapshots`, b),
+  getSnapshot: (id: string) => request<SnapshotDetail>("GET", `/api/snapshots/${enc(id)}`),
+  restoreSnapshot: (id: string, restart = false) =>
+    request<Job>("POST", `/api/snapshots/${enc(id)}/restore`, { restart }),
+  cloneSnapshot: (id: string, b: CloneSnapshotInput) => request<Job>("POST", `/api/snapshots/${enc(id)}/clone`, b),
+  deleteSnapshot: (id: string) => request<void>("DELETE", `/api/snapshots/${enc(id)}`),
+
+  migrationSources: () => request<MigrateSource[]>("GET", "/api/migrations/sources"),
+  /** Lists the databases of another server, for the database source's form. */
+  remoteDatabases: (b: Omit<MigrateDatabase, "databases" | "targetServiceId">) =>
+    request<{ databases: DbDatabase[] }>("POST", "/api/migrations/databases", b),
+  listMigrations: () => request<Migration[]>("GET", "/api/migrations"),
+  startMigration: (b: MigrateRequest) => request<Job>("POST", "/api/migrations", b),
+  revertMigration: (id: string, how: RevertHow) => request<Job>("POST", `/api/migrations/${enc(id)}/revert`, { how }),
 };

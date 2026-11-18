@@ -156,6 +156,9 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) error {
 
 func (s *Server) getJob(w http.ResponseWriter, r *http.Request) error {
 	j, ok := s.Installer.Get(r.PathValue("id"))
+	if !ok && s.Jobs != nil { // database, snapshot and migration jobs (0.0.5)
+		j, ok = s.Jobs.Get(r.PathValue("id"))
+	}
 	if !ok {
 		return apperr.NotFound("job %s not found", r.PathValue("id"))
 	}

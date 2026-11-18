@@ -51,6 +51,9 @@ type Supervisor struct {
 	closing bool
 	// logsClosed: StopAll has closed the log files; nothing may reopen them.
 	logsClosed bool
+	// reserved: services that an operation on their files holds (a snapshot,
+	// a restore, a reset, a migration), with what it is doing; see Reserve.
+	reserved map[string]string
 }
 
 // proc is one run of a service. All fields are guarded by Supervisor.mu.
@@ -182,6 +185,10 @@ func (s *Supervisor) start(id string, auto *crashState) error {
 	if auto != nil && s.crash[id] != auto {
 		s.mu.Unlock()
 		return errRestartCancelled
+	}
+	if why, ok := s.reserved[id]; ok {
+		s.mu.Unlock()
+		return apperr.Conflict("%s is busy (%s); try again when it is done", svc.Name, why)
 	}
 	prev := s.procs[id]
 	if prev != nil && active(prev.state) {

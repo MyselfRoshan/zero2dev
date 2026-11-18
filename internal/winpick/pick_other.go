@@ -5,3 +5,5 @@ package winpick
 const supported = false
 
 func pickFolder(title, start string) (string, bool, error) { return "", false, ErrUnsupported }
+
+func pickFile(FileOptions) (string, bool, error) { return "", false, ErrUnsupported }

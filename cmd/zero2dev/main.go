@@ -23,13 +23,17 @@ import (
 	"zero2dev/internal/api"
 	"zero2dev/internal/catalog"
 	"zero2dev/internal/config"
+	"zero2dev/internal/dbtools"
 	"zero2dev/internal/envreg"
 	"zero2dev/internal/events"
 	"zero2dev/internal/installer"
+	"zero2dev/internal/jobs"
 	"zero2dev/internal/launch"
+	"zero2dev/internal/migrate"
 	"zero2dev/internal/model"
 	"zero2dev/internal/runtimes"
 	"zero2dev/internal/sites"
+	"zero2dev/internal/snapshot"
 	"zero2dev/internal/store"
 	"zero2dev/internal/supervisor"
 	"zero2dev/internal/tray"
@@ -38,7 +42,7 @@ import (
 )
 
 // version is overridden with -ldflags "-X main.version=...".
-var version = "0.0.4"
+var version = "0.0.5"
 
 func main() {
 	setupOutput()
@@ -163,16 +167,24 @@ func run() error {
 	removeConsoleQuit := consoleQuit(quit, shutdownDone)
 	defer removeConsoleQuit()
 	defer close(shutdownDone)
+	// 0.0.5: database tools, snapshots and Bring in share one job registry.
+	loadCatalog := func() ([]model.CatalogEntry, error) { return catalog.Load(cfg.Home) }
+	jobReg := jobs.New(hub)
+	dbm := dbtools.New(st, sup, jobReg, cfg.Home)
+	snaps := snapshot.New(cfg.Home, version, st, sup, jobReg, site, hub.Publish, loadCatalog)
+	migr := migrate.New(cfg.Home, cfg.BinDir, st, jobReg, dbm, hub.Publish)
 	srv := api.New(api.Deps{
 		Cfg: cfg, Store: st, Hub: hub, Sup: sup, Runtimes: rt, Installer: inst, Sites: site,
-		Catalog: func() ([]model.CatalogEntry, error) { return catalog.Load(cfg.Home) }, Remote: remote,
+		Catalog: loadCatalog, Remote: remote,
 		UI: webui.FS(), Version: version, Started: time.Now(),
 		PickFolder: folderPicker(),
+		PickFile:   filePicker(),
 		Launch:     launch.Start,
 		Terminal:   launch.OpenTerminal,
 		EnvApply:   func(d store.Data) error { return envreg.Apply(cfg.Home, d) },
 		EnvReport:  func(d store.Data) envreg.Report { return envreg.Inspect(cfg.Home, d) },
 		Quit:       quit,
+		Jobs:       jobReg, DB: dbm, Snapshots: snaps, Migrate: migr,
 	})
 
 	httpSrv := &http.Server{Handler: srv, ReadHeaderTimeout: 10 * time.Second}
@@ -341,4 +353,11 @@ func folderPicker() func(title, start string) (string, bool, error) {
 		return nil
 	}
 	return winpick.Folder
+}
+
+func filePicker() func(o winpick.FileOptions) (string, bool, error) {
+	if !winpick.Supported() {
+		return nil
+	}
+	return winpick.File
 }

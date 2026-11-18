@@ -732,7 +732,7 @@ await step("reconnect: daemon outage shows banner, recovers with fresh ticket", 
 await step("dashboard with data + dark mode + narrow width", async () => {
   await page.goto(BASE + "/#/dashboard");
   await page.locator(".svc").first().waitFor();
-  await page.getByText("v0.0.4").waitFor();
+  await page.getByText("v0.0.5").waitFor();
   await shot(page, "01-dashboard");
   await page.emulateMedia({ colorScheme: "dark" });
   await shot(page, "09-dashboard-dark");
@@ -1487,6 +1487,15 @@ await step(
       .waitFor();
   },
 );
+
+// ---- 0.0.5: each feature's steps live in e2e/steps/*.mjs ----
+{
+  const t = { page, BASE, step, apiCall, shot, assert, customService, serviceRow, pickType };
+  for (const f of ["mail", "databases", "snapshots", "migrate"]) {
+    const { default: steps } = await import(`./steps/${f}.mjs`);
+    await steps(t);
+  }
+}
 
 await step("no external network requests", async () => {
   assert.deepEqual(external, []);

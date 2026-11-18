@@ -19,14 +19,19 @@ import (
 	"zero2dev/internal/apperr"
 	"zero2dev/internal/catalog"
 	"zero2dev/internal/config"
+	"zero2dev/internal/dbtools"
 	"zero2dev/internal/envreg"
 	"zero2dev/internal/events"
 	"zero2dev/internal/installer"
+	"zero2dev/internal/jobs"
+	"zero2dev/internal/migrate"
 	"zero2dev/internal/model"
 	"zero2dev/internal/runtimes"
 	"zero2dev/internal/sites"
+	"zero2dev/internal/snapshot"
 	"zero2dev/internal/store"
 	"zero2dev/internal/supervisor"
+	"zero2dev/internal/winpick"
 )
 
 // Deps are the collaborators of the API.
@@ -60,6 +65,17 @@ type Deps struct {
 	// nil answers an empty report.
 	EnvApply  func(d store.Data) error
 	EnvReport func(d store.Data) envreg.Report
+
+	// 0.0.5. Jobs keeps the database, snapshot and migration jobs (GET
+	// /api/jobs/{id} looks there after the installer). DB, Snapshots and
+	// Migrate may be nil: their routes then answer 501.
+	Jobs      *jobs.Registry
+	DB        *dbtools.Manager
+	Snapshots *snapshot.Manager
+	Migrate   *migrate.Manager
+	// PickFile shows the native Open / Save as dialog (winpick.File); nil
+	// means not available. Replaced in tests.
+	PickFile func(o winpick.FileOptions) (path string, ok bool, err error)
 }
 
 // Server is the http.Handler for the whole daemon.
@@ -150,6 +166,11 @@ func (s *Server) routes() {
 	s.handle("GET /api/events", s.eventStream)
 	s.handle("POST /api/dialog/folder", s.pickFolder)
 	s.handle("POST /api/shutdown", s.shutdown)
+	// 0.0.5: each feature registers its own routes in its own file.
+	s.databaseRoutes()   // databases.go
+	s.snapshotRoutes()   // snapshots.go
+	s.migrationRoutes()  // migrations.go
+	s.fileDialogRoutes() // dialog_file.go
 	s.handle("/api/", func(http.ResponseWriter, *http.Request) error {
 		return apperr.NotFound("no such endpoint")
 	})

@@ -241,7 +241,15 @@ Good to know:
 - A MariaDB, MySQL or PostgreSQL service page has **Open in HeidiSQL** and **Open in DBeaver** when those are installed. They connect straight to the database. HeidiSQL keeps its settings in `data\heidisql`, DBeaver its workspace in `data\dbeaver\workspace`.
 - Programs opened this way are not services: they keep running when Zero2Dev stops.
 
+<!-- db-ui: "### Working with a database" (create a database and a user, import and export a dump, password, reset) goes here. -->
+
+<!-- mailpit: "### Catch e-mails with Mailpit" goes here. -->
+
 ---
+
+<!-- snapshot-ui: "## Snapshots: undo for a whole project" goes here (take, restore, clone, the offer before risky actions). -->
+
+<!-- migrate-ui: "## Bring in: use your installed VS Code and other programs in Zero2Dev" goes here (copy or move, revert). -->
 
 ## Projects: start and stop a whole stack
 

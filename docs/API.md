@@ -1039,3 +1039,212 @@ Event: `environment.changed` (no data) after a `PUT` and after every runtime cha
 ### Migration
 
 `store.normalize` runs on load and after every update. A `state.json` from 0.0.3 loads unchanged: `projects` becomes `[]`, `dependsOn` `[]`, `databaseId` and `envFile` `""`, `restartOnCrash` `false`, `restartLimit` 5. The `envFile` entry of a Node service's `settings` moves to the new `envFile` field (and leaves `settings`). Ids in `dependsOn`, `databaseId` and projects that no longer exist, and a `databaseId` that is not a database, are dropped.
+
+## Amendment: data, databases and environment snapshots (0.0.5)
+
+Binding for daemon and UI. Everything not listed here is unchanged. Old `state.json` files load unchanged: the new fields default to "not set".
+
+Each subsection below is owned by one part of the work. The details marked *(to be completed)* are filled in by that part, without changing what is already written.
+
+### Shared: jobs, new fields, events
+
+- **Jobs.** Database imports and exports, snapshots, restores, clones and migrations are jobs, like runtime installs.
+  - The route answers `202 Job`.
+  - Progress comes as `job.progress { id, percent, step }` and the end as `job.done`. `GET /api/jobs/{id}` answers for every job.
+  - `job.done` now also carries `type`, `serviceId`, `projectId`, `snapshotId`, `migrationId` and `path`.
+- **`Job`** gains optional fields, missing when not used:
+  - `serviceId`;
+  - `projectId` (for a clone, the new project, set when done);
+  - `snapshotId`, `migrationId`;
+  - `path`: the file a `db-export` wrote.
+
+  New `type`s: `db-import`, `db-export`, `snapshot`, `snapshot-restore`, `snapshot-clone`, `migrate`, `migrate-revert`.
+- **One job per thing.** While a job works on a service, a project, a snapshot or a program, a second one on it is `409 conflict` with `details.jobId`.
+- **Busy services.** While a snapshot, restore, reset or migration holds a service, starting, editing or deleting it is `409` "`<name> is busy (<what>); try again when it is done`".
+- **`Service.adminPassword`** (`string`, `""` for none) is the database administrator's password, and it is in every `Service` response.
+  - It is **not** part of `ServiceInput`: create and update ignore it and keep the stored value.
+  - Only `PUT .../database/password` changes it, and a reset clears it.
+- **`Settings.portable`** `{ "npmGlobal": false, "composer": false, "goCache": false }` says which runtime caches and global package folders live in the data folder. Only Bring in changes it; `PUT /api/settings` ignores it.
+- **New events:** `snapshots.changed` `{ ownerId }` and `migrations.changed` `{}`. A restore or a clone also publishes `services.changed`, `sites.changed` and `projects.changed`.
+
+### File dialog
+
+#### `POST /api/dialog/file` -> 200 `{ "path": "C:\\dumps\\shop.sql", "cancelled": false }`
+
+Body (all optional): `{ "title", "start", "save": false, "defaultName": "shop.sql", "filters": [{ "name": "SQL dumps", "pattern": "*.sql;*.sql.gz" }] }`.
+
+It shows the native Open dialog on the daemon's PC (or Save as, with `save: true`) and answers when the dialog is closed. When the user cancels, the answer is `cancelled: true` and `path: ""`.
+
+Errors:
+- `400` for:
+  - a title over 100 characters or with a line break;
+  - more than 10 filters, or a filter without a name or a pattern;
+  - a `defaultName` with a slash, a colon or a line break.
+- `409` while another file or folder dialog is open.
+- `501 not_supported` off Windows.
+
+Like the folder dialog, it is a convenience: every path field also accepts typed text.
+
+### Databases
+
+For services of kind `mariadb`, `mysql`, `postgres` and `redis`. Any other kind is `400` "`<name> is not a database`".
+- **Client programs** (`mariadb`/`mysql`, `mariadb-dump`/`mysqldump`, `psql`, `pg_dump`, `redis-cli`) come from the folder of the service's server binary.
+- **Passwords** are passed to them in `MYSQL_PWD`, `PGPASSWORD` or `REDISCLI_AUTH`, never on the command line.
+- **Logging:** what each operation ran goes to the service's log as `system` lines, without passwords.
+
+**Names.** A database or user name is 1-64 letters, digits or `_`: `400` "`database name must be 1-64 letters, digits or _`" (and "`user name must be ...`"). The system databases (`mysql`, `information_schema`, `performance_schema`, `sys`, `postgres`, `template0`, `template1`) cannot be created, imported into, exported or dropped through these routes.
+
+| Method | Path | Body | Success | Needs |
+| --- | --- | --- | --- | --- |
+| GET | `/api/services/{id}/database` | none | `DatabaseInfo` | - |
+| POST | `/api/services/{id}/database/databases` | `{ "name" }` | `201 { name }` | running; not redis |
+| POST | `/api/services/{id}/database/users` | `{ "user", "password", "database" }` (`database` optional: all privileges on it) | `201 { user, database }` | running; not redis |
+| POST | `/api/services/{id}/database/import` | `{ "database", "filePath", "create": false }` | `202 Job` (`db-import`) | running; not redis |
+| POST | `/api/services/{id}/database/export` | `{ "database", "filePath", "overwrite": false }` | `202 Job` (`db-export`) | running; not redis |
+| POST | `/api/services/{id}/database/reset` | none | `200 Service` | stopped |
+| PUT | `/api/services/{id}/database/password` | `{ "password" }` (`""` removes it) | `200 Service` | running |
+
+```json
+{
+  "serviceId": "svc_9e9e9e9e", "kind": "mariadb", "running": true, "user": "root", "hasPassword": false,
+  "databases": [{ "name": "shop", "sizeBytes": 1048576 }], "users": ["root", "shop"],
+  "supports": { "databases": true, "dumps": true, "password": true, "reset": true },
+  "dataDir": "D:\\zero2dev\\data\\mariadb\\svc_9e9e9e9e"
+}
+```
+
+`databases` and `users` are `[]` while the server is stopped, and always for Redis. For Redis, `supports.databases` and `supports.dumps` are `false`.
+
+- **Needs running / stopped:** `409` "`start <name> first`" or "`stop <name> first`".
+- **Import:**
+  - `filePath` is an absolute path on the daemon's PC to a plain `.sql` dump or a gzip-compressed one. Gzip is recognised by its first bytes, whatever the file is called. A missing file is `400`.
+  - A database that does not exist is `400`, unless `create: true` creates it first.
+  - The job has one step, `Importing`, whose percent follows the bytes read.
+  - A SQL error fails the job with the server's message. Whatever was imported before the error stays.
+- **Export:**
+  - Writes `filePath` (absolute; gzip when it ends in `.gz`) through a temporary `<filePath>.tmp`, renamed at the end, so a failed export never leaves half a file.
+  - An existing file is `409` "`<file> exists`", unless `overwrite: true`.
+  - MariaDB/MySQL use `--single-transaction --routines --triggers`; PostgreSQL uses `pg_dump --no-owner`.
+  - `job.path` is the file that was written.
+- **Reset:**
+  - Deletes the data folder. The next start sets the database up again as on its first start: empty, no password.
+  - Clears `adminPassword`.
+  - Refused while a job works on the service.
+- **Password:**
+  - MariaDB/MySQL: `ALTER USER` for every `root` account. PostgreSQL: the `postgres` user. Redis: `requirepass`, and from then on Zero2Dev starts Redis with `--requirepass`.
+  - After that, these use it:
+    - the clean stop;
+    - the connection variables: `DB_PASSWORD`, `DATABASE_URL` (with the password URL-escaped) and `REDIS_URL`;
+    - **Open in** HeidiSQL / DBeaver;
+    - the command preview, which shows it as `********`.
+  - PostgreSQL still accepts local connections without a password (`trust`). The password is there for apps and tools that insist on one.
+
+*(To be completed by the db-backend work: the exact client arguments and error messages.)*
+
+### Snapshots
+
+A snapshot is a named copy of either:
+- a **project**: its services and their settings, the runtime each one used, its generated `php.ini` files, its sites, and the data folders of its database services;
+- one **database service**: its settings and its data folder.
+
+Snapshots live in `<data>\snapshots\<ownerId>\<snapshotId>\` and move with the data folder. Ids have the prefix `snp_`.
+
+| Method | Path | Body | Success |
+| --- | --- | --- | --- |
+| GET | `/api/projects/{id}/snapshots` | none | `Snapshot[]`, newest first |
+| POST | `/api/projects/{id}/snapshots` | `{ "name", "restart": false }` | `202 Job` (`snapshot`) |
+| GET | `/api/services/{id}/snapshots` | none | `Snapshot[]` (database services only) |
+| POST | `/api/services/{id}/snapshots` | `{ "name", "restart": false }` | `202 Job` (`snapshot`) |
+| GET | `/api/snapshots/{snap}` | none | `SnapshotDetail` |
+| POST | `/api/snapshots/{snap}/restore` | `{ "restart": false }` | `202 Job` (`snapshot-restore`) |
+| POST | `/api/snapshots/{snap}/clone` | `{ "name", "domainSuffix": "-copy" }` | `202 Job` (`snapshot-clone`) |
+| DELETE | `/api/snapshots/{snap}` | none | `204` |
+
+```json
+{
+  "format": 1, "id": "snp_1a2b3c4d", "name": "Before the PHP 8.4 upgrade", "scope": "project", "ownerId": "prj_5e6f7a8b",
+  "createdAt": "2026-11-20T10:00:00Z", "version": "0.0.5", "sizeBytes": 73400320,
+  "project": { "id": "prj_5e6f7a8b", "name": "Shop", "serviceIds": ["svc_1", "svc_2"], "siteIds": ["site_1"] },
+  "sites": [{ "id": "site_1", "name": "Shop", "domain": "shop.localhost", "...": "..." }],
+  "services": [
+    { "service": { "id": "svc_1", "name": "Shop DB", "kind": "mariadb", "...": "..." },
+      "runtime": { "kind": "mariadb", "version": "11.4.4", "catalogId": "mariadb-11.4.4", "binary": "D:\\zero2dev\\bin\\mariadb-11.4.4\\bin\\mariadbd.exe", "followedDefault": true },
+      "hasData": true, "phpIni": false }
+  ],
+  "warnings": []
+}
+```
+
+`SnapshotDetail` is a `Snapshot` plus `"missing": [{ "kind", "version", "catalogId", "installable", "services": ["Shop API"] }]`: the runtimes it needs that are not installed now.
+
+- **Name:** 1-64 characters (`400`). Two snapshots of one owner may share a name.
+- **Taking:**
+  - Every service of the snapshot must be stopped; otherwise `409` names the running ones.
+  - With `restart: true`, Zero2Dev stops them in the project's stop order, takes the snapshot, and starts again the ones that were running.
+  - A database service with its own command line (`customArgs`) has no known data folder. Its settings are kept but its data is not, and `warnings` says so.
+  - Steps: `Stopping`, `Copying` (percent follows the bytes copied), `Starting`.
+- **Restoring** brings the project back as it was:
+  - Every service in the snapshot gets its stored settings back; a deleted one is created again with its old id.
+  - Each service is pinned to the runtime it used (`runtimeId`), so a later change of the default does not affect it.
+  - Data folders and `php.ini` files are put back, and the sites come back.
+  - Services and sites added to the project since are taken out of the project, not deleted.
+  - `adminPassword` gets the value from the snapshot.
+  - Restoring a service snapshot restores only that service.
+  - `409` while a needed runtime is missing (`details.missing`), or while a service runs and `restart` is false.
+  - A failed restore puts the data folders back as they were.
+- **Cloning** works only on project snapshots (`400` otherwise). It creates a new project named `name`:
+  - New ids for the project, its services and its sites. Every link between them (`dependsOn`, `databaseId`, a site's service, the project's lists) points at the copies.
+  - Database data is copied into the copies' own data folders.
+  - Each copy gets a free port: the next port that no other service uses.
+  - Site domains get `domainSuffix` added to their first label (`shop.localhost` -> `shop-copy.localhost`), made unique with `-2`, `-3` and so on.
+  - The project folders (`cwd`) are not copied, so both projects point at the same code.
+  - `job.projectId` is the new project.
+- **Deleting** a project or a service keeps its snapshots. Restoring one of them brings the project or service back.
+
+*(To be completed by the snapshot-backend work: the step names in detail and the error messages.)*
+
+### Bring in (migrations)
+
+Copies or moves the settings and data of programs installed on this PC into Zero2Dev's portable folders, and back. Every migration is recorded in `<data>\migrations\<migrationId>\` (`migration.json` plus the backups). Ids have the prefix `mig_`.
+
+| Method | Path | Body | Success |
+| --- | --- | --- | --- |
+| GET | `/api/migrations/sources` | none | `MigrateSource[]` |
+| POST | `/api/migrations/databases` | `{ "kind", "host", "port", "user", "password" }` | `{ "databases": [{ "name", "sizeBytes" }] }` |
+| POST | `/api/migrations` | `MigrateRequest` | `202 Job` (`migrate`) |
+| GET | `/api/migrations` | none | `Migration[]`, newest first |
+| POST | `/api/migrations/{id}/revert` | `{ "how": "discard" \| "copy-back" \| "move-back" }` | `202 Job` (`migrate-revert`) |
+
+```json
+{
+  "id": "vscode", "program": "vscode", "label": "VS Code", "found": true,
+  "items": [
+    { "label": "Settings", "kind": "dir", "from": "C:\\Users\\me\\AppData\\Roaming\\Code\\User", "to": "D:\\zero2dev\\data\\code\\user-data\\User", "sizeBytes": 2048000, "exists": true },
+    { "label": "Extensions", "kind": "dir", "from": "C:\\Users\\me\\.vscode\\extensions", "to": "D:\\zero2dev\\data\\code\\extensions", "sizeBytes": 412000000, "exists": true }
+  ],
+  "modes": ["copy", "move"], "copyOnlyReason": "", "blockers": [], "targetHasData": false,
+  "note": "Logins kept by Windows (Settings Sync) are not moved."
+}
+```
+
+Sources (`program`): `vscode`, `vscodium`, `notepadpp`, `heidisql`, `dbeaver`, `runtime`, `npm-global`, `npm-cache`, `go-cache`, `composer`, `database`. There is one `runtime` source per registered runtime, with the `id` `runtime:<runtimeId>`.
+
+`MigrateRequest` is `{ "source": "vscode", "mode": "copy", "items": ["Settings"], "database": null }`. An empty `items` means all of them. For `database`, it is `"database": { "kind", "host", "port", "user", "password", "databases": ["shop"], "targetServiceId": "svc_..." }`.
+
+- **Copy-only sources:** `runtime` and `database` have `modes: ["copy"]`, and `copyOnlyReason` says why. `mode: "move"` for them is `400`.
+  - A runtime's files belong to the system installer.
+  - Zero2Dev does not remove databases from a server it does not own.
+- **Blockers**, such as "Install VS Code in Zero2Dev first" or "Close VS Code first", make `POST /api/migrations` a `409` with the blocker as the message.
+- **Backups:**
+  - Whatever the portable place held before is saved first. `targetHasData` says whether it holds something.
+  - A move or a copy-back saves the originals before touching them.
+  - A move to another drive copies, checks the copy, and only then deletes the original.
+- **Revert** (`revertOptions` lists what a migration accepts):
+  - `move-back` puts moved items back, saving first whatever is there by then.
+  - `discard` removes the portable copy and brings back what the portable place held before.
+  - `copy-back` copies the portable data over the originals, saved first.
+  - An adopted runtime goes back to the registered program it came from.
+  - A database copy drops the databases it created in the Zero2Dev service.
+- `Settings.portable` is switched on by a migration of `npm-global`, `composer` or `go-cache`, and off by its revert.
+
+*(To be completed by the migrate-backend work: the exact items per program, HeidiSQL's settings format and the adoption details.)*

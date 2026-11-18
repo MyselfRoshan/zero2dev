@@ -24,6 +24,7 @@ import (
 
 	"zero2dev/internal/apperr"
 	"zero2dev/internal/catalog"
+	"zero2dev/internal/fsutil"
 	"zero2dev/internal/model"
 	"zero2dev/internal/runtimes"
 	"zero2dev/internal/store"
@@ -79,7 +80,7 @@ type Options struct {
 // New creates an Installer.
 func New(home string, st *store.Store, rt *runtimes.Manager, em Emitter) *Installer {
 	return &Installer{
-		home: home, Bin: filepath.Join(home, "bin"), st: st, rt: rt, em: em, Version: "0.0.4",
+		home: home, Bin: filepath.Join(home, "bin"), st: st, rt: rt, em: em, Version: "0.0.5",
 		log:     &fileLog{path: filepath.Join(home, "logs", "installer.log")},
 		Catalog: func() ([]model.CatalogEntry, error) { return catalog.Load(home) },
 		Rename:  os.Rename, Sleep: time.Sleep, RenameAttempts: 20,
@@ -480,7 +481,7 @@ func (in *Installer) moveDir(jobID, src, dst string) error {
 	}
 	in.log.printf(jobID, "rename kept failing, falling back to copy")
 	_ = os.RemoveAll(dst)
-	if cerr := copyTree(src, dst); cerr != nil {
+	if cerr := fsutil.CopyTree(src, dst); cerr != nil {
 		_ = os.RemoveAll(dst)
 		return fmt.Errorf("%v; copy fallback failed: %v%s", err, cerr, avHint(err))
 	}
