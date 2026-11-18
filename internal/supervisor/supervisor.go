@@ -49,6 +49,8 @@ type Supervisor struct {
 	logs    map[string]*svcLog
 	crash   map[string]*crashState // restart bookkeeping per service, see restart.go
 	closing bool
+	// logsClosed: StopAll has closed the log files; nothing may reopen them.
+	logsClosed bool
 }
 
 // proc is one run of a service. All fields are guarded by Supervisor.mu.
@@ -93,6 +95,7 @@ func (s *Supervisor) logFor(id string) *svcLog {
 	l := s.logs[id]
 	if l == nil {
 		l = newSvcLog(s.logPath(id))
+		l.closed = s.logsClosed // after StopAll: keep lines in memory only
 		s.logs[id] = l
 	}
 	return l
@@ -512,6 +515,7 @@ func (s *Supervisor) StopAll(ctx context.Context) {
 	}
 	wg.Wait()
 	s.mu.Lock()
+	s.logsClosed = true
 	for _, l := range s.logs {
 		l.close()
 	}

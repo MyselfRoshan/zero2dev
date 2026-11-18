@@ -284,14 +284,15 @@ func (in *Installer) run(j *job, e model.CatalogEntry, acq acquire) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 	archive, want, got, err := acq(ctx)
+	rid := ""
+	if err == nil {
+		rid, err = in.process(j, e, archive, want, got)
+	}
+	// Remove the download before the job is reported finished, so whoever
+	// sees "done" or "failed" also sees an empty tmp folder.
 	if archive != "" {
-		defer os.Remove(archive)
+		_ = os.Remove(archive)
 	}
-	if err != nil {
-		in.finish(j, err, "")
-		return
-	}
-	rid, err := in.process(j, e, archive, want, got)
 	in.finish(j, err, rid)
 }
 
