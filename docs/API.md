@@ -1201,7 +1201,53 @@ Snapshots live in `<data>\snapshots\<ownerId>\<snapshotId>\` and move with the d
   - `job.projectId` is the new project.
 - **Deleting** a project or a service keeps its snapshots. Restoring one of them brings the project or service back.
 
-*(To be completed by the snapshot-backend work: the step names in detail and the error messages.)*
+#### Snapshot jobs in detail
+
+| Job | Steps, in order | `job` fields |
+| --- | --- | --- |
+| `snapshot` | `Stopping` (only with `restart` and something running), `Copying` (percent = bytes copied), `Starting` (only when something was stopped) | `snapshotId`; `projectId` or `serviceId` |
+| `snapshot-restore` | `Stopping` (as above), `Restoring` (percent = bytes copied back), `Starting` (as above) | `snapshotId`; `projectId` or `serviceId` (the owner) |
+| `snapshot-clone` | `Copying` (percent = bytes copied), `Creating` | `snapshotId`; `projectId` = the new project, set when done |
+
+- **One job per owner.** A snapshot and a restore of the same project or service share one job slot (`409 conflict` with `details.jobId`). Two clones of one snapshot do too.
+- **While a job runs**, the services it works on are held (`Reserve`): starting, editing or deleting them is `409` "`<name> is busy (taking a snapshot)`" or "`(restoring a snapshot)`".
+- **Taking:**
+  - It is written to `<snapshotId>.partial` and renamed when complete. A failed snapshot leaves nothing behind.
+  - A service whose runtime cannot be resolved is kept, with a warning `<name>: its runtime could not be resolved (...), so restoring will not pin one`.
+  - A service with its own command (`command`) or of kind `custom` has `runtime: null`.
+  - A service that ran a program found on PATH has a `runtime` with only `kind`, `binary` and `followedDefault: true`. A restore does not pin it, and it is missing only when that file is gone.
+  - A database whose data folder does not exist yet (never started) has `hasData: false` and no warning.
+  - Each service's log gets a `system` line: `snapshot "<name>" (<id>) taken`.
+- **Restoring:**
+  - The runtime check matches the recorded runtime against what is installed by `catalogId`, then by `kind` + `version`, then by `binary` (a registered program). The match is what `runtimeId` is pinned to.
+  - `missing[].catalogId` is the catalog entry that would install it when `installable` (it may differ from the recorded one when only the kind and version match). `missing[].services` names the services that need it.
+  - Each data folder is renamed to `<folder>.restore-old`, the snapshot's copy goes in its place, and the old one is deleted only after the state is saved. If anything fails, every data folder and `php.ini` is put back and the state is not changed.
+  - Each service's log gets `snapshot "<name>" (<id>) restored`.
+- **Cloning:**
+  - The copies keep their names, folders, settings and `adminPassword` (the copied data has that password). Each one is pinned to the recorded runtime when it is installed.
+  - **Links:** `dependsOn` and `databaseId` that point at a service outside the project still point at it. A proxy site without a `serviceId` whose `upstreamPort` was a member's port gets the copy's port.
+  - **Ports:** the next port after the old one (wrapping round to 1024) that no service, site or proxy port setting uses, and that can be listened on at that moment.
+  - **Domains:** a first label longer than 63 characters is shortened so the suffix fits.
+  - `php.ini` files are not copied: a PHP service writes its own on every start.
+- **Errors** (`error.message`):
+
+  | Status | When | Message |
+  | --- | --- | --- |
+  | `400` | name | `name must be 1-64 characters` |
+  | `400` | service snapshot of a non-database | `<name> is not a database` |
+  | `400` | clone of a service snapshot | `only project snapshots can be cloned` |
+  | `400` | bad `domainSuffix` | `domainSuffix must be 1-32 letters, digits or -, and must not end with -` |
+  | `404` | take | `project <id> not found`, `service <id> not found` |
+  | `404` | get, restore, clone, delete | `snapshot <id> not found` |
+  | `409` | running, without `restart` | `<names> is/are running; stop it/them first, or take the snapshot with restart` (restore: `... or restore with restart`); `details.running` = the ids, comma-separated |
+  | `409` | runtime missing | `the snapshot needs <kind version>, which is/are not installed; install it/them first`; `details.missing` = `"php 8.3.14, mariadb 11.4.4"` (the list is in `GET /api/snapshots/{snap}`) |
+  | `409` | a snapshot site's domain is taken | `domain <domain> is now used by site "<name>"; change or delete that site first` |
+  | `409` | delete while a restore or clone uses it | `snapshot "<name>" is in use (restoring it); try again when it is done` |
+  | `409` | leftover from a crashed restore | `<folder>.restore-old is left over from an earlier restore; move it away first` |
+  | `409` | clone | `no free port for the copy of <name>` |
+  | job failed | copy error | `the snapshot could not be taken: ...`, `the snapshot could not be restored: ...`, `the snapshot could not be cloned: ...` |
+
+- `GET /api/services/{id}/snapshots` of a service that exists and is not a database is `400`. For an id that names nothing (a deleted owner), both lists answer the snapshots that are left, or `[]`.
 
 ### Bring in (migrations)
 

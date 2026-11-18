@@ -3,6 +3,8 @@ package api
 import (
 	"net/http"
 
+	"zero2dev/internal/apperr"
+	"zero2dev/internal/model"
 	"zero2dev/internal/snapshot"
 )
 
@@ -25,18 +27,32 @@ func (s *Server) snapManager() (*snapshot.Manager, error) {
 	return s.Snapshots, nil
 }
 
+// listSnapshots answers the snapshots of a project or a database service,
+// newest first. An owner that was deleted still lists its snapshots; a
+// service that exists and is not a database is a 400.
 func (s *Server) listSnapshots(scope string) handler {
 	return func(w http.ResponseWriter, r *http.Request) error {
 		m, err := s.snapManager()
 		if err != nil {
 			return err
 		}
-		list, err := m.List(r.PathValue("id"))
-		if err != nil {
-			return notYet(err)
+		id := r.PathValue("id")
+		if scope == snapshot.ScopeService {
+			for _, sv := range s.Store.Snapshot().Services {
+				if sv.ID == id && !model.IsDatabase(sv.Kind) {
+					return apperr.BadRequest("%s is not a database", sv.Name)
+				}
+			}
 		}
-		if list == nil {
-			list = []snapshot.Manifest{}
+		all, err := m.List(id)
+		if err != nil {
+			return err
+		}
+		list := []snapshot.Manifest{}
+		for _, mf := range all {
+			if mf.Scope == scope {
+				list = append(list, mf)
+			}
 		}
 		writeJSON(w, 200, list)
 		return nil
@@ -58,7 +74,7 @@ func (s *Server) takeSnapshot(scope string) handler {
 		}
 		j, err := m.Take(scope, r.PathValue("id"), snapshot.TakeOptions{Name: in.Name, Restart: in.Restart})
 		if err != nil {
-			return notYet(err)
+			return err
 		}
 		writeJSON(w, http.StatusAccepted, j)
 		return nil
@@ -72,7 +88,7 @@ func (s *Server) getSnapshot(w http.ResponseWriter, r *http.Request) error {
 	}
 	d, err := m.Get(r.PathValue("snap"))
 	if err != nil {
-		return notYet(err)
+		return err
 	}
 	writeJSON(w, 200, d)
 	return nil
@@ -93,7 +109,7 @@ func (s *Server) restoreSnapshot(w http.ResponseWriter, r *http.Request) error {
 	}
 	j, err := m.Restore(r.PathValue("snap"), in.Restart)
 	if err != nil {
-		return notYet(err)
+		return err
 	}
 	writeJSON(w, http.StatusAccepted, j)
 	return nil
@@ -113,7 +129,7 @@ func (s *Server) cloneSnapshot(w http.ResponseWriter, r *http.Request) error {
 	}
 	j, err := m.Clone(r.PathValue("snap"), snapshot.CloneOptions{Name: in.Name, DomainSuffix: in.DomainSuffix})
 	if err != nil {
-		return notYet(err)
+		return err
 	}
 	writeJSON(w, http.StatusAccepted, j)
 	return nil
@@ -125,7 +141,7 @@ func (s *Server) deleteSnapshot(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	if err := m.Delete(r.PathValue("snap")); err != nil {
-		return notYet(err)
+		return err
 	}
 	w.WriteHeader(http.StatusNoContent)
 	return nil

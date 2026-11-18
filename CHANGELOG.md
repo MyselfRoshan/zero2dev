@@ -10,6 +10,10 @@
 
 <!-- snapshot-backend + snapshot-ui: snapshots, restore, clone, offers before risky actions -->
 
+- **Snapshots** of a project or a database service: its services' settings, the runtime each one used, its database data folders, its `php.ini` files and its sites, kept in `snapshots\<owner>\<snapshot>\` inside the data folder. With "restart", running services are stopped in the project's stop order and started again afterwards.
+- **Restore** puts the settings, data folders, `php.ini` files, sites and the project's members back. It pins each service to the runtime it used and recreates deleted services with their old ids. It refuses while a needed runtime is not installed, and a failed restore puts the data folders back as they were.
+- **Clone** a project snapshot into a new project, with new ids, links pointing at the copies, free ports, its own data copies and `-copy` domains.
+
 <!-- /snapshots -->
 
 <!-- mailpit -->
