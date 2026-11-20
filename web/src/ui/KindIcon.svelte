@@ -18,6 +18,7 @@
   import notepadpp from "@iconify-icons/simple-icons/notepadplusplus";
   import dbeaver from "@iconify-icons/simple-icons/dbeaver";
   import heidisql from "@iconify-icons/lucide/database-zap";
+  import mailpit from "@iconify-icons/lucide/mail";
   import fallback from "@iconify-icons/lucide/package";
   import custom from "@iconify-icons/lucide/square-terminal";
   import type { IconifyIcon } from "@iconify/types";
@@ -27,7 +28,7 @@
 
   const icons: Record<string, IconifyIcon> = {
     node, php, go, java, nginx, caddy, custom,
-    mariadb, mysql, postgres, redis, vscode, vscodium, notepadpp, heidisql, dbeaver,
+    mariadb, mysql, postgres, redis, mailpit, vscode, vscodium, notepadpp, heidisql, dbeaver,
   };
   // Monochrome marks get their brand colour (chosen to stay readable on light and dark backgrounds).
   const tint: Record<string, string> = {
@@ -36,6 +37,7 @@
     notepadpp: "#4a9c32",
     dbeaver: "#a0785a",
     heidisql: "#3f8fd2",
+    mailpit: "var(--accent-text)", // a plain envelope (Mailpit has no published mark) in the theme accent
   };
   const icon = $derived(icons[kind] ?? fallback);
 </script>

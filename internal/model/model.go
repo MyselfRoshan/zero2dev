@@ -55,6 +55,11 @@ type Service struct {
 	// RestartLimit times in a row (1-20, default DefaultRestartLimit).
 	RestartOnCrash bool `json:"restartOnCrash"`
 	RestartLimit   int  `json:"restartLimit"`
+	// AdminPassword is the password of a database service's administrator
+	// (root, postgres, or Redis' requirepass), "" for none. It is not part of
+	// ServiceInput: only PUT /api/services/{id}/database/password changes it
+	// (and a reset clears it), so it always matches what the data folder holds.
+	AdminPassword string `json:"adminPassword"`
 	// Restarts is how many crash restarts happened since the last manual start
 	// (filled in by the supervisor, never stored or accepted as input).
 	Restarts  int        `json:"restarts"`
@@ -215,7 +220,10 @@ type SiteInput struct {
 	Enabled      *bool  `json:"enabled"`
 }
 
-// Job is a long running operation (runtime install).
+// Job is a long running operation: a runtime install (internal/installer) or,
+// since 0.0.5, a database import or export, a snapshot, a restore, a clone or a
+// migration (internal/jobs). The fields after RuntimeID are set only by the
+// jobs that use them.
 type Job struct {
 	ID        string `json:"id"`
 	Type      string `json:"type"`
@@ -224,6 +232,38 @@ type Job struct {
 	Step      string `json:"step"`
 	Error     string `json:"error"`
 	RuntimeID string `json:"runtimeId"`
+	// ServiceID is the database service of a db-import / db-export, or the
+	// service whose snapshot is taken or restored.
+	ServiceID string `json:"serviceId,omitempty"`
+	// ProjectID is the project of a project snapshot or restore, and the new
+	// project of a snapshot-clone (known once the job is done).
+	ProjectID   string `json:"projectId,omitempty"`
+	SnapshotID  string `json:"snapshotId,omitempty"`
+	MigrationID string `json:"migrationId,omitempty"`
+	// Path is the file a db-export wrote (set when it is done).
+	Path string `json:"path,omitempty"`
+}
+
+// Job types of internal/jobs (the installer's are "install", "import" and "xdebug").
+const (
+	JobDBImport        = "db-import"
+	JobDBExport        = "db-export"
+	JobSnapshot        = "snapshot"
+	JobSnapshotRestore = "snapshot-restore"
+	JobSnapshotClone   = "snapshot-clone"
+	JobMigrate         = "migrate"
+	JobMigrateRevert   = "migrate-revert"
+	JobMigrateCleanup  = "migrate-cleanup"
+)
+
+// Portable says which user-level caches and global package folders of the
+// runtimes Zero2Dev keeps in its data folder instead of the user profile. All
+// off by default; a migration (internal/migrate) switches one on and its
+// revert switches it off again.
+type Portable struct {
+	NpmGlobal bool `json:"npmGlobal"` // npm_config_prefix = <home>/node/global
+	Composer  bool `json:"composer"`  // COMPOSER_HOME = <home>/composer
+	GoCache   bool `json:"goCache"`   // GOMODCACHE / GOCACHE in <home>/go even when isolate is off
 }
 
 // Settings are user-editable daemon settings.
@@ -239,6 +279,8 @@ type Settings struct {
 	SiteServer         string `json:"siteServer"` // caddy (default) | nginx: which program serves the sites
 	Theme              string `json:"theme"`      // system (default) | light | dark: the dashboard's colour scheme
 	Accent             string `json:"accent"`     // #rrggbb: the dashboard's accent colour (default #1677ff)
+	// Portable is changed by migrations only (ignored on PUT /api/settings).
+	Portable Portable `json:"portable"`
 }
 
 // EnvConfig is what the user chose to put in their Windows user environment (the one
@@ -299,14 +341,14 @@ type LogLine struct {
 
 // ServiceKinds and RuntimeKinds are the accepted enums.
 var (
-	ServiceKinds = []string{"custom", "node", "php", "go", "java", "caddy", "nginx", "mariadb", "mysql", "postgres", "redis"}
+	ServiceKinds = []string{"custom", "node", "php", "go", "java", "caddy", "nginx", "mariadb", "mysql", "postgres", "redis", "mailpit"}
 	RuntimeKinds = []string{"node", "php", "go", "java", "caddy", "nginx",
-		"mariadb", "mysql", "postgres", "redis",
+		"mariadb", "mysql", "postgres", "redis", "mailpit",
 		"vscode", "vscodium", "notepadpp",
 		"heidisql", "dbeaver", "other"}
 	// RemoteKinds can have their version lists fetched from the publishers.
 	RemoteKinds = []string{"node", "go", "caddy", "php", "java", "nginx",
-		"mariadb", "mysql", "postgres", "redis", "vscode", "vscodium", "notepadpp", "heidisql", "dbeaver"}
+		"mariadb", "mysql", "postgres", "redis", "mailpit", "vscode", "vscodium", "notepadpp", "heidisql", "dbeaver"}
 )
 
 // Kind categories, as grouped on the Runtimes page.
@@ -316,6 +358,7 @@ const (
 	CatDatabase = "database"
 	CatEditor   = "editor"
 	CatDBTool   = "dbtool"
+	CatMail     = "mail"
 )
 
 // KindCategory maps every runtime kind (except "other") to its category.
@@ -323,7 +366,8 @@ var KindCategory = map[string]string{
 	"node": CatLanguage, "php": CatLanguage, "go": CatLanguage, "java": CatLanguage,
 	"caddy": CatServer, "nginx": CatServer,
 	"mariadb": CatDatabase, "mysql": CatDatabase, "postgres": CatDatabase, "redis": CatDatabase,
-	"vscode": CatEditor, "vscodium": CatEditor, "notepadpp": CatEditor,
+	"mailpit": CatMail,
+	"vscode":  CatEditor, "vscodium": CatEditor, "notepadpp": CatEditor,
 	"heidisql": CatDBTool, "dbeaver": CatDBTool,
 }
 
@@ -338,7 +382,7 @@ func Launchable(kind string) bool {
 // holds the programs themselves.
 var dataDirNames = map[string]string{
 	"vscode": "code", "vscodium": "codium", "notepadpp": "notepadpp", "heidisql": "heidisql", "dbeaver": "dbeaver",
-	"mariadb": "mariadb", "mysql": "mysql", "postgres": "postgres", "redis": "redis",
+	"mariadb": "mariadb", "mysql": "mysql", "postgres": "postgres", "redis": "redis", "mailpit": "mailpit",
 	"php": "php", "node": "node", "go": "go",
 }
 

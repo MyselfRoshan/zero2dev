@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Sets the version everywhere it is written down and opens a CHANGELOG.md section for it:
-# VERSION, web/package.json, the default in cmd/zero2dev/main.go and the installer's default.
+# VERSION, web/package.json, the default in cmd/zero2dev/main.go, the installer's default and
+# the exe's version info (cmd/zero2dev/rsrc_windows_amd64.syso, written by scripts/winres.mjs).
 # Then fill in the new "## <version>" section and open a pull request into the release branch.
 #
 # Usage: scripts/bump-version.sh 0.0.5
@@ -18,6 +19,7 @@ printf '%s\n' "$NEW" > VERSION
 sed -i "s/^  \"version\": \"${OLD//./\\.}\",/  \"version\": \"${NEW}\",/" web/package.json
 sed -i "s/^var version = \"${OLD//./\\.}\"$/var version = \"${NEW}\"/" cmd/zero2dev/main.go
 sed -i "s/Version: \"${OLD//./\\.}\",/Version: \"${NEW}\",/" internal/installer/installer.go
+node scripts/winres.mjs > /dev/null # the exe's version info
 
 if ! grep -qx "## ${NEW}" CHANGELOG.md; then
   # The new section goes above the first existing "## " heading.

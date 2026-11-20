@@ -129,34 +129,58 @@ export function dbToolsFor(runtimes: Runtime[], serviceKind: string): Runtime[] 
 
 // ---- databases ----
 
-/** The port a new database service gets (the usual one for each server). */
+/** How to connect to a database service (the Connection section of its page). */
 export interface ConnectionInfo {
   host: string;
   port: number;
+  /** The administrator: root, postgres, or "" for Redis. */
   user: string;
+  /** The administrator password, "" when there is none. */
   password: string;
+  /** The URL to connect with, the password included (URL-escaped) when there is one. */
   url: string;
+  /** The same URL with the password shown as ********, for the screen. */
+  maskedUrl: string;
+  /** The line under the details: what the password (or its absence) means. */
+  hint: string;
 }
 
-/** How to connect to a database service Zero2Dev set up (local only, no password). */
-export function connectionInfo(s: Pick<Service, "kind" | "port">): ConnectionInfo | null {
+/** How to connect to a database service Zero2Dev set up (local only; with the password when one is set). */
+export function connectionInfo(s: Pick<Service, "kind" | "port"> & { adminPassword?: string }): ConnectionInfo | null {
   if (!isDatabase(s.kind) || s.port <= 0) return null;
   const host = "127.0.0.1";
-  switch (s.kind) {
-    case "mariadb":
-    case "mysql":
-      return { host, port: s.port, user: "root", password: "none", url: `mysql://root@${host}:${s.port}` };
-    case "postgres":
-      return {
-        host,
-        port: s.port,
-        user: "postgres",
-        password: "none",
-        url: `postgresql://postgres@${host}:${s.port}/postgres`,
-      };
-    default:
-      return { host, port: s.port, user: "", password: "none", url: `redis://${host}:${s.port}` };
-  }
+  const password = s.adminPassword ?? "";
+  const user = s.kind === "mariadb" || s.kind === "mysql" ? "root" : s.kind === "postgres" ? "postgres" : "";
+  const make = (pw: string) => {
+    const auth = pw ? `${user}:${pw}@` : user ? `${user}@` : "";
+    switch (s.kind) {
+      case "mariadb":
+      case "mysql":
+        return `mysql://${auth}${host}:${s.port}`;
+      case "postgres":
+        return `postgresql://${auth}${host}:${s.port}/postgres`;
+      default:
+        return `redis://${auth}${host}:${s.port}`;
+    }
+  };
+  const local = "the server only accepts connections from this PC (127.0.0.1).";
+  let hint: string;
+  if (!password) hint = `No password: ${local}`;
+  else if (s.kind === "postgres")
+    hint = `Password set: apps get it in DB_PASSWORD and DATABASE_URL. PostgreSQL still lets programs on this PC connect without it; the password is for apps and tools that ask for one. As before, ${local}`;
+  else if (s.kind === "redis")
+    hint = `Password set: Redis asks for it, and apps get it in DB_PASSWORD and REDIS_URL. As before, ${local}`;
+  else
+    hint = `Password set: apps get it in DB_PASSWORD and DATABASE_URL, and HeidiSQL and DBeaver use it. As before, ${local}`;
+  return {
+    host,
+    port: s.port,
+    user,
+    password,
+    url: make(password ? encodeURIComponent(password) : ""),
+    maskedUrl: make(password ? "********" : ""),
+    hint,
+  };
 }
 
 /** The delete confirmation text; database services keep their data folder. */

@@ -34,3 +34,32 @@ func Folder(title, start string) (path string, ok bool, err error) {
 	defer mu.Unlock()
 	return pickFolder(title, start)
 }
+
+// Filter is one entry of a file dialog's type list, e.g. {"SQL dumps", "*.sql;*.sql.gz"}.
+type Filter struct {
+	Name    string `json:"name"`
+	Pattern string `json:"pattern"`
+}
+
+// FileOptions describe a file dialog.
+type FileOptions struct {
+	Title       string
+	Start       string   // a folder or file where the dialog opens
+	Save        bool     // a "Save as" dialog instead of "Open"
+	DefaultName string   // Save: the file name it suggests
+	Filters     []Filter // empty: all files
+}
+
+// File shows the native Open or Save as dialog and blocks until the user
+// closes it. It returns the chosen absolute path, or ok=false when the user
+// cancelled. One dialog (folder or file) at a time: ErrBusy otherwise.
+func File(o FileOptions) (path string, ok bool, err error) {
+	if !supported {
+		return "", false, ErrUnsupported
+	}
+	if !mu.TryLock() {
+		return "", false, ErrBusy
+	}
+	defer mu.Unlock()
+	return pickFile(o)
+}

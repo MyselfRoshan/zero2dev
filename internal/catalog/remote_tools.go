@@ -31,7 +31,8 @@ const (
 // ghSpec describes one GitHub-hosted Windows ZIP.
 type ghSpec struct {
 	kind, label, repo string
-	asset             *regexp.Regexp // matches the asset name; group 1 is the version
+	asset             *regexp.Regexp // matches the asset name; group 1 is the version (unless tag is set)
+	tag               *regexp.Regexp // set when the asset name carries no version: group 1 of the tag is the version
 	bin               string
 	strip, keep       int
 }
@@ -47,6 +48,10 @@ var ghSpecs = []ghSpec{
 		asset: regexp.MustCompile(`^HeidiSQL_(\d+\.\d+(?:\.\d+)?)_64_Portable\.zip$`), bin: "heidisql.exe", strip: 0, keep: 2},
 	{kind: "dbeaver", label: "DBeaver", repo: "dbeaver/dbeaver",
 		asset: regexp.MustCompile(`^dbeaver-ce-(\d+\.\d+\.\d+)-windows-x86_64\.zip$`), bin: "dbeaver.exe", strip: 1, keep: 2},
+	// Mailpit names its ZIP the same in every release; the version is the tag (v1.33.0).
+	{kind: "mailpit", label: "Mailpit", repo: "axllent/mailpit",
+		asset: regexp.MustCompile(`^mailpit-windows-amd64\.zip$`), tag: regexp.MustCompile(`^v(\d+\.\d+\.\d+)$`),
+		bin: "mailpit.exe", strip: 0, keep: 3},
 }
 
 func (r *Remote) ghURL(s ghSpec) string {
@@ -76,6 +81,14 @@ func parseGitHub(b []byte, s ghSpec) ([]model.CatalogEntry, error) {
 		if rel.Draft || rel.Prerelease {
 			continue
 		}
+		tagVer := ""
+		if s.tag != nil {
+			tm := s.tag.FindStringSubmatch(rel.Tag)
+			if tm == nil {
+				continue
+			}
+			tagVer = tm[1]
+		}
 		for _, a := range rel.Assets {
 			m := s.asset.FindStringSubmatch(a.Name)
 			if m == nil {
@@ -84,7 +97,10 @@ func parseGitHub(b []byte, s ghSpec) ([]model.CatalogEntry, error) {
 			if !hostOK(a.URL, "github.com") {
 				return nil, fmt.Errorf("a %s download link points to an unexpected host", s.label)
 			}
-			ver := m[1]
+			ver := tagVer
+			if s.tag == nil {
+				ver = m[1]
+			}
 			e := model.CatalogEntry{
 				ID: s.kind + "-" + ver + "-windows-amd64", Kind: s.kind, Version: ver, Name: s.label + " " + ver,
 				URL: a.URL, BinaryRelPath: s.bin, StripComponents: s.strip, OS: "windows", Arch: "amd64",

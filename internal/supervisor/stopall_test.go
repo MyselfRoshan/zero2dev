@@ -18,7 +18,7 @@ func TestStopTier(t *testing.T) {
 	if !(apps < dbs && dbs < front) {
 		t.Fatalf("order must be apps < databases < site server, got %d %d %d", apps, dbs, front)
 	}
-	for _, k := range []string{"custom", "php", "go", "java", "node", ""} {
+	for _, k := range []string{"custom", "php", "go", "java", "node", "mailpit", ""} {
 		if StopTier(k) != apps {
 			t.Errorf("%q should stop with the apps", k)
 		}

@@ -51,6 +51,9 @@ type Supervisor struct {
 	closing bool
 	// logsClosed: StopAll has closed the log files; nothing may reopen them.
 	logsClosed bool
+	// reserved: services that an operation on their files holds (a snapshot,
+	// a restore, a reset, a migration), with what it is doing; see Reserve.
+	reserved map[string]string
 }
 
 // proc is one run of a service. All fields are guarded by Supervisor.mu.
@@ -183,6 +186,10 @@ func (s *Supervisor) start(id string, auto *crashState) error {
 		s.mu.Unlock()
 		return errRestartCancelled
 	}
+	if why, ok := s.reserved[id]; ok {
+		s.mu.Unlock()
+		return apperr.Conflict("%s is busy (%s); try again when it is done", svc.Name, why)
+	}
 	prev := s.procs[id]
 	if prev != nil && active(prev.state) {
 		st := prev.state
@@ -217,6 +224,10 @@ func (s *Supervisor) start(id string, auto *crashState) error {
 		revert()
 		return apperr.Conflict("port %d is already in use", svc.Port)
 	}
+	if err := checkExtraPorts(*svc, portFree); err != nil {
+		revert()
+		return err
+	}
 	if err := s.prepare(id, r); err != nil {
 		s.logLine(id, "system", err.Error())
 		revert()
@@ -243,7 +254,7 @@ func (s *Supervisor) start(id string, auto *crashState) error {
 	cmd.Stdout, cmd.Stderr = outW, errW
 	cmd.WaitDelay = 2 * time.Second // do not hang on pipes held by orphaned grandchildren
 	configure(cmd)
-	s.logLine(id, "system", fmt.Sprintf("starting: %s %v", r.bin, r.args))
+	s.logLine(id, "system", fmt.Sprintf("starting: %s %v", r.bin, maskArgs(r.args)))
 	if err := cmd.Start(); err != nil {
 		s.logLine(id, "system", "failed to start: "+err.Error())
 		revert()
@@ -348,7 +359,7 @@ func (s *Supervisor) watchHealth(id string, p *proc, svc model.Service) {
 			}
 			return
 		case <-tick.C:
-			if probe(svc.Port, svc.HealthPath) {
+			if probe(svc.Port, healthPath(svc)) {
 				promote()
 				return
 			}

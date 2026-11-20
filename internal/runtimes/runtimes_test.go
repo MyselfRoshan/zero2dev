@@ -21,15 +21,26 @@ func TestVersionRegexp(t *testing.T) {
 		"no digits here":                      "",
 	}
 	for in, want := range cases {
-		if got := versionRE.FindString(in); got != want {
+		if got := parseVersion(in); got != want {
 			t.Errorf("%q -> %q, want %q", in, got, want)
 		}
+	}
+	// Mailpit prints its own path first; digits in the path must not win.
+	mp := `C:\tools\2.1\mailpit.exe v1.33.0 compiled with go1.25.3 on windows/amd64` + "\n"
+	if got := parseVersion(mp); got != "1.33.0" {
+		t.Errorf("mailpit: %q", got)
 	}
 }
 
 func TestDisplayName(t *testing.T) {
 	if DisplayName("node", "22.11.0", "x") != "Node.js 22.11.0" || DisplayName("other", "1.0", "/usr/sbin/nginx") != "nginx 1.0" {
 		t.Fatal("display names")
+	}
+	if DisplayName("mailpit", "1.33.0", "x") != "Mailpit 1.33.0" {
+		t.Fatal(DisplayName("mailpit", "1.33.0", "x"))
+	}
+	if a := argsFor("mailpit", `C:\m\mailpit.exe`); strings.Join(a, " ") != "version --no-release-check" {
+		t.Fatalf("mailpit probe args %q: it must not ask GitHub", a)
 	}
 }
 
@@ -126,3 +137,20 @@ func TestDetectAndRegisterNeverRunEditors(t *testing.T) {
 type nopEmitter struct{}
 
 func (nopEmitter) Publish(string, any) {}
+
+func TestInstallDirKeepsOtherAdoptedRuntimes(t *testing.T) {
+	bin := t.TempDir()
+	m := &Manager{Bin: bin}
+	cases := map[string]string{
+		filepath.Join(bin, "node-22.1.0", "node.exe"):               filepath.Join(bin, "node-22.1.0"),
+		filepath.Join(bin, "adopted", "node-20.11.0", "node.exe"):   filepath.Join(bin, "adopted", "node-20.11.0"),
+		filepath.Join(bin, "adopted", "java-21", "bin", "java.exe"): filepath.Join(bin, "adopted", "java-21"),
+		filepath.Join(bin, "adopted", "stray.exe"):                  "",
+		filepath.Join(filepath.Dir(bin), "elsewhere", "node.exe"):   "",
+	}
+	for binary, want := range cases {
+		if got := m.installDir(binary); got != want {
+			t.Errorf("installDir(%s) = %q, want %q", binary, got, want)
+		}
+	}
+}

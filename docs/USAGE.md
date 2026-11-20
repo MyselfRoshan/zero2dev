@@ -11,17 +11,17 @@ Contents: [1. Start](#1-start-zero2dev) · [2. Install Caddy](#2-install-a-runti
 ## 1. Start Zero2Dev
 
 1. Put `zero2dev.exe` in a folder you own, for example `D:\zero2dev\`. (Download it from the GitHub release, or build it with `build.ps1`.)
-2. Double-click it. No window opens: Zero2Dev starts in the background, puts its icon in the notification area (next to the clock) and opens your browser at a link like `http://127.0.0.1:7000/#token=...`. The token is your password; the page saves it and removes it from the address bar.
+2. Double-click it. No window opens: Zero2Dev starts in the background, puts its icon in the notification area (next to the clock) and on the taskbar, underlined like any running program, and opens your browser at a link like `http://127.0.0.1:7000/#token=...`. The token is your password; the page saves it and removes it from the address bar.
 3. The first run creates a `data` folder next to the exe. Messages go to `data\logs\zero2dev.log` (started from PowerShell, `.\zero2dev.exe` prints them in the terminal instead).
 
 **Getting back to it and stopping it.**
 
 | To | Do |
 | --- | --- |
-| Open the dashboard again | Click the Zero2Dev icon in the notification area, or double-click `zero2dev.exe` again (a second start just opens the dashboard of the one already running) |
+| Open the dashboard again | Click the Zero2Dev icon on the taskbar or in the notification area, or double-click `zero2dev.exe` again (a second start just opens the dashboard of the one already running) |
 | Open the data folder | Right-click the icon > **Open data folder** |
 | Stop every service but keep Zero2Dev open | Right-click the icon > **Stop all services**, or **Stop all** on the dashboard or the Services page. Apps stop first, then databases, then the web server (and a service that others wait for stops after them); a message says how many stopped |
-| Quit | Right-click the icon > **Quit Zero2Dev**, or **Quit Zero2Dev** at the bottom of the sidebar. Your running services are stopped cleanly first (the dialog lists them) |
+| Quit | Right-click the icon in the notification area > **Quit Zero2Dev**, right-click the taskbar button > **Close window**, or **Quit Zero2Dev** at the bottom of the sidebar. Your running services are stopped cleanly first (the dialog lists them) |
 
 If Zero2Dev cannot start (another program uses its port, or the data folder is damaged), a message box says why.
 
@@ -236,12 +236,111 @@ Good to know:
 ### Code editors and database tools
 
 - Install **VS Code**, **VSCodium** or **Notepad++** from **Code editors**. Their settings and extensions go to `data\code` and `data\codium` (Notepad++: `data\notepadpp`), not into `bin`, which only holds the programs.
+- VS Code and VSCodium also have a `data` link next to `Code.exe` / `VSCodium.exe` that points at `data\code` / `data\codium`. So they open with the same settings and extensions however you start them: from Zero2Dev, by double-clicking the exe in `bin`, or from a shortcut you pin. Zero2Dev fixes the link at every start, for example after you moved the folder. Removing a version removes only the link, never your settings.
 - Each installed editor or tool has an **Open** button on its card.
 - A service page has **Open in VS Code** (one button per installed editor), which opens the project folder.
 - A MariaDB, MySQL or PostgreSQL service page has **Open in HeidiSQL** and **Open in DBeaver** when those are installed. They connect straight to the database. HeidiSQL keeps its settings in `data\heidisql`, DBeaver its workspace in `data\dbeaver\workspace`.
 - Programs opened this way are not services: they keep running when Zero2Dev stops.
 
+### Working with a database
+
+A MariaDB, MySQL or PostgreSQL service page has a **Databases** section. It lists the databases on the server with their sizes, and the users. Most of its tools work inside the running server, so they are off while it is stopped, and the section says why. **Reset** is the other way round: it works only while the server is stopped. A Redis service page has only the password and reset.
+
+- **Create database:** enter a name of 1-64 letters, digits or `_`. The system databases (`mysql`, `information_schema`, `performance_schema`, `sys`, `postgres`, `template0`, `template1`) are not listed and cannot be used.
+- **Create user:** a user name, a password (**Generate** makes a random one) and, optionally, the database the user gets all privileges on. Your app then logs in with this user.
+- **Import a dump:** pick the database, or **A new database...** to create one first. Then enter the path of a `.sql` file or a compressed `.sql.gz`, or click **Browse...**. The statements run in that database, with a progress bar. If one fails, the import stops and what came before it stays. The file itself is only read.
+- **Export:** pick the database and where to save it (**Browse...** suggests `shop-2026-11-18.sql`). A name ending in `.gz` writes a compressed dump. The file appears only when the export has finished. If it already exists, Zero2Dev asks before replacing it.
+- While an import or an export runs, the other tools wait until it has finished. Its progress stays on the page when you leave and come back.
+
+**Administrator password.** The server starts without one (`root`, or `postgres`). **Set password** gives the administrator a password while the server runs; **Change password** and **Remove password** do what they say.
+- Zero2Dev keeps the password and uses it to stop the server cleanly. Apps that use the database get it in `DB_PASSWORD` and `DATABASE_URL` (Redis: `REDIS_URL`) from their next start, so restart them. **Open in HeidiSQL** and **Open in DBeaver** use it too.
+- **Connection** shows it hidden, with **Show** and **Copy**. The URL includes it once one is set.
+- PostgreSQL still lets programs on this PC connect without a password. The password is there for apps and tools that ask for one.
+
+**Reset** deletes the server's data folder: every database, every user and the password. The confirmation names the databases and the folder. The next start sets the server up again, empty and without a password. Stop the service first. Zero2Dev offers to take a snapshot before a reset or an import, so you can go back.
+
+
+### Catch e-mails with Mailpit
+
+Mailpit is a pretend mail server. Your app sends its e-mails to it, and you read them in the browser; no real inbox gets them.
+
+1. On **Runtimes**, install **Mailpit** from the **Mail** group.
+2. Add a service of type **Mailpit**. The **Port** (8025) is the web inbox. The **SMTP port** setting (1025) is where your app sends mail.
+3. Start it. The service page shows **Sending mail**: the SMTP host `127.0.0.1`, the SMTP port, "No authentication" and a link to the inbox.
+4. Click **Copy** next to the lines for your `.env` (`MAIL_MAILER=smtp`, `MAIL_HOST=127.0.0.1`, `MAIL_PORT=1025`), paste them into your project and send a test mail.
+
+- Only this PC can connect, and nothing is passed on. Apps that send a user name and password are let in too.
+- The caught e-mails are kept in `data\mailpit\<service id>\mailpit.db`. **Keep at most** (500) sets how many; the oldest go first.
+- Two Mailpit services need different ports. If the SMTP port is taken, the start fails with "SMTP port 1025 is already in use".
+
 ---
+
+## Snapshots: undo for a whole project
+
+A *snapshot* is a named copy of a project as it is now: the settings of its services, the runtime version each one uses, its sites, its `php.ini` files and the data of its databases. The code in the project folders is not copied. Snapshots are kept in `data\snapshots`, so they move with the data folder.
+
+**Take one.** In **Projects**, click **Snapshots** in the project's row, then **Take snapshot**. Give it a name that says why, such as *Before the PHP 8.4 upgrade*. A snapshot needs stopped services, so the data does not change while it is copied. When some run, the dialog says so and offers to **stop them, take the snapshot, and start them again**.
+
+The list shows each snapshot's name, when it was taken, its size, its services and the runtime versions they used. A database service with its own command line has no known data folder: its settings are kept but not its data, and the snapshot shows a warning.
+
+**Restore.** **Restore** first shows what changes: which services get their settings and data back, which come back after being deleted, and which runtime version each one runs again. Each service is pinned to that version, so a later change of the default does not move it.
+- When a runtime it needs is no longer installed, it is listed with an **Install** button (when Zero2Dev can download it). Restore is possible once nothing is missing.
+- When services run, tick **Stop them, restore, and start them again**.
+- Services and sites added to the project after the snapshot are taken out of the project, not deleted.
+
+**Clone into a new project.** **Clone** makes a new project from a snapshot, with copies of its services, sites and database data. Each copy gets a free port, and each domain gets a suffix (`-copy` by default, so `shop.localhost` becomes `shop-copy.localhost`); the dialog shows the new addresses. Both projects use the **same code folder**: a change to the code shows up in both.
+
+**Delete** removes a snapshot after you confirm. Deleting a project or a service does not delete its snapshots; they stay in the data folder.
+
+**A database on its own.** The page of a MariaDB, MySQL, PostgreSQL or Redis service has its own **Snapshots** box: the same take, restore and delete, for that one service and its data.
+
+**Before risky actions.** Zero2Dev offers a snapshot when a change could break something:
+- **Make default** on a runtime, when services follow that kind's default: the dialog lists the projects whose services switch versions and takes a snapshot of each one you keep ticked, then switches the default.
+- Importing a dump into a database, or resetting it: **Take a snapshot first?** offers **Take snapshot and continue**, **Continue without** and **Cancel**. The action goes ahead only once the snapshot is finished.
+
+
+## Import from this PC: use your installed VS Code and other programs in Zero2Dev
+
+**Import from this PC** (in the menu) copies or moves the settings and data of programs installed on this PC into Zero2Dev's portable folder, so Zero2Dev's copies of those programs start with what you already had. Every step can be reverted.
+
+1. Open **Import from this PC**. Zero2Dev lists what it found, in four groups:
+   - **Editors and tools:** VS Code, VSCodium, Notepad++, HeidiSQL, DBeaver.
+   - **Runtimes:** programs you registered by path.
+   - **Caches and global packages:** global npm packages, and the npm, Go and Composer caches.
+   - **Databases:** on a server you name.
+
+   Each line says what it holds and how big it is. Programs that were not found are named in one line under their group.
+2. Press **Import…** (or **Adopt…** for a runtime) on a line. The plan shows every item, where it comes from and where it goes. Untick what you do not want.
+3. Choose how:
+   - **Copy** keeps the originals, so the installed program keeps working as before.
+   - **Move** saves the originals, then removes them from their old place. Runtimes and databases can only be copied; the page says why next to the greyed-out Move.
+4. If something must happen first, the plan says so. For example, *Install VS Code in Zero2Dev first* comes with a link to Runtimes, and for *Close VS Code first* you close it and press **Check again**. When Zero2Dev's folder already holds data, that data is saved first and comes back if you revert.
+5. Press **Review**. A dialog says exactly what will happen, such as "This copies 414 MB (settings and extensions) of VS Code into Zero2Dev's folder". Press **Start copying** (or **Start moving**, or **Adopt into Zero2Dev**). Progress shows at the top, then a notice says what was done.
+
+**Runtimes.** Adopting a registered runtime copies its folder into Zero2Dev. Services that use it keep working, now from the copy. On the Runtimes page, **Detect on this PC** offers **Adopt into Zero2Dev** next to registered programs, and the runtime cards show a note when something can be imported.
+
+**Databases.** Choose the server type, enter the host, port, user and password, and press **List databases**. Tick the databases, pick the Zero2Dev service to copy into (it must be running), then press Review. The server you copy from is not changed, and the password is not stored.
+
+**Revert.** Every migration is listed in **History**, newest first. **Revert…** shows the ways back that apply, each explained before you confirm:
+- **Discard the copy** removes the copy in Zero2Dev and brings back what was there before. For a runtime, Zero2Dev uses the program from its old place again. For databases, the copied databases are dropped.
+- **Copy back to the installed program** copies what Zero2Dev has now over the originals, which are saved first.
+- **Move back** puts moved items back where they were.
+
+**Is it worth importing?** Every item has a label:
+- **Recommended:** small and worth it: your editor settings, extensions, saved connections, global npm and Composer packages.
+- **Optional:** the Go caches (they rebuild by themselves, but a first build takes long), adopting a runtime, copying databases.
+- **Not worth it:** the npm download cache. It fills up again by itself.
+
+**Several at once.** At the top, **Select recommended** ticks the programs worth importing. You can also tick rows by hand. A bar shows how many are selected and how big they are; **Review** lists each program with its items and the free space, and **Start** brings them in one after another. A failure does not stop the others. Each one is its own entry in History.
+
+**Free space.** The plan says how much room it needs and how much is free on Zero2Dev's drive. It warns when that is tight, and waits until you free some space when it is not enough.
+
+**History.** The **History** tab shows every migration, with a filter. **Details** lists the items (from, to, size), when it ran and how long it took, and what was backed up. There you can also:
+- **Remove the old files:** after a **Copy**, the originals are still where they were. Once you have checked Zero2Dev's copy, this deletes them to free the space. Zero2Dev checks its copy first and removes nothing when it is not complete. Afterwards the migration counts as a move, so **Move back** can still put the files back. Runtimes and databases keep their originals (they belong to another installer or server).
+- **Delete backups:** what Zero2Dev's folder held before is saved when you import something. Delete it when you do not need it back; Revert will no longer bring it back.
+- **Remove from history** for a migration that was reverted or failed.
+
+Logins that Windows keeps for a program (such as VS Code Settings Sync) are not moved. Sign in again in Zero2Dev's copy.
 
 ## Projects: start and stop a whole stack
 

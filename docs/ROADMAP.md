@@ -16,7 +16,7 @@ Status: **done** (shipped and tested), **in progress** (code exists but is not f
 | 0.0.2 | Many versions side by side, version discovery, nginx as site server | done |
 | 0.0.3 | Databases, code editors, database tools, settings for each service type, no console window (tray icon), a new dashboard, in-app tutorials, and an Ant Design look with your own accent colour | done |
 | 0.0.4 | **Projects**: one click starts the whole stack, in the right order, and tells you when something crashes; a `.env` file and database variables for every service; runtimes usable from your own terminals; Node.js 26 LTS | done (a few checks on a real Windows desktop are still open, see below) |
-| 0.0.5 | **Data**: databases you can create, fill and reset; snapshots of a whole environment | planned |
+| 0.0.5 | **Data**: databases you can create, fill and reset; snapshots of a whole environment; Mailpit; **Import from this PC** your installed editors, runtimes and databases | done (checks on a real Windows desktop are still open, see below) |
 | 0.0.6 | **More languages** and **one-click new projects** for each language and framework | planned |
 | 0.0.7 | **WSL aware**: run, detect and open projects that live in WSL | planned |
 | 0.0.8 | **Real domains**: ports 80/443, `.test` domains, sharing | planned |
@@ -87,18 +87,27 @@ change (a migration, a PHP upgrade, a new extension) has no undo for the environ
 
 | Stage | What | Why it helps | Status |
 | --- | --- | --- | --- |
-| 1 | **Create a database and a user** from the service page | The first step of every new project, without SQL | planned |
-| 2 | **Import a dump** (`.sql`, `.sql.gz`) and **export** one (`mysqldump`, `pg_dump`) | Load a copy of production or a colleague's data in one step | planned |
-| 3 | **Database snapshots**: copy one database's data folder before a risky change, restore it later | An easy undo for migrations | planned |
-| 4 | **Environment snapshots**, one set per project: a named copy of everything the project's environment is made of (its services and their settings, the runtime version each one uses, generated `php.ini` files, sites, and the data of its databases), taken with the services stopped | "Before the PHP 8.4 upgrade": try it, and go back in one click if it breaks | planned |
-| 5 | **Restore** a snapshot, or **clone** it into a new environment (for example a second copy of the project to test a branch) | Several states of the same project without setting them up again | planned |
-| 6 | **Snapshot before risky actions**, offered automatically before switching a runtime version, resetting a database or importing a dump | The undo exists even when nobody thought of taking one | planned |
-| 7 | **Reset a database** (delete its files and create them again) | Start clean without hunting for the data folder | planned |
-| 8 | **Optional password** for the administrator account | For apps and frameworks that refuse an empty password | planned |
-| 9 | **Mail catcher** (Mailpit) as a service type, with its SMTP settings shown | Test e-mails without sending real ones | planned |
+| 1 | **Create a database and a user** from the service page | The first step of every new project, without SQL | done |
+| 2 | **Import a dump** (`.sql`, `.sql.gz`) and **export** one (`mysqldump`, `pg_dump`) | Load a copy of production or a colleague's data in one step | done |
+| 3 | **Database snapshots**: copy one database's data folder before a risky change, restore it later | An easy undo for migrations | done |
+| 4 | **Environment snapshots**, one set per project: a named copy of everything the project's environment is made of (its services and their settings, the runtime version each one uses, generated `php.ini` files, sites, and the data of its databases), taken with the services stopped | "Before the PHP 8.4 upgrade": try it, and go back in one click if it breaks | done |
+| 5 | **Restore** a snapshot, or **clone** it into a new environment (for example a second copy of the project to test a branch) | Several states of the same project without setting them up again | done |
+| 6 | **Snapshot before risky actions**, offered automatically before switching a runtime version, resetting a database or importing a dump | The undo exists even when nobody thought of taking one | done |
+| 7 | **Reset a database** (delete its files and create them again) | Start clean without hunting for the data folder | done |
+| 8 | **Optional password** for the administrator account | For apps and frameworks that refuse an empty password | done |
+| 9 | **Mail catcher** (Mailpit) as a service type, with its SMTP settings shown | Test e-mails without sending real ones | done |
+| 10 | **Import from this PC** (`#/migrate`): copy or move the settings and data of an installed VS Code, VSCodium, Notepad++, HeidiSQL or DBeaver into Zero2Dev's portable folders; adopt a runtime found on PATH; move npm, Composer and Go caches; copy databases from another server. Every migration can be reverted | Switch to Zero2Dev without setting your editors and tools up again, and go back if you change your mind | done |
 
 Snapshots live in `data\snapshots\<project id>\<snapshot>` and move with the folder like everything else. Runtimes are not
 copied: a snapshot records which installed version each service used, and restoring it offers to install a missing one.
+
+Release 0.0.5: **done**. The tests use a fake for the database programs, the registry and the user folders, so these checks need a real Windows desktop:
+- **Databases**: create, import (`.sql`, `.sql.gz`), export, reset and the password against real MariaDB, MySQL, PostgreSQL and Redis servers. With a password set, the clean stop must still work, and HeidiSQL must connect. `redis-cli -x` and `REDISCLI_AUTH` on the Windows Redis builds.
+- **Snapshots**: take and restore a project after switching its PHP default; restore after uninstalling that version (the install is offered); clone a project and open both sites.
+- **Mailpit**: mail sent to port 1025 shows in the inbox on 8025.
+- **Import from this PC**: copy VS Code, open Zero2Dev's VS Code with the same settings and extensions, then revert. Move VSCodium and move it back. The same round trip for Notepad++, DBeaver and HeidiSQL (the registry key comes back after move-back). Adopt a Node.js found on PATH and revert. `npm ls -g` in **Open terminal** after copying the npm globals. Copy a database from a system MySQL and revert.
+- **Import, clean-up and space**: copy VS Code, then **Remove the old files** in History: `%APPDATA%\Code\User` and `.vscode\extensions` are gone, Zero2Dev's VS Code still has everything, and **Move back** puts them back. The free space shown on the plan matches the real drive. **Delete backups** really frees the disk space.
+- **VS Code and VSCodium `data` link**: double-click `Code.exe` and `VSCodium.exe` in `bin` and see the same settings and extensions as from **Open**; remove a version and check that `data\code` is untouched.
 
 ## 0.0.6: more languages and one-click new projects
 

@@ -64,7 +64,7 @@ try {
   } else {
     const dist = path.resolve(import.meta.dirname, "../../internal/webui/dist/index.html");
     if (!fs.existsSync(dist)) throw new Error("build the dashboard first: pnpm run build");
-    const port = 7102;
+    const port = Number(process.env.E2E_PORT) || 7102;
     BASE = `http://127.0.0.1:${port}`;
     TOKEN = "devtoken";
     mock = spawn(process.execPath, [path.resolve(import.meta.dirname, "../mock/server.mjs")], {
@@ -122,6 +122,12 @@ try {
       siteIds: site ? [site.id] : [],
     });
     if (worker) await api("POST", `/api/services/${worker.id}/start`).catch(() => {});
+    // Two caches imported, so Import shows a history with details and old files to remove.
+    for (const source of ["npm-global", "go-cache"])
+      await api("POST", "/api/migrations", { source, mode: "copy" }).catch((e) =>
+        console.warn("demo migration:", e.message),
+      );
+    await new Promise((resolve) => setTimeout(resolve, 2500));
     return { service: shopApi };
   }
 
@@ -148,10 +154,27 @@ try {
       hash: `#/projects/${projectId}/edit`,
       title: "Edit a project: services, start order, sites",
     },
+    projectId && {
+      name: "project-snapshots",
+      hash: `#/projects/${projectId}/snapshots`,
+      title: "Project snapshots: take, restore, clone",
+    },
     { name: "runtimes", hash: "#/runtimes", title: "Runtimes: installed versions and the catalog" },
     { name: "sites", hash: "#/sites", title: "Sites: local domains" },
     { name: "site-new", hash: "#/sites?new", title: "New site form" },
     { name: "environment", hash: "#/environment", title: "Environment: PATH folders and variables" },
+    {
+      name: "migrate",
+      hash: "#/migrate?source=vscode",
+      title: "Import from this PC: installed programs, the plan, history",
+      ready: "[data-testid=migrate-plan]",
+    },
+    {
+      name: "migrate-history",
+      hash: "#/migrate?tab=history",
+      title: "Import from this PC: history, details, old files and backups",
+      ready: "[data-testid=migrate-history-row]",
+    },
     { name: "logs", hash: "#/logs", title: "Logs of every service" },
     { name: "settings", hash: "#/settings", title: "Settings" },
     { name: "help", hash: "#/help", title: "Help and guided tours" },

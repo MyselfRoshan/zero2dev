@@ -192,6 +192,7 @@ export function friendlyArgs(args: string[]): string {
       if (a === "") return '""';
       let s = a;
       for (const [k, v] of FRIENDLY) s = s.replaceAll(k, v);
+      s = s.replace(/\{s\.([A-Za-z0-9_]+)\}/g, "<$1>"); // a setting, e.g. Mailpit's {s.smtpPort}
       return /\s/.test(a) ? `"${s}"` : s;
     })
     .join(" ");

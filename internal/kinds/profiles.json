@@ -24,6 +24,20 @@
         "help": "npm keeps its download cache in the Zero2Dev data folder instead of your user profile."
       }
     ],
+    "portable": [
+      {
+        "setting": "npmGlobal",
+        "env": [
+          {
+            "name": "npm_config_prefix",
+            "value": "{home}/node/global",
+            "help": "npm install -g puts packages in the data folder."
+          }
+        ],
+        "path": "{home}/node/global",
+        "help": "After an import moved or copied npm's global packages into the data folder: npm installs global packages there, and their commands are on PATH."
+      }
+    ],
     "options": [
       {
         "key": "run",
@@ -207,6 +221,20 @@
           "{docroot}"
         ],
         "help": "The folder the web server serves: the project folder, or the document root below."
+      }
+    ],
+    "portable": [
+      {
+        "setting": "composer",
+        "env": [
+          {
+            "name": "COMPOSER_HOME",
+            "value": "{home}/composer",
+            "help": "Composer keeps its settings, auth.json, global packages and cache in the data folder."
+          }
+        ],
+        "path": "{home}/composer/vendor/bin",
+        "help": "After an import moved or copied Composer's home into the data folder: Composer uses it, and the commands of global packages are on PATH."
       }
     ],
     "options": [
@@ -467,6 +495,24 @@
           "run"
         ],
         "help": "Compile and run the package in one step."
+      }
+    ],
+    "portable": [
+      {
+        "setting": "goCache",
+        "env": [
+          {
+            "name": "GOMODCACHE",
+            "value": "{home}/go/path/pkg/mod",
+            "help": "Downloaded modules stay in the data folder."
+          },
+          {
+            "name": "GOCACHE",
+            "value": "{home}/go/cache",
+            "help": "Compiled packages stay in the data folder."
+          }
+        ],
+        "help": "After an import moved or copied Go's module and build caches into the data folder: Go uses them there, also when the setting below is off. They are the same folders that setting uses."
       }
     ],
     "options": [
@@ -1339,7 +1385,7 @@
           "--bind",
           "127.0.0.1"
         ],
-        "help": "Only this PC can connect. There is no password."
+        "help": "Only this PC can connect. There is no password until you set one under Database tools; Zero2Dev then adds --requirepass."
       },
       {
         "args": [
@@ -1475,5 +1521,88 @@
     "extraArgs": "",
     "extraArgsHint": "One value per row. {port} is the port, {home} the Zero2Dev data folder.",
     "options": []
+  },
+  {
+    "kind": "mailpit",
+    "label": "Mailpit",
+    "summary": "Catches the e-mails your apps send, so you can read them in the browser.",
+    "folder": {
+      "use": "hidden"
+    },
+    "port": {
+      "use": "required",
+      "default": 8025,
+      "hint": "The web page with the caught e-mails. 8025 is the usual one. Your apps send mail to the SMTP port below."
+    },
+    "health": true,
+    "healthPath": "/livez",
+    "dataDir": "service",
+    "extraArgs": "Extra arguments",
+    "extraArgsHint": "Any other Mailpit option as --name value, like --webroot /mail/. Added after the generated ones.",
+    "fixed": [
+      {
+        "args": [
+          "--listen",
+          "127.0.0.1:{port}"
+        ],
+        "help": "The web page and its API on the service port, for this PC only."
+      },
+      {
+        "args": [
+          "--smtp",
+          "127.0.0.1:{s.smtpPort}"
+        ],
+        "help": "Your apps send mail to this SMTP port (the SMTP port setting). Only this PC can connect."
+      },
+      {
+        "args": [
+          "--database",
+          "{dataSlash}/mailpit.db"
+        ],
+        "help": "The caught e-mails are kept in this service's data folder."
+      },
+      {
+        "args": [
+          "--smtp-auth-accept-any",
+          "--smtp-auth-allow-insecure"
+        ],
+        "help": "No login is needed. Apps that send a user name and password anyway are let in, whatever they send."
+      },
+      {
+        "args": [
+          "--disable-version-check"
+        ],
+        "help": "Mailpit does not look online for updates. Zero2Dev's Runtimes page lists the new versions."
+      }
+    ],
+    "options": [
+      {
+        "key": "smtpPort",
+        "group": "Mail",
+        "label": "SMTP port",
+        "common": true,
+        "type": "number",
+        "default": "1025",
+        "min": 1,
+        "max": 65535,
+        "help": "Your apps send their e-mails to 127.0.0.1 on this port. 1025 is the usual one. Use a different port for each Mailpit service."
+      },
+      {
+        "key": "maxMessages",
+        "group": "Mail",
+        "label": "Keep at most",
+        "type": "number",
+        "default": "500",
+        "min": 0,
+        "max": 1000000,
+        "emit": {
+          "arg": [
+            "--max",
+            "{v}"
+          ]
+        },
+        "help": "How many e-mails to keep. The oldest ones are deleted first. 0 keeps all of them."
+      }
+    ]
   }
 ]
