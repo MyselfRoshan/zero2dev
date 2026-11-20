@@ -531,7 +531,7 @@ Opens an `editor` or `dbtool` runtime. The program is detached: not in the super
 
 | Kind | Redirect | Folder |
 | --- | --- | --- |
-| vscode, vscodium | env `VSCODE_PORTABLE=<dir>` (portable mode with the data outside the program folder) | `<home>/code`, `<home>/codium` (`user-data`, `extensions`) |
+| vscode, vscodium | env `VSCODE_PORTABLE=<dir>` (portable mode with the data outside the program folder). The install also gets `<install>/data`, a directory junction to `<dir>`, so starts outside Zero2Dev use the same data; it is made on install, checked on every launch and at daemon start, and removed (link only) before the version's folder is deleted. A real `data` folder there is left alone. | `<home>/code`, `<home>/codium` (`user-data`, `extensions`) |
 | notepadpp | `-settingsDir=<dir>` | `<home>/notepadpp` |
 | heidisql | `--psettings=<dir>/portable_settings.txt`, created empty if missing | `<home>/heidisql` |
 | dbeaver | `-data <dir>/workspace`. This moves only DBeaver's workspace; DBeaver still writes some files to its default location. | `<home>/dbeaver` |

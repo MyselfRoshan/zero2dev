@@ -236,6 +236,7 @@ Good to know:
 ### Code editors and database tools
 
 - Install **VS Code**, **VSCodium** or **Notepad++** from **Code editors**. Their settings and extensions go to `data\code` and `data\codium` (Notepad++: `data\notepadpp`), not into `bin`, which only holds the programs.
+- VS Code and VSCodium also have a `data` link next to `Code.exe` / `VSCodium.exe` that points at `data\code` / `data\codium`. So they open with the same settings and extensions however you start them: from Zero2Dev, by double-clicking the exe in `bin`, or from a shortcut you pin. Zero2Dev fixes the link at every start, for example after you moved the folder. Removing a version removes only the link, never your settings.
 - Each installed editor or tool has an **Open** button on its card.
 - A service page has **Open in VS Code** (one button per installed editor), which opens the project folder.
 - A MariaDB, MySQL or PostgreSQL service page has **Open in HeidiSQL** and **Open in DBeaver** when those are installed. They connect straight to the database. HeidiSQL keeps its settings in `data\heidisql`, DBeaver its workspace in `data\dbeaver\workspace`.

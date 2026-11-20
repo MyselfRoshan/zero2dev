@@ -49,6 +49,12 @@ func (s *Server) launchRuntime(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return apperr.Internal("cannot prepare the data folder of %s: %v", rt.Name, err)
 	}
+	// So a later start outside Zero2Dev (bin, a shortcut) finds the same data.
+	// This launch works without the link (VSCODE_PORTABLE), so an error here is
+	// not the user's problem now; the daemon reports it at its next start.
+	if s.Runtimes != nil {
+		_ = s.Runtimes.EnsureEditorData(*rt)
+	}
 	dir := filepath.Dir(rt.Binary)
 	switch {
 	case in.ServiceID != "":

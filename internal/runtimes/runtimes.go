@@ -255,6 +255,10 @@ func (m *Manager) Add(rt model.Runtime) error {
 	if err != nil {
 		return err
 	}
+	// Best effort: a missing link only means a double-click in bin starts
+	// VS Code without Zero2Dev's settings; launches from Zero2Dev and the next
+	// start repair it.
+	_ = m.EnsureEditorData(rt)
 	m.changed()
 	return nil
 }
@@ -315,6 +319,11 @@ func (m *Manager) Delete(id string) error {
 	}
 	if rt.Source == "installed" {
 		if dir := m.installDir(rt.Binary); dir != "" {
+			// The data link first: removing the folder must never reach the
+			// settings and extensions it points at.
+			if err := m.removeEditorLink(*rt); err != nil {
+				return apperr.Internal("cannot remove the data link of %s: %v", rt.Name, err)
+			}
 			if err := os.RemoveAll(dir); err != nil {
 				return apperr.Internal("cannot remove %s: %v", dir, err)
 			}

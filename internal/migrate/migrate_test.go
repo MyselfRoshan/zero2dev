@@ -535,9 +535,9 @@ func TestHeidiCopyAndMove(t *testing.T) {
 func (e *tenv) registered(kind, version string, files map[string]string, binRel string) model.Runtime {
 	dir := filepath.Join(e.root, "Program Files", kind)
 	for rel, c := range files {
-		write(e.t, filepath.Join(dir, rel), c)
+		write(e.t, filepath.Join(dir, filepath.FromSlash(rel)), c)
 	}
-	rt := model.Runtime{ID: "rt_" + kind + "1", Kind: kind, Version: version, Name: kind + " " + version, Source: "registered", Binary: filepath.Join(dir, binRel)}
+	rt := model.Runtime{ID: "rt_" + kind + "1", Kind: kind, Version: version, Name: kind + " " + version, Source: "registered", Binary: filepath.Join(dir, filepath.FromSlash(binRel))}
 	e.st.Update(func(d *store.Data) error {
 		d.Runtimes = append(d.Runtimes, rt)
 		d.Services = append(d.Services, model.Service{ID: "svc_" + kind, Name: "app", Kind: kind, RuntimeID: rt.ID})
@@ -558,7 +558,7 @@ func (e *tenv) runtime(id string) model.Runtime {
 
 func TestRuntimeAdoptionKeepsIDAndRevert(t *testing.T) {
 	e := setup(t)
-	rt := e.registered("node", "22.1.0", map[string]string{"node.exe": "exe", `node_modules\npm\a.js`: "npm"}, "node.exe")
+	rt := e.registered("node", "22.1.0", map[string]string{"node.exe": "exe", "node_modules/npm/a.js": "npm"}, "node.exe")
 	id := "runtime:" + rt.ID
 	src := e.source(id)
 	if src.Program != ProgRuntime || src.RuntimeID != rt.ID || !slices.Equal(src.Modes, []string{ModeCopy}) || src.CopyOnly == "" || len(src.Blockers) != 0 {
@@ -595,7 +595,7 @@ func TestRuntimeAdoptionKeepsIDAndRevert(t *testing.T) {
 
 func TestRuntimeAdoptionLeavesDatabaseDataOut(t *testing.T) {
 	e := setup(t)
-	rt := e.registered("mariadb", "11.4", map[string]string{`bin\mariadbd.exe`: "exe", `share\x.sql`: "s", `data\ibdata1`: "big"}, `bin\mariadbd.exe`)
+	rt := e.registered("mariadb", "11.4", map[string]string{"bin/mariadbd.exe": "exe", "share/x.sql": "s", "data/ibdata1": "big"}, "bin/mariadbd.exe")
 	e.run(Request{Source: "runtime:" + rt.ID, Mode: ModeCopy})
 	dir := filepath.Join(e.m.Bin, "adopted", "mariadb-11.4")
 	if !exists(filepath.Join(dir, "bin", "mariadbd.exe")) || !exists(filepath.Join(dir, "share", "x.sql")) || exists(filepath.Join(dir, "data")) {

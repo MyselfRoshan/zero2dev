@@ -32,6 +32,10 @@
 - A Mailpit service page shows **Sending mail**: the SMTP host and port, no login, the inbox link and the `MAIL_MAILER` / `MAIL_HOST` / `MAIL_PORT` lines to copy into `.env`.
 - The start is refused when the SMTP port is taken or equals the web port. The health check asks Mailpit's `/livez`.
 
+### Editors
+
+- **VS Code and VSCodium keep your settings however you start them.** Before, only **Open** in Zero2Dev used `data\code` / `data\codium`; double-clicking `Code.exe` in `bin` started without your extensions and settings. Each installed version now has a `data` link next to its exe that points there, which is VS Code's own portable mode. Zero2Dev makes it on install and repairs it at every start (for example after the folder moved). Removing a version deletes the link, never the settings.
+
 ### Bring in
 
 - **Bring in** page (`#/migrate`): lists what was found on this PC (editors and tools, registered runtimes, caches and global packages, databases on another server) with each item's size and where it goes. Choose **Copy** (keep the originals) or **Move**; Move is greyed out with the reason for runtimes and databases. Blockers such as "Install VS Code in Zero2Dev first" or "Close VS Code first" come with a link or a **Check again** button, and a warning says when Zero2Dev's folder already holds data (it is saved first).

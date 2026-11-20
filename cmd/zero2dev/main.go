@@ -113,6 +113,11 @@ func run() error {
 	sup := supervisor.New(cfg.Home, st, hub)
 	rt := runtimes.New(cfg.Home, st, hub)
 	rt.Bin = cfg.BinDir
+	// VS Code and VSCodium in bin get (or, after the folder moved, fix) their
+	// "data" link, so a double-click on Code.exe uses Zero2Dev's settings.
+	for _, err := range rt.RepairEditorData() {
+		say("Editor data: %v", err)
+	}
 	site := sites.New(cfg.Home, st, hub, sup)
 	inst := installer.New(cfg.Home, st, rt, hub)
 	inst.Bin = cfg.BinDir
