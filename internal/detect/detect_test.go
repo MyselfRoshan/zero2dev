@@ -35,7 +35,8 @@ func TestDir(t *testing.T) {
 			"package.json":   `{"name":"@acme/web-shop","scripts":{"dev":"next dev","build":"next build"},"dependencies":{"next":"14","react":"18"}}`,
 			"next.config.js": "", "pnpm-lock.yaml": "",
 		}, Result{Kind: "node", Framework: "nextjs", Name: "web-shop", Confidence: "high", Port: 3000,
-			Settings: map[string]string{"run": "npm", "npmScript": "dev"}, Markers: []string{"package.json", "next.config.js"}}},
+			// pnpm-lock.yaml: the package manager is pnpm (the option exists since the Composer work)
+			Settings: map[string]string{"run": "npm", "npmScript": "dev", "packageManager": "pnpm"}, Markers: []string{"package.json", "next.config.js"}}},
 		{"vite react", map[string]string{"package.json": `{"name":"ui","scripts":{"dev":"vite"},"devDependencies":{"vite":"5","react":"18"}}`, "vite.config.ts": ""},
 			Result{Kind: "node", Framework: "vite-react", Name: "ui", Confidence: "high", Port: 5173,
 				Settings: map[string]string{"run": "npm", "npmScript": "dev"}, Markers: []string{"package.json", "vite.config.ts"}}},

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -65,6 +66,8 @@ func newEnv(t *testing.T, kind string) *env {
 		t.Fatal(err)
 	}
 	e := &env{t: t, sup: sup, st: st, dir: dir, svc: svc}
+	// The pre-steps of a service (the virtual environment, Corepack for pnpm/Yarn) are not run for real.
+	sup.PreRun = func(context.Context, string, []string, string, []string, io.Writer) error { return nil }
 	e.m = New(home, st, sup, jobs.New(hub))
 	e.m.Run = func(ctx context.Context, c Cmd) error {
 		e.mu.Lock()
@@ -443,5 +446,39 @@ func TestShippedPresets(t *testing.T) {
 		if !seen[id] {
 			t.Errorf("missing preset %s", id)
 		}
+	}
+}
+
+// The preset "composer-install" runs the service's PHP with composer.phar: the manager is
+// connected to Supervisor.ComposerCommand (internal/supervisor/composer.go).
+func TestComposerPresetRunsPhpWithThePhar(t *testing.T) {
+	e := newEnv(t, "php")
+	e.touch("composer.json", "{}")
+	if _, err := e.m.Start(e.svc.ID, Request{Preset: "composer-install"}); err == nil || !strings.Contains(err.Error(), "Composer is not installed") {
+		t.Fatalf("without Composer: %v", err)
+	}
+	dir := t.TempDir()
+	php := filepath.Join(dir, "php", "php.exe")
+	bat := filepath.Join(dir, "composer", "composer.bat")
+	for _, f := range []string{php, bat, filepath.Join(dir, "composer", "composer.phar")} {
+		os.MkdirAll(filepath.Dir(f), 0o755)
+		os.WriteFile(f, []byte("x"), 0o755)
+	}
+	e.st.Update(func(d *store.Data) error {
+		d.Runtimes = append(d.Runtimes,
+			model.Runtime{ID: "rt_php", Kind: "php", Version: "8.4", Binary: php, Source: "installed", Default: true},
+			model.Runtime{ID: "rt_comp", Kind: "composer", Version: "2.11", Binary: bat, Source: "installed", Default: true})
+		return nil
+	})
+	j, err := e.m.Start(e.svc.ID, Request{Preset: "composer-install"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if done := e.wait(j.ID); done.State != "done" {
+		t.Fatalf("job %+v", done)
+	}
+	c := e.lastRun()
+	if c.Bin != php || len(c.Args) < 2 || c.Args[0] != filepath.Join(dir, "composer", "composer.phar") || c.Args[1] != "install" {
+		t.Fatalf("cmd %v %v", c.Bin, c.Args)
 	}
 }

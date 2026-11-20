@@ -88,8 +88,7 @@ type Manager struct {
 	// Composer resolves the program "composer" for a service: the binary to run (the service's PHP)
 	// and the arguments that go before the task's own (the composer.phar path). nil, or an error,
 	// is a 409: Composer is not installed.
-	// TODO(composer): connect to supervisor.ComposerCommand(svc) (internal/supervisor/composer.go)
-	// in New once the composer work is merged.
+	// New connects it to supervisor.ComposerCommand (internal/supervisor/composer.go); tests replace it.
 	Composer func(svc model.Service) (bin string, args []string, err error)
 
 	mu      sync.Mutex
@@ -98,7 +97,11 @@ type Manager struct {
 
 // New returns a Manager.
 func New(home string, st *store.Store, sup *supervisor.Supervisor, j *jobs.Registry) *Manager {
-	return &Manager{Home: home, St: st, Sup: sup, Jobs: j}
+	m := &Manager{Home: home, St: st, Sup: sup, Jobs: j}
+	if sup != nil {
+		m.Composer = sup.ComposerCommand
+	}
+	return m
 }
 
 func (m *Manager) service(id string) (model.Service, error) {
