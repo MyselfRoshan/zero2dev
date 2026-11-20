@@ -1,6 +1,7 @@
 // "Take a snapshot first?": offered before a risky action (switching a runtime's default version,
-// resetting a database, importing a dump). The snapshot-ui work (0.0.5) replaces this stub with the
-// real dialog (ui/SnapshotOffer.svelte); callers only use offerSnapshot.
+// resetting a database, importing a dump). The dialog is ui/SnapshotOffer.svelte, mounted once in
+// App.svelte; callers only use offerSnapshot.
+import { openOffer } from "./snapshotOffer.svelte";
 import type { SnapshotScope } from "./types";
 
 export interface SnapshotOfferRequest {
@@ -17,8 +18,10 @@ export interface SnapshotOfferRequest {
  */
 export type SnapshotOfferResult = "taken" | "skipped" | "cancelled";
 
-/** Wave 0 stub: always goes ahead without a snapshot. */
+/**
+ * Asks "Take a snapshot first?". Running services of the owner are stopped for the snapshot and
+ * started again (the dialog says so). Resolves "taken" only once the snapshot job is done.
+ */
 export async function offerSnapshot(req: SnapshotOfferRequest): Promise<SnapshotOfferResult> {
-  void req;
-  return "skipped";
+  return openOffer(req);
 }

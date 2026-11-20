@@ -10,6 +10,13 @@
 
 <!-- snapshot-backend + snapshot-ui: snapshots, restore, clone, offers before risky actions -->
 
+- **Snapshots** in the dashboard: a **Snapshots** button on each project opens its snapshots page. Take one (with a choice to stop running services and start them again), and see each snapshot's date, size, services, runtime versions and warnings.
+- **Restore** shows what changes first: settings, data, and the runtime version each service runs again. A missing runtime gets an **Install** button, and restoring is possible once none is missing.
+- **Clone** a project snapshot into a new project, with a preview of the new `-copy` domains and a note that both projects share the code folder.
+- A database service page has its own **Snapshots** box.
+- **Make default** on a runtime now asks first when services follow that default. It lists the affected projects and takes a snapshot of each one you keep ticked.
+- **Take a snapshot first?** is offered before a database import or reset.
+
 <!-- /snapshots -->
 
 <!-- mailpit -->

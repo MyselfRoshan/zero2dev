@@ -247,7 +247,28 @@ Good to know:
 
 ---
 
-<!-- snapshot-ui: "## Snapshots: undo for a whole project" goes here (take, restore, clone, the offer before risky actions). -->
+## Snapshots: undo for a whole project
+
+A *snapshot* is a named copy of a project as it is now: the settings of its services, the runtime version each one uses, its sites, its `php.ini` files and the data of its databases. The code in the project folders is not copied. Snapshots are kept in `data\snapshots`, so they move with the data folder.
+
+**Take one.** In **Projects**, click **Snapshots** in the project's row, then **Take snapshot**. Give it a name that says why, such as *Before the PHP 8.4 upgrade*. A snapshot needs stopped services, so the data does not change while it is copied. When some run, the dialog says so and offers to **stop them, take the snapshot, and start them again**.
+
+The list shows each snapshot's name, when it was taken, its size, its services and the runtime versions they used. A database service with its own command line has no known data folder: its settings are kept but not its data, and the snapshot shows a warning.
+
+**Restore.** **Restore** first shows what changes: which services get their settings and data back, which come back after being deleted, and which runtime version each one runs again. Each service is pinned to that version, so a later change of the default does not move it.
+- When a runtime it needs is no longer installed, it is listed with an **Install** button (when Zero2Dev can download it). Restore is possible once nothing is missing.
+- When services run, tick **Stop them, restore, and start them again**.
+- Services and sites added to the project after the snapshot are taken out of the project, not deleted.
+
+**Clone into a new project.** **Clone** makes a new project from a snapshot, with copies of its services, sites and database data. Each copy gets a free port, and each domain gets a suffix (`-copy` by default, so `shop.localhost` becomes `shop-copy.localhost`); the dialog shows the new addresses. Both projects use the **same code folder**: a change to the code shows up in both.
+
+**Delete** removes a snapshot after you confirm. Deleting a project or a service does not delete its snapshots; they stay in the data folder.
+
+**A database on its own.** The page of a MariaDB, MySQL, PostgreSQL or Redis service has its own **Snapshots** box: the same take, restore and delete, for that one service and its data.
+
+**Before risky actions.** Zero2Dev offers a snapshot when a change could break something:
+- **Make default** on a runtime, when services follow that kind's default: the dialog lists the projects whose services switch versions and takes a snapshot of each one you keep ticked, then switches the default.
+- Importing a dump into a database, or resetting it: **Take a snapshot first?** offers **Take snapshot and continue**, **Continue without** and **Cancel**. The action goes ahead only once the snapshot is finished.
 
 <!-- migrate-ui: "## Bring in: use your installed VS Code and other programs in Zero2Dev" goes here (copy or move, revert). -->
 

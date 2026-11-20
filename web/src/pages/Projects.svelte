@@ -71,6 +71,7 @@
             <td class="actions">
               <button class="btn sm" type="button" disabled={busyId !== null || !st.canStart} onclick={() => run(p, true)} aria-label="Start {p.name}" title="Starts the project's services, switches its sites on and runs the site server"><Icon name="play" size={14} /> Start</button>
               <button class="btn sm" type="button" disabled={busyId !== null || !st.canStop} onclick={() => run(p, false)} aria-label="Stop {p.name}" title="Stops the project's services. Sites and other services keep running"><Icon name="stop" size={14} /> Stop</button>
+              <a class="btn sm" href="#/projects/{encodeURIComponent(p.id)}/snapshots" aria-label="Snapshots of {p.name}" title="Take, restore or clone snapshots of this project" data-testid="project-snapshots-link"><Icon name="history" size={14} /> Snapshots</a>
               <button class="btn sm ghost icon" type="button" onclick={() => navigate(`#/projects/${encodeURIComponent(p.id)}/edit`)} aria-label="Edit {p.name}" title="Edit"><Icon name="edit" size={14} /></button>
               <button class="btn sm ghost icon danger" type="button" onclick={() => (deleting = p)} aria-label="Delete {p.name}" title="Delete"><Icon name="trash" size={14} /></button>
             </td>
