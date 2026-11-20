@@ -199,7 +199,7 @@ export type BlockerAction =
 export function blockerAction(text: string): BlockerAction {
   if (/^install .+ in zero2dev/i.test(text)) return { type: "link", href: "#/runtimes", label: "Open Runtimes" };
   if (/^(close|quit|stop) /i.test(text) || /is running/i.test(text)) return { type: "recheck", label: "Check again" };
-  if (/create .*service/i.test(text)) return { type: "link", href: "#/services/new", label: "New service" };
+  if (/(create|add) .*service/i.test(text)) return { type: "link", href: "#/services/new", label: "New service" };
   return { type: "none" };
 }
 

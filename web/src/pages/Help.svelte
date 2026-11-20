@@ -12,12 +12,15 @@
     { icon: "services", title: "Service", href: "#/services", text: "One of your apps (or a database) that Zero2Dev starts, watches and stops. It runs on a runtime, from your project folder." },
     { icon: "sites", title: "Site", href: "#/sites", text: "A local address like shop.localhost that leads to a service, a port or a folder. Caddy or nginx serves it." },
     { icon: "folder", title: "Data folder", href: "#/settings", text: "Everything Zero2Dev keeps (settings, logs, databases, editor settings) sits next to zero2dev.exe. Move the folder to move it all." },
+    { icon: "history", title: "Snapshot", href: "#/projects", text: "A saved copy of a project's services, runtime versions, sites and database data. Restore it to undo a risky change, or clone it into a second project." },
+    { icon: "download", title: "Bring in", href: "#/migrate", text: "Copy or move the settings of your installed VS Code, Notepad++, HeidiSQL or DBeaver, a runtime or a database into Zero2Dev. Every step can be reverted." },
   ];
 
   const FIXES = [
     { q: "A service says the port is already in use", a: "Another program (or another service) uses that port. Stop it, or give the service a different port in its settings." },
     { q: "Downloads fail on a company network", a: "Set the download proxy under Settings > Downloads. Zero2Dev does not read the Windows proxy setting. Or download the file in your browser and use Import it on the runtime's row." },
     { q: "The browser warns about an HTTPS site", a: "The local certificate is not trusted yet. Switch on trust under Settings > HTTPS, or import the certificate shown there into Windows yourself." },
+    { q: "An import or a change broke the database", a: "If you took a snapshot first (Zero2Dev offers one before an import or a reset), restore it from the service's Snapshots box or the project's Snapshots page." },
     { q: "PHP will not start", a: "PHP for Windows needs the Microsoft Visual C++ Redistributable (x64). Install it from Microsoft, then start the service again." },
     { q: "Where did Zero2Dev go? I closed the browser", a: "It keeps running in the notification area (the Zero2Dev icon next to the clock). Click it to open the dashboard again, or right-click it to quit." },
   ];

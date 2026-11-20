@@ -2,9 +2,7 @@
 
 ## 0.0.5
 
-<!-- Each part writes its bullets between its own markers; the markers go when 0.0.5 is finished. -->
-
-<!-- db-backend + db-ui: databases (create, users, import, export, reset, password) -->
+### Databases
 
 - **Database tools in the daemon.** `GET /api/services/{id}/database` lists a running MariaDB, MySQL or PostgreSQL server's databases (with sizes) and users. New routes create a database, or a user with every privilege on one database. Zero2Dev runs the server's own client programs (`mariadb`/`mysql`, `psql`, `redis-cli`) from the runtime's folder, with no console window. Every run is logged to the service's log.
 - **Import and export dumps as jobs.** An import reads a `.sql` file, or a gzip-compressed one recognised by its first bytes, and can create the database first. Its progress follows the bytes read. An export uses `mariadb-dump --single-transaction --routines --triggers` or `pg_dump --no-owner`, gzips when the name ends in `.gz`, and writes through `<file>.tmp`, so a failed export never leaves half a file. An existing file is kept unless `overwrite` is set.
@@ -16,9 +14,7 @@
 - **Administrator password.** **Set password**, **Change password** and **Remove password** while the server runs, on Redis too. **Connection** shows the password hidden, with **Show** and **Copy**, and the URL includes it (URL-escaped). The hint under it says what the password changes.
 - **Reset a database.** A danger button, only while the service is stopped, behind a confirmation that names the databases and the data folder it deletes. A snapshot is offered first, as before an import.
 
-<!-- /databases -->
-
-<!-- snapshot-backend + snapshot-ui: snapshots, restore, clone, offers before risky actions -->
+### Snapshots
 
 - **Snapshots** of a project or a database service: its services' settings, the runtime each one used, its database data folders, its `php.ini` files and its sites, kept in `snapshots\<owner>\<snapshot>\` inside the data folder. With "restart", running services are stopped in the project's stop order and started again afterwards.
 - **Restore** puts the settings, data folders, `php.ini` files, sites and the project's members back. It pins each service to the runtime it used and recreates deleted services with their old ids. It refuses while a needed runtime is not installed, and a failed restore puts the data folders back as they were.
@@ -30,15 +26,14 @@
 - **Make default** on a runtime now asks first when services follow that default. It lists the affected projects and takes a snapshot of each one you keep ticked.
 - **Take a snapshot first?** is offered before a database import or reset.
 
-<!-- /snapshots -->
+### Mailpit
 
-<!-- mailpit -->
 - **Mailpit** catches the e-mails your apps send. Install it from the new **Mail** group on the Runtimes page (Mailpit 1.33.0 built in, newer versions from its GitHub releases), then add a Mailpit service: the web inbox on port 8025, SMTP on 1025, the messages in the service's data folder.
 - A Mailpit service page shows **Sending mail**: the SMTP host and port, no login, the inbox link and the `MAIL_MAILER` / `MAIL_HOST` / `MAIL_PORT` lines to copy into `.env`.
 - The start is refused when the SMTP port is taken or equals the web port. The health check asks Mailpit's `/livez`.
-<!-- /mailpit -->
 
-<!-- migrate-backend + migrate-ui: Bring in -->
+### Bring in
+
 - **Bring in** page (`#/migrate`): lists what was found on this PC (editors and tools, registered runtimes, caches and global packages, databases on another server) with each item's size and where it goes. Choose **Copy** (keep the originals) or **Move**; Move is greyed out with the reason for runtimes and databases. Blockers such as "Install VS Code in Zero2Dev first" or "Close VS Code first" come with a link or a **Check again** button, and a warning says when Zero2Dev's folder already holds data (it is saved first).
 - Nothing starts before a review dialog that says what will happen ("This copies 414 MB ..."). Progress shows while the job runs, and a notice says what was done.
 - Databases: a form for the server (type, host, port, user, password), **List databases**, then pick the databases and the Zero2Dev service to copy into, with a check for each field.
@@ -55,8 +50,6 @@
   - Reverting offers discard, copy back or move back. Originals are saved before they are touched.
 - **HeidiSQL.** The registry key is written as HeidiSQL's own `portable_settings.txt`. A move removes the key after saving a `.reg` backup of it.
 - **Portable caches.** After such a migration, Zero2Dev's Node.js, PHP and Go services can get `npm_config_prefix` and the global folder on `PATH`, `COMPOSER_HOME`, or `GOMODCACHE`/`GOCACHE` in the data folder (`Settings.portable`).
-
-<!-- /migrate -->
 
 ## 0.0.4
 

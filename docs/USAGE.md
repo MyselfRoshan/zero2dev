@@ -258,7 +258,6 @@ A MariaDB, MySQL or PostgreSQL service page has a **Databases** section. It list
 
 **Reset** deletes the server's data folder: every database, every user and the password. The confirmation names the databases and the folder. The next start sets the server up again, empty and without a password. Stop the service first. Zero2Dev offers to take a snapshot before a reset or an import, so you can go back.
 
-<!-- mailpit: "### Catch e-mails with Mailpit" goes here. -->
 
 ### Catch e-mails with Mailpit
 
@@ -298,7 +297,6 @@ The list shows each snapshot's name, when it was taken, its size, its services a
 - **Make default** on a runtime, when services follow that kind's default: the dialog lists the projects whose services switch versions and takes a snapshot of each one you keep ticked, then switches the default.
 - Importing a dump into a database, or resetting it: **Take a snapshot first?** offers **Take snapshot and continue**, **Continue without** and **Cancel**. The action goes ahead only once the snapshot is finished.
 
-<!-- migrate-ui: "## Bring in: use your installed VS Code and other programs in Zero2Dev" goes here (copy or move, revert). -->
 
 ## Bring in: use your installed VS Code and other programs in Zero2Dev
 

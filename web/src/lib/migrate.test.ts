@@ -167,6 +167,12 @@ describe("blockers", () => {
     });
     expect(blockerAction("Close VS Code first")).toEqual({ type: "recheck", label: "Check again" });
     expect(blockerAction("Create a MariaDB, MySQL or PostgreSQL service in Zero2Dev first").type).toBe("link");
+    // the daemon's own wording (internal/migrate)
+    expect(blockerAction("Add a MariaDB, MySQL or PostgreSQL service in Zero2Dev first")).toEqual({
+      type: "link",
+      href: "#/services/new",
+      label: "New service",
+    });
     expect(blockerAction("Something else")).toEqual({ type: "none" });
   });
 });
