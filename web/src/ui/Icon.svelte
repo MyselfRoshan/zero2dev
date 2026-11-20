@@ -60,6 +60,7 @@
   import upload from "@iconify-icons/lucide/upload";
   import userPlus from "@iconify-icons/lucide/user-plus";
   import history from "@iconify-icons/lucide/history";
+  import move from "@iconify-icons/lucide/arrow-right-left";
 
   type Props = { name: string; size?: number; label?: string };
   let { name, size = 16, label }: Props = $props();
@@ -69,8 +70,7 @@
     info, power, grid, list, help, book, activity, database, arrowRight, lightbulb, rocket, lifebuoy,
     circleCheck, clock, compass, playCircle, sun, moon, monitor, palette, projects, terminal, variable,
     chevronUp, chevronDown, reorder, undo, sparkles,
-    eye, eyeOff, upload, userPlus,
-    history,
+    eye, eyeOff, upload, userPlus, history, move,
   };
   const icon = $derived(icons[name as keyof typeof icons]);
 </script>
