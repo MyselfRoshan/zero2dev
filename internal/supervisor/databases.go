@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"zero2dev/internal/model"
+	"zero2dev/internal/store"
 )
 
 // Databases run as ordinary services, plus three things a plain process does
@@ -145,7 +146,111 @@ func (s *Supervisor) initDB(id string, p *dbPlan, env []string) error {
 		return fmt.Errorf("creating the database files failed (%s): %v; see the service log", p.initDesc, err)
 	}
 	s.logLine(id, "system", "database files created in "+p.data)
+	s.clearAdminPassword(id)
 	return nil
+}
+
+// clearAdminPassword forgets the stored administrator password of a MariaDB,
+// MySQL or PostgreSQL service whose data files were just created: the new
+// database has none (its password lives in those files). Redis keeps its
+// password, which is passed on its command line.
+func (s *Supervisor) clearAdminPassword(id string) {
+	cleared := false
+	_ = s.st.Update(func(d *store.Data) error {
+		for i := range d.Services {
+			if sv := &d.Services[i]; sv.ID == id && sv.AdminPassword != "" && sv.Kind != "redis" {
+				sv.AdminPassword, cleared = "", true
+			}
+		}
+		return nil
+	})
+	if cleared {
+		s.logLine(id, "system", "the stored administrator password was cleared: the new database has none")
+		s.em.Publish("services.changed", struct{}{})
+	}
+}
+
+// adminPassword returns the stored administrator password and kind of a service.
+func (s *Supervisor) adminPassword(id string) (pw, kind string) {
+	for _, sv := range s.st.Snapshot().Services {
+		if sv.ID == id {
+			return sv.AdminPassword, sv.Kind
+		}
+	}
+	return "", ""
+}
+
+// withAdminPassword adds the service's current administrator password to the
+// environment of a helper program (the clean stop runs mariadb-admin /
+// mysqladmin with MYSQL_PWD and redis-cli with REDISCLI_AUTH). It is read at
+// the time of the call, so a password set while the server runs is used by
+// its stop. Never on a command line, never logged.
+func (s *Supervisor) withAdminPassword(id string, env []string) []string {
+	pw, kind := s.adminPassword(id)
+	if pw == "" {
+		return env
+	}
+	out := append([]string{}, env...)
+	switch kind {
+	case "mariadb", "mysql":
+		out = append(out, "MYSQL_PWD="+pw)
+	case "postgres":
+		out = append(out, "PGPASSWORD="+pw)
+	case "redis":
+		out = append(out, "REDISCLI_AUTH="+pw)
+	}
+	return out
+}
+
+// dbStartArgs are arguments Zero2Dev adds to a database server's command
+// line: --requirepass for a Redis service with an administrator password.
+func dbStartArgs(svc model.Service) []string {
+	if svc.Kind == "redis" && svc.AdminPassword != "" {
+		return []string{"--requirepass", svc.AdminPassword}
+	}
+	return nil
+}
+
+// Masked is how the command preview and the start log show a password.
+const Masked = "********"
+
+// maskArgs hides the value after --requirepass.
+func maskArgs(args []string) []string {
+	out := append([]string{}, args...)
+	for i := 0; i+1 < len(out); i++ {
+		if strings.EqualFold(out[i], "--requirepass") {
+			out[i+1] = Masked
+		}
+	}
+	return out
+}
+
+// maskEnv hides the database password in the variables Zero2Dev sets
+// (DB_PASSWORD, and the password part of DATABASE_URL / REDIS_URL).
+func maskEnv(env []string) []string {
+	out := append([]string{}, env...)
+	for i, kv := range out {
+		k, v, _ := strings.Cut(kv, "=")
+		switch k {
+		case "DB_PASSWORD":
+			if v != "" && v != "(hidden)" {
+				out[i] = k + "=" + Masked
+			}
+		case "DATABASE_URL", "REDIS_URL":
+			scheme, rest, ok := strings.Cut(v, "://")
+			if !ok {
+				continue
+			}
+			at := strings.LastIndex(rest, "@")
+			if at < 0 {
+				continue
+			}
+			if user, _, hasPw := strings.Cut(rest[:at], ":"); hasPw {
+				out[i] = k + "=" + scheme + "://" + user + ":" + Masked + rest[at:]
+			}
+		}
+	}
+	return out
 }
 
 // runTool runs a helper program of a database (setup or shutdown), sending
@@ -154,7 +259,7 @@ func (s *Supervisor) runTool(id, bin string, args, env []string, timeout time.Du
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, bin, args...) // never a shell
-	cmd.Env = env
+	cmd.Env = s.withAdminPassword(id, env)
 	cmd.Dir = filepath.Dir(bin)
 	configure(cmd)
 	out, err := cmd.StdoutPipe()

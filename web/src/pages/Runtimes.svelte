@@ -19,6 +19,7 @@
   import { CARD_KINDS, filterKinds, kindLabel, RUNTIME_GROUPS, sourceErrors, type RuntimeFilter } from "../lib/catalog";
   import { getRuntimeView, setRuntimeView, type RuntimeView } from "../lib/ux";
   import { hashParam } from "../lib/router.svelte";
+  import { adoptHref } from "../lib/migrate";
   import RuntimeKindCard from "./RuntimeKindCard.svelte";
   import { RUNTIME_KINDS, type CatalogEntry, type DetectedRuntime, type Runtime, type RuntimeKind } from "../lib/types";
   import { hasErrors, validateRegister, type RegisterField } from "../lib/validate";
@@ -74,6 +75,9 @@
   }
   const known = $derived(new Set(lists.runtimes.map((r) => r.binary.toLowerCase())));
   const detectedLabel = (d: DetectedRuntime) => (d.name === "nginx" ? "nginx" : kindLabel(d.kind));
+  // The registered runtime a detected program became (Adopt links to Import with it preselected).
+  const registeredAt = (d: DetectedRuntime) =>
+    lists.runtimes.find((r) => r.source === "registered" && r.binary.toLowerCase() === d.binary.toLowerCase());
   async function registerDetected(d: DetectedRuntime) {
     const kind = (RUNTIME_KINDS as string[]).includes(d.kind) ? (d.kind as RuntimeKind) : "other";
     const r = await attempt(() => api.registerRuntime({ kind, binary: d.binary, version: d.version || undefined }), `${kind} ${d.version} registered.`);
@@ -140,7 +144,9 @@
                 <td class="path">{d.binary}</td>
                 <td class="actions">
                   {#if known.has(d.binary.toLowerCase())}
+                    {@const reg = registeredAt(d)}
                     <span class="badge running"><span class="dot"></span>Registered</span>
+                    {#if reg}<a class="btn sm adopt" href={adoptHref(reg.id)} data-testid="adopt-runtime" aria-label="Adopt {detectedLabel(d)} {d.version} into Zero2Dev">Adopt into Zero2Dev</a>{/if}
                   {:else}
                     <button class="btn sm" onclick={() => registerDetected(d)} aria-label="Register {detectedLabel(d)} {d.version}"><Icon name="plus" size={14} /> Register</button>
                   {/if}
@@ -150,7 +156,7 @@
           </tbody>
         </table>
       </div>
-      <p class="card-pad small muted foot">Registering only remembers the path; nothing is copied or changed.</p>
+      <p class="card-pad small muted foot">Registering only remembers the path; nothing is copied or changed. <b>Adopt</b> copies a registered program into Zero2Dev's folder, and <a href="#/migrate" data-testid="bring-in-hint">Import from this PC</a> does the same for your editors' settings and package caches.</p>
     {/if}
   </section>
 {/if}
@@ -261,6 +267,9 @@
   }
   .detect .foot {
     padding-top: 8px;
+  }
+  .detect .adopt {
+    margin-left: 8px;
   }
   .toolbar {
     display: flex;

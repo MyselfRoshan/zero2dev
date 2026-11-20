@@ -10,7 +10,8 @@ import assert from "node:assert/strict";
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
 
-const PORT = 7101;
+// E2E_PORT lets several checkouts run the test at the same time.
+const PORT = Number(process.env.E2E_PORT) || 7101;
 const BASE = `http://127.0.0.1:${PORT}`;
 const SHOTS = process.env.SHOTS_DIR || path.join(os.tmpdir(), "zero2dev-e2e-shots");
 fs.mkdirSync(SHOTS, { recursive: true });
@@ -103,6 +104,7 @@ await step("runtimes: a card per kind, first check, version list per kind", asyn
     "node", "php", "go", "java", // languages
     "caddy", "nginx", // web servers
     "mariadb", "mysql", "postgres", "redis", // databases
+    "mailpit", // mail
     "vscode", "vscodium", "notepadpp", // code editors
     "heidisql", "dbeaver", // database tools
   ]);
@@ -358,7 +360,7 @@ await step("create a service (validation first, then success)", async () => {
   await page.getByLabel("Script", { exact: true }).fill("server.js");
   await page.getByLabel("Project folder", { exact: true }).fill("C:\\work\\demo");
   await page.getByText(/Your app's code, with package.json/).waitFor();
-  await page.getByLabel("Port").fill("3100");
+  await page.locator("#main").getByLabel("Port").fill("3100");
   await page
     .getByTestId("preview-command")
     .getByText(/node\.exe server\.js/)
@@ -508,7 +510,7 @@ await step("port conflict shows a clear message", async () => {
   await page.getByLabel("Name", { exact: true }).fill("Second");
   await page.getByLabel("Program").fill("C:\\tools\\x.exe");
   await page.getByLabel("Working folder", { exact: true }).fill("C:\\work\\second");
-  await page.getByLabel("Port").fill("3100");
+  await page.locator("#main").getByLabel("Port").fill("3100");
   await page.getByRole("button", { name: "Create service" }).click();
   await page.locator('tr[data-service="Second"]').waitFor();
   await page.locator('tr[data-service="Second"]').getByRole("button", { name: "Start Second", exact: true }).click();
@@ -580,7 +582,7 @@ await step("php 8.4.1 and 7.1.33 side by side: default, per-service version, rem
   assert.deepEqual(ropts, ["Default (PHP 7.1.33)", "PHP 8.4.1", "PHP 7.1.33 (default)"]);
   await page.getByLabel("Version").selectOption({ label: "PHP 8.4.1" });
   await page.getByLabel("Project folder", { exact: true }).fill("C:\\work\\legacy");
-  await page.getByLabel("Port").fill("8099");
+  await page.locator("#main").getByLabel("Port").fill("8099");
   await page.getByRole("button", { name: "Create service" }).click();
   const row = page.locator('tr[data-service="Legacy PHP"]');
   await row.getByTestId("svc-runtime").getByText("PHP 8.4.1").waitFor();
@@ -732,7 +734,7 @@ await step("reconnect: daemon outage shows banner, recovers with fresh ticket", 
 await step("dashboard with data + dark mode + narrow width", async () => {
   await page.goto(BASE + "/#/dashboard");
   await page.locator(".svc").first().waitFor();
-  await page.getByText("v0.0.4").waitFor();
+  await page.getByText("v0.0.5").waitFor();
   await shot(page, "01-dashboard");
   await page.emulateMedia({ colorScheme: "dark" });
   await shot(page, "09-dashboard-dark");
@@ -1487,6 +1489,15 @@ await step(
       .waitFor();
   },
 );
+
+// ---- 0.0.5: each feature's steps live in e2e/steps/*.mjs ----
+{
+  const t = { page, BASE, step, apiCall, shot, assert, customService, serviceRow, pickType };
+  for (const f of ["mail", "databases", "snapshots", "migrate"]) {
+    const { default: steps } = await import(`./steps/${f}.mjs`);
+    await steps(t);
+  }
+}
 
 await step("no external network requests", async () => {
   assert.deepEqual(external, []);

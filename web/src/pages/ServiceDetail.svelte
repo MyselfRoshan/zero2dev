@@ -10,9 +10,13 @@
   import type { CommandPreview, Runtime, Service, ServiceInput } from "../lib/types";
   import { fmtDateTime } from "../lib/format";
   import { navigate } from "../lib/router.svelte";
-  import { app, attempt, clearLogs, lists, logs, seedLogs, toast, upsertService } from "../lib/store.svelte";
+  import { app, attempt, clearLogs, lists, logs, seedLogs, upsertService } from "../lib/store.svelte";
   import ConfirmDialog from "../ui/ConfirmDialog.svelte";
+  import ConnectionInfo from "../ui/ConnectionInfo.svelte";
   import CrashBanner from "../ui/CrashBanner.svelte";
+  import DatabaseTools from "../ui/DatabaseTools.svelte";
+  import MailInfo from "../ui/MailInfo.svelte";
+  import ServiceSnapshots from "../ui/ServiceSnapshots.svelte";
   import Icon from "../ui/Icon.svelte";
   import KindIcon from "../ui/KindIcon.svelte";
   import LogViewer from "../ui/LogViewer.svelte";
@@ -85,14 +89,6 @@
     if (saved) upsertService(saved);
     guided = null;
   }
-  async function copy(text: string) {
-    try {
-      await navigator.clipboard.writeText(text);
-      toast("success", "Connection URL copied.");
-    } catch {
-      toast("error", "Could not copy to the clipboard in this browser context.");
-    }
-  }
   const dbTools = $derived(service ? dbToolsFor(lists.runtimes, service.kind) : []);
   async function openIn(r: Runtime, body: { path?: string; serviceId?: string }) {
     await attempt(() => api.launchRuntime(r.id, body), `Opening in ${kindLabel(r.kind)}.`);
@@ -160,19 +156,13 @@
       {#if command?.dataDir}<div class="wide"><dt>Data folder</dt><dd class="mono" data-testid="data-dir">{command.dataDir}</dd></div>{/if}
       {#if command?.warnings.length}<div class="wide"><dt>Notes</dt><dd>{#each command.warnings as w (w)}<div class="small muted">{w}</div>{/each}</dd></div>{/if}
     </dl>
-    {#if conn}
-      <section class="conn" aria-labelledby="conn-h" data-testid="connection">
-        <h3 id="conn-h">Connection</h3>
-        <dl>
-          <div><dt>Host</dt><dd class="mono">{conn.host}</dd></div>
-          <div><dt>Port</dt><dd class="mono">{conn.port}</dd></div>
-          <div><dt>User</dt><dd class="mono">{conn.user || "none"}</dd></div>
-          <div class="wide"><dt>URL</dt><dd class="row"><code class="mono" data-testid="connection-url">{conn.url}</code><button class="btn sm ghost" type="button" onclick={() => copy(conn.url)}><Icon name="copy" size={14} /> Copy</button></dd></div>
-        </dl>
-        <p class="hint">No password: the server only accepts connections from this PC (127.0.0.1). Its files are in <code class="mono">{dataDir}</code>.</p>
-      </section>
-    {/if}
+    <ConnectionInfo {service} {dataDir} />
+    <MailInfo {service} />
   </div>
+
+  <!-- 0.0.5: each of these renders nothing for a service it does not apply to. -->
+  <DatabaseTools {service} />
+  <ServiceSnapshots {service} />
 
   <h2 class="lh">Live output</h2>
   <div class="vh">
@@ -235,20 +225,6 @@
   }
   dl .wide {
     grid-column: 1 / -1;
-  }
-  .conn {
-    border-top: 1px solid var(--line);
-    padding-top: 12px;
-    display: grid;
-    gap: 8px;
-  }
-  .conn h3 {
-    margin: 0;
-    font-size: 14px;
-  }
-  .conn .row {
-    gap: 8px;
-    align-items: center;
   }
   dt {
     font-size: 12px;

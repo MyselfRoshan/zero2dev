@@ -85,6 +85,9 @@ func (s *Server) updateService(w http.ResponseWriter, r *http.Request) error {
 		}
 		return apperr.Conflict("service is %s; stop it before editing", st)
 	}
+	if err := s.Sup.Busy(id); err != nil { // a snapshot, restore or reset holds it
+		return err
+	}
 	var updated model.Service
 	err := s.Store.Update(func(d *store.Data) error {
 		for i := range d.Services {
@@ -96,6 +99,7 @@ func (s *Server) updateService(w http.ResponseWriter, r *http.Request) error {
 				return err
 			}
 			sv.ID = id
+			sv.AdminPassword = d.Services[i].AdminPassword // only the password route changes it
 			d.Services[i] = sv
 			updated = sv
 			return nil
@@ -114,6 +118,9 @@ func (s *Server) updateService(w http.ResponseWriter, r *http.Request) error {
 func (s *Server) deleteService(w http.ResponseWriter, r *http.Request) error {
 	id := r.PathValue("id")
 	if _, err := s.view(id); err != nil {
+		return err
+	}
+	if err := s.Sup.Busy(id); err != nil {
 		return err
 	}
 	if err := s.Sup.Remove(id); err != nil { // stops it and removes its logs

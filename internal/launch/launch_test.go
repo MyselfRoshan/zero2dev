@@ -52,3 +52,21 @@ func TestStartReturnsWithoutWaiting(t *testing.T) {
 		t.Fatalf("a missing program must be reported: %v", err)
 	}
 }
+
+func TestConnectArgsWithPassword(t *testing.T) {
+	maria := model.Service{Name: "Shop DB", Kind: "mariadb", Port: 3307, AdminPassword: "s3cret"}
+	got, _ := ConnectArgs("heidisql", maria)
+	if strings.Join(got, " ") != "--nettype=0 --description=Shop DB --host=127.0.0.1 --port=3307 --user=root --password=s3cret" {
+		t.Errorf("heidisql: %q", got)
+	}
+	got, _ = ConnectArgs("dbeaver", maria)
+	if strings.Join(got, " ") != "-con driver=MariaDB|host=127.0.0.1|port=3307|user=root|password=s3cret|name=Shop DB|connect=true" {
+		t.Errorf("dbeaver: %q", got)
+	}
+	// "|" cannot be written in DBeaver's -con string: DBeaver asks instead.
+	maria.AdminPassword = "a|b"
+	got, _ = ConnectArgs("dbeaver", maria)
+	if strings.Contains(strings.Join(got, " "), "password") {
+		t.Errorf("dbeaver with |: %q", got)
+	}
+}

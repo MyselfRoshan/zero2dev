@@ -19,7 +19,7 @@ import (
 
 // Default program names looked up on PATH per kind.
 var progName = map[string]string{"node": "node", "php": "php", "go": "go", "java": "java", "caddy": "caddy", "nginx": "nginx",
-	"mariadb": "mariadbd", "mysql": "mysqld", "postgres": "postgres", "redis": "redis-server"}
+	"mariadb": "mariadbd", "mysql": "mysqld", "postgres": "postgres", "redis": "redis-server", "mailpit": "mailpit"}
 
 // resolved is everything needed to spawn a service.
 type resolved struct {
@@ -59,7 +59,7 @@ func (s *Supervisor) Preview(svc model.Service) Preview {
 	for _, f := range r.files {
 		files = append(files, f.Path)
 	}
-	return Preview{Program: r.bin, Args: nonNil(r.args), Env: nonNil(r.shown), Workdir: r.workdir, DataDir: r.dataDir, Files: files, Warnings: nonNil(r.warnings)}
+	return Preview{Program: r.bin, Args: maskArgs(r.args), Env: maskEnv(r.shown), Workdir: r.workdir, DataDir: r.dataDir, Files: files, Warnings: nonNil(r.warnings)}
 }
 
 func nonNil(s []string) []string {
@@ -164,7 +164,7 @@ func (s *Supervisor) resolveWith(svc model.Service, d store.Data, lenient bool) 
 	r.bin, r.args = bin, plan.Args
 
 	// Order (later wins): runtime home, kind settings, database, .env, user Env, PORT.
-	added, shown, warns, info, err := serviceVars(svc, d, rtUsed, plan.Env, lenient)
+	added, shown, warns, info, err := s.serviceVarsWithHome(svc, d, rtUsed, plan.Env, lenient)
 	if err != nil {
 		return nil, err
 	}
@@ -200,6 +200,7 @@ func (s *Supervisor) resolveWith(svc model.Service, d store.Data, lenient bool) 
 		r.workdir = s.home
 	}
 	r.db = s.planDB(svc, bin, svc.CustomArgs)
+	r.args = append(r.args, dbStartArgs(svc)...) // Redis: --requirepass when it has a password
 	return r, nil
 }
 

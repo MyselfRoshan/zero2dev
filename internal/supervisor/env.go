@@ -1,11 +1,16 @@
 package supervisor
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
 
+	"zero2dev/internal/kinds"
 	"zero2dev/internal/model"
 	"zero2dev/internal/store"
 )
@@ -31,6 +36,7 @@ func (s *Supervisor) Environ(svc model.Service) ([]string, error) {
 //  1. the runtime home: JAVA_HOME (java) or GOROOT (go), only when the service
 //     uses a Zero2Dev runtime (rt != nil)
 //  2. the kind's own variables from its settings (plan, e.g. NODE_ENV)
+//     2b. the portable folders switched on in Settings.Portable (see portableVars)
 //  3. the database variables of Service.DatabaseID
 //  4. the .env file (Service.EnvFile, relative to the folder)
 //  5. the user's own Env ({port} is replaced)
@@ -43,7 +49,21 @@ func (s *Supervisor) Environ(svc model.Service) ([]string, error) {
 // the values of secret-looking .env variables hidden. warnings are for the
 // preview and the start log, info lines for the start log only. A .env path
 // that leaves the folder is an error unless lenient.
+//
+// serviceVars itself cannot add step 2b: it does not know the data folder.
+// resolve gets it by calling s.serviceVarsWithHome instead (the same with
+// s.home).
 func serviceVars(svc model.Service, d store.Data, rt *model.Runtime, planEnv []string, lenient bool) (added, shown, warnings, info []string, err error) {
+	return serviceVarsHome("", svc, d, rt, planEnv, lenient)
+}
+
+// serviceVarsWithHome is serviceVars with the portable folders of step 2b.
+func (s *Supervisor) serviceVarsWithHome(svc model.Service, d store.Data, rt *model.Runtime, planEnv []string, lenient bool) (added, shown, warnings, info []string, err error) {
+	return serviceVarsHome(s.home, svc, d, rt, planEnv, lenient)
+}
+
+// serviceVarsHome is serviceVars for the data folder home ("": no portable folders).
+func serviceVarsHome(home string, svc model.Service, d store.Data, rt *model.Runtime, planEnv []string, lenient bool) (added, shown, warnings, info []string, err error) {
 	add := func(kv string) { added, shown = append(added, kv), append(shown, kv) }
 	if rt != nil {
 		if name, dir := model.RuntimeHome(*rt); name != "" {
@@ -52,6 +72,10 @@ func serviceVars(svc model.Service, d store.Data, rt *model.Runtime, planEnv []s
 	}
 	for _, e := range planEnv {
 		add(e)
+	}
+	if home != "" {
+		pAdded, pShown := portableVars(home, svc.Kind, d.Settings.Portable, rt, os.Environ())
+		added, shown = append(added, pAdded...), append(shown, pShown...)
 	}
 	dbVars, w := databaseEnv(svc, d)
 	if w != "" {
@@ -113,4 +137,98 @@ func displayValue(key, value string) string {
 		}
 	}
 	return value
+}
+
+// portableRule is one entry of a kind's "portable" list in profiles.json:
+// what a service of that kind gets while Settings.Portable.<setting> is on
+// (Import switches it on, its revert off). {home} is the data folder.
+type portableRule struct {
+	Setting string           `json:"setting"` // npmGlobal | composer | goCache
+	Env     []kinds.FixedEnv `json:"env"`
+	Path    string           `json:"path,omitempty"` // a folder put first on PATH
+	Help    string           `json:"help"`
+}
+
+// portableRules maps a kind to its rules, read once from profiles.json.
+var portableRules = func() map[string][]portableRule {
+	var list []struct {
+		Kind     string         `json:"kind"`
+		Portable []portableRule `json:"portable"`
+	}
+	if err := json.Unmarshal(kinds.JSON(), &list); err != nil {
+		panic("supervisor: profiles.json: " + err.Error())
+	}
+	out := map[string][]portableRule{}
+	for _, k := range list {
+		if len(k.Portable) > 0 {
+			out[k.Kind] = k.Portable
+		}
+	}
+	return out
+}()
+
+func portableOn(p model.Portable, setting string) bool {
+	switch setting {
+	case "npmGlobal":
+		return p.NpmGlobal
+	case "composer":
+		return p.Composer
+	case "goCache":
+		return p.GoCache
+	}
+	return false
+}
+
+// portableVars is what Settings.Portable adds for a service of kind: the
+// variables of its rules that are on, and a PATH with their folders first.
+// The PATH entry is the whole value (the folders, the runtime's folder that
+// resolve puts first, then the daemon's PATH from environ) because the last
+// value of a name wins; the preview shows it as "<folders>;%PATH%".
+func portableVars(home, kind string, p model.Portable, rt *model.Runtime, environ []string) (added, shown []string) {
+	expand := func(v string) string {
+		return filepath.FromSlash(strings.ReplaceAll(v, "{home}", filepath.ToSlash(home)))
+	}
+	var dirs []string
+	for _, r := range portableRules[kind] {
+		if !portableOn(p, r.Setting) {
+			continue
+		}
+		for _, e := range r.Env {
+			kv := e.Name + "=" + expand(e.Value)
+			added, shown = append(added, kv), append(shown, kv)
+		}
+		if r.Path != "" {
+			dirs = append(dirs, expand(r.Path))
+		}
+	}
+	if len(dirs) == 0 {
+		return added, shown
+	}
+	name, cur := "PATH", ""
+	for _, kv := range environ {
+		if k, v, ok := strings.Cut(kv, "="); ok && strings.EqualFold(k, "PATH") {
+			name, cur = k, v
+		}
+	}
+	if rt != nil && rt.Binary != "" {
+		cur = joinList(filepath.Dir(rt.Binary), cur)
+	}
+	sep := string(os.PathListSeparator)
+	rest := "$PATH"
+	if runtime.GOOS == "windows" {
+		rest = "%PATH%"
+	}
+	added = append(added, name+"="+joinList(strings.Join(dirs, sep), cur))
+	shown = append(shown, name+"="+strings.Join(dirs, sep)+sep+rest)
+	return added, shown
+}
+
+func joinList(a, b string) string {
+	if b == "" {
+		return a
+	}
+	if a == "" {
+		return b
+	}
+	return a + string(os.PathListSeparator) + b
 }

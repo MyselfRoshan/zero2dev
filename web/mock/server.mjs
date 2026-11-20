@@ -8,6 +8,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
 import { PHP_EXTENSIONS, PROFILES, preview, profileOf, validateSettings } from "./kinds.mjs";
+import * as databasesFeature from "./features/databases.mjs";
+import * as snapshotsFeature from "./features/snapshots.mjs";
+import * as migrationsFeature from "./features/migrations.mjs";
 
 const PORT = Number(process.env.MOCK_PORT || 7000);
 const TOKEN = process.env.MOCK_TOKEN || "devtoken";
@@ -80,6 +83,7 @@ const KINDS = [
   "mysql",
   "postgres",
   "redis",
+  "mailpit",
   "vscode",
   "vscodium",
   "notepadpp",
@@ -101,6 +105,7 @@ function ext(kind, version, line, channel, source, o = {}) {
     mysql: `https://cdn.mysql.com/Downloads/MySQL-${line}/mysql-${version}-winx64.zip`,
     postgres: `https://get.enterprisedb.com/postgresql/postgresql-${version}-1-windows-x64-binaries.zip`,
     redis: gh("redis-windows/redis-windows", version, `Redis-${version}-Windows-x64-msys2.zip`),
+    mailpit: gh("axllent/mailpit", "v" + version, "mailpit-windows-amd64.zip"),
     vscode: `https://vscode.download.prss.microsoft.com/dbazure/download/stable/x/VSCode-win32-x64-${version}.zip`,
     vscodium: gh("VSCodium/vscodium", version, `VSCodium-win32-x64-${version}.zip`),
     notepadpp: gh("notepad-plus-plus/notepad-plus-plus", "v" + version, `npp.${version}.portable.x64.zip`),
@@ -118,6 +123,7 @@ function ext(kind, version, line, channel, source, o = {}) {
     mysql: "MySQL",
     postgres: "PostgreSQL",
     redis: "Redis",
+    mailpit: "Mailpit",
     vscode: "VS Code",
     vscodium: "VSCodium",
     notepadpp: "Notepad++",
@@ -149,6 +155,7 @@ function ext(kind, version, line, channel, source, o = {}) {
       mysql: "bin/mysqld.exe",
       postgres: "bin/postgres.exe",
       redis: "redis-server.exe",
+      mailpit: "mailpit.exe",
       vscode: "Code.exe",
       vscodium: "VSCodium.exe",
       notepadpp: "notepad++.exe",
@@ -182,6 +189,7 @@ const BUILTIN = [
   ext("mysql", "8.4.13", "8.4", "lts", "builtin"),
   ext("postgres", "17.11", "17", "", "builtin"),
   ext("redis", "8.10.3", "", "", "builtin"),
+  ext("mailpit", "1.33.0", "", "", "builtin"),
   ext("vscode", "1.145.0", "", "", "builtin"),
   ext("vscodium", "1.143.17232", "", "", "builtin"),
   ext("notepadpp", "8.9.8.1", "", "", "builtin"),
@@ -200,6 +208,7 @@ const REMOTE = [
   ext("mariadb", "11.8.5", "11.8", "lts", "remote"),
   ext("postgres", "18.6", "18", "", "remote"),
   ext("vscode", "1.145.1", "", "", "remote"),
+  ext("mailpit", "1.34.0", "", "", "remote"),
 ];
 const discovered = new Set();
 const SOURCES = {
@@ -213,6 +222,7 @@ const SOURCES = {
   postgres: "www.enterprisedb.com",
   vscode: "update.code.visualstudio.com",
   redis: "github.com/redis-windows/redis-windows",
+  mailpit: "github.com/axllent/mailpit",
   vscodium: "github.com/VSCodium/vscodium",
   notepadpp: "github.com/notepad-plus-plus/notepad-plus-plus",
   heidisql: "github.com/HeidiSQL/HeidiSQL",
@@ -621,7 +631,20 @@ function validateLinks(b, selfId) {
   return null;
 }
 function validateService(b, selfId = "") {
-  const kinds = ["custom", "node", "php", "go", "java", "caddy", "nginx", "mariadb", "mysql", "postgres", "redis"];
+  const kinds = [
+    "custom",
+    "node",
+    "php",
+    "go",
+    "java",
+    "caddy",
+    "nginx",
+    "mariadb",
+    "mysql",
+    "postgres",
+    "redis",
+    "mailpit",
+  ];
   const allowed = [
     "name",
     "kind",
@@ -933,6 +956,52 @@ function ensureSitesNginx() {
   emit("services.changed");
 }
 
+// ---------- 0.0.5 feature modules ----------
+// fakeJob runs a job like the daemon's internal/jobs: it walks through steps (each ~ms long),
+// publishing job.progress, then job.done; work (may be async, may throw) runs at the end and
+// may return fields to set on the job (path, projectId ...). Returns the job as started.
+function fakeJob({ type, fields = {}, steps = ["Working"], ms = 400, work }) {
+  const job = {
+    id: id("job"),
+    type,
+    state: "running",
+    percent: 0,
+    step: steps[0],
+    error: "",
+    runtimeId: "",
+    ...fields,
+  };
+  jobs.set(job.id, job);
+  void (async () => {
+    for (let i = 0; i < steps.length; i++) {
+      await sleep(ms);
+      Object.assign(job, { step: steps[i], percent: Math.round(((i + 1) / (steps.length + 1)) * 100) });
+      emit("job.progress", { id: job.id, percent: job.percent, step: job.step });
+    }
+    try {
+      Object.assign(job, (await work?.(job)) ?? {}, { state: "done", percent: 100, error: "" });
+    } catch (e) {
+      Object.assign(job, { state: "failed", error: e instanceof Error ? e.message : String(e) });
+    }
+    const { id: jid, state: st, error, runtimeId, serviceId, projectId, snapshotId, migrationId, path: jpath } = job;
+    emit("job.done", {
+      id: jid,
+      state: st,
+      error,
+      runtimeId,
+      type,
+      serviceId,
+      projectId,
+      snapshotId,
+      migrationId,
+      path: jpath,
+    });
+  })();
+  return { ...job };
+}
+const FEATURES = [databasesFeature, snapshotsFeature, migrationsFeature];
+const featureCtx = { state, emit, send, fail, id, now, sleep, procs, setState, addLog, startProc, stopProc, fakeJob };
+
 // ---------- router ----------
 async function api(req, res, url) {
   const p = url.pathname;
@@ -959,6 +1028,8 @@ async function api(req, res, url) {
   let m2;
   const body = m === "POST" || m === "PUT" ? await readBody(req).catch(() => null) : undefined;
   if (body === null) return fail(res, 400, "bad_request", "invalid JSON");
+  // 0.0.5: each feature's routes live in their own module (mock/features/*.mjs).
+  for (const f of FEATURES) if (await f.handle(featureCtx, m, p, body, res, url)) return;
 
   if (m === "POST" && p === "/api/events/ticket") {
     const ticket = randomBytes(16).toString("hex");
@@ -967,7 +1038,7 @@ async function api(req, res, url) {
   }
   if (m === "GET" && p === "/api/status") {
     return send(res, 200, {
-      version: "0.0.4",
+      version: "0.0.5",
       uptimeSeconds: Math.floor((Date.now() - started) / 1000),
       os: THIS_PC.os,
       arch: THIS_PC.arch,

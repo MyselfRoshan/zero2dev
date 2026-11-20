@@ -224,6 +224,39 @@ func inOrder(have, want []string) bool {
 	return i == len(want)
 }
 
+func TestBuildMailpit(t *testing.T) {
+	c := ctx()
+	c.Port = "8025"
+	d := filepath.ToSlash(c.Data)
+	pl := Build("mailpit", nil, nil, c)
+	want := []string{"--listen", "127.0.0.1:8025", "--smtp", "127.0.0.1:1025", "--database", d + "/mailpit.db"}
+	if len(pl.Args) < len(want) || !slices.Equal(pl.Args[:len(want)], want) {
+		t.Fatalf("args %q, want prefix %q", pl.Args, want)
+	}
+	if !inOrder(pl.Args, []string{"--smtp-auth-accept-any", "--smtp-auth-allow-insecure", "--disable-version-check", "--max", "500"}) {
+		t.Errorf("args %q", pl.Args)
+	}
+	if !slices.Contains(pl.Dirs, c.Data) {
+		t.Errorf("the data folder must be created: %q", pl.Dirs)
+	}
+	pl = Build("mailpit", map[string]string{"smtpPort": "2525", "maxMessages": "0"}, []string{"--webroot", "/mail/"}, c)
+	if !inOrder(pl.Args, []string{"--smtp", "127.0.0.1:2525", "--max", "0", "--webroot", "/mail/"}) {
+		t.Errorf("settings: %q", pl.Args)
+	}
+	for _, bad := range []map[string]string{{"smtpPort": "0"}, {"smtpPort": "70000"}, {"smtpPort": "x"}} {
+		if Validate("mailpit", bad) == nil {
+			t.Errorf("%v must be refused", bad)
+		}
+	}
+	p, _ := Lookup("mailpit")
+	if p.Port.Default != 8025 || p.DataDir != "service" || !p.Health || p.Managed {
+		t.Errorf("profile %+v", p)
+	}
+	if HealthPath("mailpit", "") != "/livez" || HealthPath("mailpit", "/x") != "/x" || HealthPath("node", "") != "" || HealthPath("redis", "") != "" {
+		t.Error("HealthPath")
+	}
+}
+
 func TestBuildEnv(t *testing.T) {
 	c := ctx()
 	pl := Build("go", nil, nil, c)

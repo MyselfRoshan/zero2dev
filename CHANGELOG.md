@@ -1,7 +1,70 @@
 # Changelog
 
+## 0.0.5
+
+### Databases
+
+- **Database tools in the daemon.** `GET /api/services/{id}/database` lists a running MariaDB, MySQL or PostgreSQL server's databases (with sizes) and users. New routes create a database, or a user with every privilege on one database. Zero2Dev runs the server's own client programs (`mariadb`/`mysql`, `psql`, `redis-cli`) from the runtime's folder, with no console window. Every run is logged to the service's log.
+- **Import and export dumps as jobs.** An import reads a `.sql` file, or a gzip-compressed one recognised by its first bytes, and can create the database first. Its progress follows the bytes read. An export uses `mariadb-dump --single-transaction --routines --triggers` or `pg_dump --no-owner`, gzips when the name ends in `.gz`, and writes through `<file>.tmp`, so a failed export never leaves half a file. An existing file is kept unless `overwrite` is set.
+- **Reset a database.** While the service is stopped, its data folder is deleted, so the next start sets the database up again, empty. A reset is refused while an import, an export, a snapshot or a migration works on the service.
+- **Optional administrator password.** `PUT .../database/password` sets it for every `root` account, for `postgres`, or as Redis' `requirepass`. It then reaches the clean stop (`MYSQL_PWD`, `REDISCLI_AUTH`), `DB_PASSWORD`, the URL-escaped `DATABASE_URL` / `REDIS_URL`, and HeidiSQL and DBeaver. Redis is started with `--requirepass`. The command preview and the start log show the password as `********`. Passwords travel only in environment variables or stdin, never on a client's command line.
+- **Native Open and Save as dialogs** (`POST /api/dialog/file`), with file type filters, a suggested name and a start folder, for picking dumps.
+- **`dbtools.CopyFromServer`** pipes `mysqldump`/`pg_dump` from another server straight into a Zero2Dev database service. If it fails, it drops what it created. Import uses it.
+- **Databases on the service page.** A MariaDB, MySQL or PostgreSQL service page has a **Databases** section: the databases with their sizes and the users, **Create database**, **Create user** (with a generated password and all privileges on one database), **Import a dump** (`.sql` or `.sql.gz`, into an existing or a new database, with a progress bar) and **Export** (a name ending in `.gz` compresses it; an existing file is replaced only after a confirm). **Browse...** opens the Windows Open and Save as dialogs. Tools that need the running server are off while it is stopped, and the page says why.
+- **Administrator password.** **Set password**, **Change password** and **Remove password** while the server runs, on Redis too. **Connection** shows the password hidden, with **Show** and **Copy**, and the URL includes it (URL-escaped). The hint under it says what the password changes.
+- **Reset a database.** A danger button, only while the service is stopped, behind a confirmation that names the databases and the data folder it deletes. A snapshot is offered first, as before an import.
+
+### Snapshots
+
+- **Snapshots** of a project or a database service: its services' settings, the runtime each one used, its database data folders, its `php.ini` files and its sites, kept in `snapshots\<owner>\<snapshot>\` inside the data folder. With "restart", running services are stopped in the project's stop order and started again afterwards.
+- **Restore** puts the settings, data folders, `php.ini` files, sites and the project's members back. It pins each service to the runtime it used and recreates deleted services with their old ids. It refuses while a needed runtime is not installed, and a failed restore puts the data folders back as they were.
+- **Clone** a project snapshot into a new project, with new ids, links pointing at the copies, free ports, its own data copies and `-copy` domains.
+- **Snapshots** in the dashboard: a **Snapshots** button on each project opens its snapshots page. Take one (with a choice to stop running services and start them again), and see each snapshot's date, size, services, runtime versions and warnings.
+- **Restore** shows what changes first: settings, data, and the runtime version each service runs again. A missing runtime gets an **Install** button, and restoring is possible once none is missing.
+- **Clone** a project snapshot into a new project, with a preview of the new `-copy` domains and a note that both projects share the code folder.
+- A database service page has its own **Snapshots** box.
+- **Make default** on a runtime now asks first when services follow that default. It lists the affected projects and takes a snapshot of each one you keep ticked.
+- **Take a snapshot first?** is offered before a database import or reset.
+
+### Mailpit
+
+- **Mailpit** catches the e-mails your apps send. Install it from the new **Mail** group on the Runtimes page (Mailpit 1.33.0 built in, newer versions from its GitHub releases), then add a Mailpit service: the web inbox on port 8025, SMTP on 1025, the messages in the service's data folder.
+- A Mailpit service page shows **Sending mail**: the SMTP host and port, no login, the inbox link and the `MAIL_MAILER` / `MAIL_HOST` / `MAIL_PORT` lines to copy into `.env`.
+- The start is refused when the SMTP port is taken or equals the web port. The health check asks Mailpit's `/livez`.
+
+### Editors
+
+- **VS Code and VSCodium keep your settings however you start them.** Before, only **Open** in Zero2Dev used `data\code` / `data\codium`; double-clicking `Code.exe` in `bin` started without your extensions and settings. Each installed version now has a `data` link next to its exe that points there, which is VS Code's own portable mode. Zero2Dev makes it on install and repairs it at every start (for example after the folder moved). Removing a version deletes the link, never the settings.
+
+### Import from this PC
+
+- **A calmer Import from this PC page.** Two columns: the programs on the left, the plan of the open one in a side panel (under its row on a narrow screen). Programs and History are tabs. A summary shows what was found, what can come in, what is in and what the backups take. Blocked programs say why in plain words instead of an amber badge, and Copy / Move are two cards that explain themselves.
+- **What is worth importing.** Each item is labelled Recommended, Optional or Not worth it, with the reason, and only the recommended items are ticked at first. **Select recommended** picks the programs worth it.
+- **Several at once.** Tick programs (or Select recommended), review them together, and they are imported one after another. A failure does not stop the others.
+- **Free space.** The plan shows what it needs against the free space of Zero2Dev's drive, warns when it is tight and waits when it is not enough (`targetFreeBytes` on each source).
+- **Remove the old files after a copy** (`POST /api/migrations/{id}/cleanup`). The copy is checked first; the migration then counts as a move, so Move back still works. Never for runtimes and databases.
+- **Richer history.** Filter by state and program, a Details view with every item (from, to, size), the time it took (`finishedAt`) and the backup size (`backupBytes`), **Delete backups** and **Remove from history**.
+- **Import from this PC** page (`#/migrate`): lists what was found on this PC (editors and tools, registered runtimes, caches and global packages, databases on another server) with each item's size and where it goes. Choose **Copy** (keep the originals) or **Move**; Move is greyed out with the reason for runtimes and databases. Blockers such as "Install VS Code in Zero2Dev first" or "Close VS Code first" come with a link or a **Check again** button, and a warning says when Zero2Dev's folder already holds data (it is saved first).
+- Nothing starts before a review dialog that says what will happen ("This copies 414 MB ..."). Progress shows while the job runs, and a notice says what was done.
+- Databases: a form for the server (type, host, port, user, password), **List databases**, then pick the databases and the Zero2Dev service to copy into, with a check for each field.
+- **History** with **Revert**: each way back (discard the copy, copy back, move back) is explained in plain words and confirmed first.
+- Entry points: **Adopt into Zero2Dev** for registered runtimes in the Runtimes page's detected list, and a note on the runtime cards when an installed VS Code, VSCodium, Notepad++, HeidiSQL or DBeaver (or a registered runtime) can be imported.
+
+- **Import from this PC (server).** The daemon can copy or move the settings and data of programs installed on this PC into the data folder, and revert it. The routes are under `/api/migrations`.
+  - It covers VS Code and VSCodium (settings and extensions), Notepad++, DBeaver's workspace and HeidiSQL's sessions.
+  - It covers npm's global packages and cache, Go's module and build caches, and Composer's home.
+  - It also covers registered runtimes, which are adopted into `bin\adopted\` and keep their id, and databases of another server.
+- **Records and backups.** Every migration is recorded in `data\migrations\<id>\`.
+  - Whatever the portable place held is saved first.
+  - A move across drives is copied, checked, and only then deleted.
+  - Reverting offers discard, copy back or move back. Originals are saved before they are touched.
+- **HeidiSQL.** The registry key is written as HeidiSQL's own `portable_settings.txt`. A move removes the key after saving a `.reg` backup of it.
+- **Portable caches.** After such a migration, Zero2Dev's Node.js, PHP and Go services can get `npm_config_prefix` and the global folder on `PATH`, `COMPOSER_HOME`, or `GOMODCACHE`/`GOCACHE` in the data folder (`Settings.portable`).
+
 ## 0.0.4
 
+- **zero2dev.exe has its icon,** in Explorer, on the taskbar, in Alt+Tab and in a pinned shortcut, and its name and version in Properties and Task Manager ("Zero2Dev"). The exe is DPI aware, so the tray icon is sharp on scaled screens. The resources are in `cmd/zero2dev/rsrc_windows_amd64.syso`, written by `node scripts/winres.mjs` (and by `scripts/bump-version.sh`); `scripts/release-check.sh` fails when it is out of date.
+- **A taskbar button while Zero2Dev runs,** with the line Windows draws under running programs, so you can see at a glance that it is running. Clicking it opens the dashboard; **Close window** on it quits Zero2Dev like the tray's **Quit**. Its tooltip shows the same status as the tray icon ("2 services running").
 - **Stop all stops things in a safe order.** One request to the daemon (`POST /api/services/stop-all`) stops apps first, then databases, then the web server (Caddy or nginx), so an app never loses its database while it is still running. Services in the same group stop at the same time, and the answer lists what stopped and what did not. Before, the dashboard stopped services one by one in list order, and only while the page was open.
   - The dashboard's **Stop all** uses it and says how many services stopped, or names the ones that did not.
   - The tray menu has **Stop all services** (Zero2Dev keeps running); a balloon reports the result.

@@ -29,6 +29,12 @@ func TestKindCategories(t *testing.T) {
 	if !Launchable("vscode") || !Launchable("dbeaver") || Launchable("mysql") || !IsDatabase("postgres") || IsDatabase("node") {
 		t.Fatal("Launchable / IsDatabase")
 	}
+	// Mailpit is a service of its own category: not a database (no dumps, no
+	// clean stop), not a launch-only program, and its versions are fetched.
+	if KindCategory["mailpit"] != CatMail || IsDatabase("mailpit") || Launchable("mailpit") ||
+		!In("mailpit", ServiceKinds) || !In("mailpit", RemoteKinds) || DataDirName("mailpit") != "mailpit" {
+		t.Fatal("mailpit kind lists")
+	}
 }
 
 func TestDataDirNames(t *testing.T) {

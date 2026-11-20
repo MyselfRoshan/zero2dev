@@ -286,6 +286,7 @@ describe("runtime groups", () => {
     const by = Object.fromEntries(RUNTIME_GROUPS.map((g) => [g.id, g.kinds]));
     expect(by.servers).toEqual(["caddy", "nginx"]);
     expect(by.languages).not.toContain("caddy");
+    expect(by.mail).toEqual(["mailpit"]);
   });
 });
 

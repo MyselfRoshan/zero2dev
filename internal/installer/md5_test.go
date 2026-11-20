@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"zero2dev/internal/fsutil"
 	"zero2dev/internal/model"
 )
 
@@ -99,8 +100,15 @@ func TestEditorsInstallProgramOnly(t *testing.T) {
 	if done := e.wait(t, j.ID); done.State != "done" {
 		t.Fatalf("%+v", done)
 	}
-	// bin only holds the program: VS Code's data goes to <data>\code when Zero2Dev opens it.
-	if _, err := os.Stat(filepath.Join(e.in.Bin, entry.ID, "data")); !os.IsNotExist(err) {
-		t.Fatal("no data folder may be created inside bin")
+	// bin only holds the program: VS Code's data lives in <data>\code. The
+	// "data" next to Code.exe is only a link there, so a double-click on
+	// Code.exe runs portable with the same settings.
+	link := filepath.Join(e.in.Bin, entry.ID, "data")
+	cur, ok := fsutil.LinkTarget(link)
+	if !ok || !fsutil.SamePath(cur, filepath.Join(e.in.home, "code")) {
+		t.Fatalf("bin\\%s\\data must be a link to the data folder's code, got %q (link %v)", entry.ID, cur, ok)
+	}
+	if _, err := os.Stat(filepath.Join(e.in.home, "code")); err != nil {
+		t.Fatal(err)
 	}
 }

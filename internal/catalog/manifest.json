@@ -221,6 +221,22 @@
   {
     "os": "windows",
     "arch": "amd64",
+    "id": "mailpit-1.33.0-windows-amd64",
+    "kind": "mailpit",
+    "version": "1.33.0",
+    "name": "Mailpit 1.33.0",
+    "url": "https://github.com/axllent/mailpit/releases/download/v1.33.0/mailpit-windows-amd64.zip",
+    "checksum": {
+      "type": "sha256",
+      "value": "47122dd828ff80dcaef62b2952c478b178afadadf066c990489608e537121bfd"
+    },
+    "binaryRelPath": "mailpit.exe",
+    "stripComponents": 0,
+    "homepage": "https://github.com/axllent/mailpit/releases/tag/v1.33.0"
+  },
+  {
+    "os": "windows",
+    "arch": "amd64",
     "id": "vscode-1.145.0-windows-amd64",
     "kind": "vscode",
     "version": "1.145.0",

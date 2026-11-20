@@ -2,7 +2,9 @@
 
 export type DatabaseKind = "mariadb" | "mysql" | "postgres" | "redis";
 export const DATABASE_KINDS: DatabaseKind[] = ["mariadb", "mysql", "postgres", "redis"];
-export type ServiceKind = "custom" | "node" | "php" | "go" | "java" | "caddy" | "nginx" | DatabaseKind;
+export type MailKind = "mailpit";
+export const MAIL_KINDS: MailKind[] = ["mailpit"];
+export type ServiceKind = "custom" | "node" | "php" | "go" | "java" | "caddy" | "nginx" | DatabaseKind | MailKind;
 export const SERVICE_KINDS: ServiceKind[] = [
   "custom",
   "node",
@@ -12,6 +14,7 @@ export const SERVICE_KINDS: ServiceKind[] = [
   "caddy",
   "nginx",
   ...DATABASE_KINDS,
+  ...MAIL_KINDS,
 ];
 export type ServiceState = "stopped" | "starting" | "running" | "stopping" | "failed";
 
@@ -60,6 +63,8 @@ export interface Service {
   restartLimit: number;
   /** Crash restarts since the last manual start (filled in by the daemon). */
   restarts: number;
+  /** Database administrator password ("" for none); changed only through the password route (0.0.5). */
+  adminPassword?: string;
   state: ServiceState;
   pid: number;
   startedAt: string | null;
@@ -138,6 +143,7 @@ export type RuntimeKind =
   | "caddy"
   | "nginx"
   | DatabaseKind
+  | MailKind
   | EditorKind
   | DBToolKind
   | "other";
@@ -149,6 +155,7 @@ export const RUNTIME_KINDS: RuntimeKind[] = [
   "caddy",
   "nginx",
   ...DATABASE_KINDS,
+  ...MAIL_KINDS,
   "vscode",
   "vscodium",
   "notepadpp",
@@ -260,6 +267,13 @@ export interface Job {
   step: string;
   error: string;
   runtimeId: string;
+  // 0.0.5: set only by the jobs that use them (database, snapshot and migration jobs).
+  serviceId?: string;
+  projectId?: string;
+  snapshotId?: string;
+  migrationId?: string;
+  /** The file a db-export wrote. */
+  path?: string;
 }
 
 export interface Settings {
@@ -277,6 +291,14 @@ export interface Settings {
   theme?: "system" | "light" | "dark";
   /** Dashboard accent colour, #rrggbb. Missing (older daemon) means #1677ff. */
   accent?: string;
+  /** Which runtime caches live in the data folder; changed by Import only (0.0.5). */
+  portable?: Portable;
+}
+
+export interface Portable {
+  npmGlobal: boolean;
+  composer: boolean;
+  goCache: boolean;
 }
 
 /** A folder on the Windows user PATH, switched on or off on its own. */
@@ -425,4 +447,231 @@ export interface JobDoneEvent {
   state: JobState;
   error: string;
   runtimeId: string;
+  // 0.0.5: the daemon names the job's type and what it worked on.
+  type?: string;
+  serviceId?: string;
+  projectId?: string;
+  snapshotId?: string;
+  migrationId?: string;
+  path?: string;
+}
+
+// ---------------------------------------------------------------------------
+// 0.0.5: databases, snapshots, Import. Mirrors docs/API.md "Amendment: data,
+// databases and environment snapshots (0.0.5)".
+// ---------------------------------------------------------------------------
+
+export type JobType =
+  | "install"
+  | "import"
+  | "xdebug"
+  | "db-import"
+  | "db-export"
+  | "snapshot"
+  | "snapshot-restore"
+  | "snapshot-clone"
+  | "migrate"
+  | "migrate-revert"
+  | "migrate-cleanup";
+
+/** One database of a server. */
+export interface DbDatabase {
+  name: string;
+  /** 0 when the server does not say. */
+  sizeBytes: number;
+}
+
+/** GET /api/services/{id}/database */
+export interface DatabaseInfo {
+  serviceId: string;
+  kind: ServiceKind;
+  running: boolean;
+  /** The administrator: root or postgres ("" for redis). */
+  user: string;
+  hasPassword: boolean;
+  /** Empty while stopped or for redis. */
+  databases: DbDatabase[];
+  users: string[];
+  supports: { databases: boolean; dumps: boolean; password: boolean; reset: boolean };
+  dataDir: string;
+}
+
+export interface DbImportInput {
+  database: string;
+  /** Absolute path of a .sql or gzip-compressed dump on the daemon's PC. */
+  filePath: string;
+  /** Create the database first when it does not exist. */
+  create?: boolean;
+}
+
+export interface DbExportInput {
+  database: string;
+  /** Absolute path to write; ending in .gz writes gzip. */
+  filePath: string;
+  overwrite?: boolean;
+}
+
+export interface FileFilter {
+  name: string;
+  /** e.g. "*.sql;*.sql.gz" */
+  pattern: string;
+}
+
+export interface FilePickInput {
+  title?: string;
+  start?: string;
+  save?: boolean;
+  defaultName?: string;
+  filters?: FileFilter[];
+}
+
+export type SnapshotScope = "project" | "service";
+
+export interface RuntimeRef {
+  kind: string;
+  version: string;
+  /** "" for a registered program. */
+  catalogId: string;
+  binary: string;
+  /** The service used the default of its kind (no runtimeId of its own). */
+  followedDefault: boolean;
+}
+
+export interface SnapshotService {
+  service: Service;
+  runtime: RuntimeRef | null;
+  hasData: boolean;
+  phpIni: boolean;
+}
+
+export interface Snapshot {
+  format: number;
+  id: string;
+  name: string;
+  scope: SnapshotScope;
+  ownerId: string;
+  createdAt: string;
+  /** Zero2Dev version that took it. */
+  version: string;
+  sizeBytes: number;
+  project: Project | null;
+  sites: Site[];
+  services: SnapshotService[];
+  warnings: string[];
+}
+
+export interface MissingRuntime {
+  kind: string;
+  version: string;
+  catalogId: string;
+  /** The catalog has it, so it can be installed before restoring. */
+  installable: boolean;
+  /** Names of the services that need it. */
+  services: string[];
+}
+
+/** GET /api/snapshots/{id} */
+export interface SnapshotDetail extends Snapshot {
+  missing: MissingRuntime[];
+}
+
+export interface TakeSnapshotInput {
+  name: string;
+  /** Stop running services first and start them again afterwards. */
+  restart?: boolean;
+}
+
+export interface CloneSnapshotInput {
+  name: string;
+  /** Added to the first label of each site domain; default "-copy". */
+  domainSuffix?: string;
+}
+
+export type MigrateProgram =
+  | "vscode"
+  | "vscodium"
+  | "notepadpp"
+  | "heidisql"
+  | "dbeaver"
+  | "runtime"
+  | "npm-global"
+  | "npm-cache"
+  | "go-cache"
+  | "composer"
+  | "database";
+
+export type MigrateMode = "copy" | "move";
+export type RevertHow = "discard" | "copy-back" | "move-back";
+
+export interface MigrateItem {
+  label: string;
+  kind: "dir" | "file" | "registry" | "runtime" | "databases";
+  from: string;
+  to: string;
+  sizeBytes: number;
+  exists: boolean;
+}
+
+/** A program found on this PC that can be imported (GET /api/migrations/sources). */
+export interface MigrateSource {
+  /** "vscode", "runtime:rt_1a2b3c4d", "database" ... */
+  id: string;
+  program: MigrateProgram;
+  label: string;
+  found: boolean;
+  items: MigrateItem[];
+  modes: MigrateMode[];
+  /** Why Move is not offered; "" when it is. */
+  copyOnlyReason: string;
+  /** What must happen first; empty when it can run. */
+  blockers: string[];
+  /** The portable place already holds data (it is backed up first). */
+  targetHasData: boolean;
+  runtimeId?: string;
+  note: string;
+  /** Free space of the drive the data goes to; 0 when the daemon cannot tell. */
+  targetFreeBytes: number;
+}
+
+export interface MigrateDatabase {
+  kind: "mariadb" | "mysql" | "postgres";
+  host: string;
+  port: number;
+  user: string;
+  password: string;
+  databases: string[];
+  targetServiceId: string;
+}
+
+export interface MigrateRequest {
+  source: string;
+  mode: MigrateMode;
+  /** Labels of the items to include; empty means all. */
+  items?: string[];
+  database?: MigrateDatabase;
+}
+
+export interface Migration {
+  id: string;
+  source: string;
+  program: MigrateProgram;
+  label: string;
+  mode: MigrateMode;
+  createdAt: string;
+  state: "done" | "reverted" | "failed";
+  revertedAt: string | null;
+  items: MigrateItem[];
+  revertOptions: RevertHow[];
+  databases?: string[];
+  serviceId?: string;
+  runtimeId?: string;
+  description: string;
+  /** When its last job ended (null for records from before 0.0.5 final). */
+  finishedAt: string | null;
+  /** What its backup folders hold. */
+  backupBytes: number;
+  /** A done copy whose originals can still be removed. */
+  canCleanup: boolean;
+  /** What removing the originals frees. */
+  originalsBytes: number;
 }

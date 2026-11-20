@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"zero2dev/internal/model"
 )
@@ -34,7 +35,8 @@ func Start(bin string, args []string, dir string, env []string) error {
 var ErrNoTerminal = errors.New("opening a terminal is only supported on Windows")
 
 // DBUser is the administrator account Zero2Dev's databases are set up with
-// (no password; they only listen on 127.0.0.1).
+// (no password until one is set, Service.AdminPassword; they only listen on
+// 127.0.0.1).
 func DBUser(kind string) string {
 	switch kind {
 	case "mariadb", "mysql":
@@ -61,6 +63,9 @@ func ConnectArgs(tool string, svc model.Service) ([]string, error) {
 		// Long options with "=" work in every HeidiSQL version (short ones changed in v13).
 		// Network types: 0 = MariaDB/MySQL over TCP/IP, 8 = PostgreSQL over TCP/IP.
 		args := []string{"--description=" + svc.Name, "--host=127.0.0.1", "--port=" + port, "--user=" + user}
+		if svc.AdminPassword != "" {
+			args = append(args, "--password="+svc.AdminPassword)
+		}
 		switch svc.Kind {
 		case "mariadb", "mysql":
 			return append([]string{"--nettype=0"}, args...), nil
@@ -72,7 +77,13 @@ func ConnectArgs(tool string, svc model.Service) ([]string, error) {
 		if driver == "" {
 			break
 		}
-		con := "driver=" + driver + "|host=127.0.0.1|port=" + port + "|user=" + user + "|name=" + svc.Name + "|connect=true"
+		con := "driver=" + driver + "|host=127.0.0.1|port=" + port + "|user=" + user
+		// The -con string has no escaping: a password with "|" is left out and
+		// DBeaver asks for it.
+		if pw := svc.AdminPassword; pw != "" && !strings.Contains(pw, "|") {
+			con += "|password=" + pw
+		}
+		con += "|name=" + svc.Name + "|connect=true"
 		if svc.Kind == "postgres" {
 			con += "|database=postgres"
 		}

@@ -5,6 +5,7 @@
   import Icon from "./ui/Icon.svelte";
   import ThemeToggle from "./ui/ThemeToggle.svelte";
   import Toasts from "./ui/Toasts.svelte";
+  import SnapshotOffer from "./ui/SnapshotOffer.svelte";
   import FirstRun from "./pages/FirstRun.svelte";
   import Dashboard from "./pages/Dashboard.svelte";
   import Services from "./pages/Services.svelte";
@@ -12,6 +13,8 @@
   import ServiceEditor from "./pages/ServiceEditor.svelte";
   import Projects from "./pages/Projects.svelte";
   import ProjectForm from "./pages/ProjectForm.svelte";
+  import ProjectSnapshots from "./pages/ProjectSnapshots.svelte";
+  import Migrate from "./pages/Migrate.svelte";
   import Runtimes from "./pages/Runtimes.svelte";
   import Sites from "./pages/Sites.svelte";
   import Environment from "./pages/Environment.svelte";
@@ -40,6 +43,7 @@
     { href: "#/runtimes", name: "runtimes", label: "Runtimes", icon: "runtimes" },
     { href: "#/sites", name: "sites", label: "Sites", icon: "sites" },
     { href: "#/environment", name: "environment", label: "Environment", icon: "variable" },
+    { href: "#/migrate", name: "migrate", label: "Import from this PC", icon: "download" },
     { href: "#/logs", name: "logs", label: "Logs", icon: "logs" },
     { href: "#/settings", name: "settings", label: "Settings", icon: "settings" },
     { href: "#/help", name: "help", label: "Help", icon: "help" },
@@ -55,6 +59,7 @@
     if (r.name === "serviceEdit") return `Edit ${lists.services.find((s) => s.id === r.id)?.name ?? "service"}`;
     if (r.name === "projectNew") return "New project";
     if (r.name === "projectEdit") return `Edit ${lists.projects.find((p) => p.id === r.id)?.name ?? "project"}`;
+    if (r.name === "projectSnapshots") return `Snapshots of ${lists.projects.find((p) => p.id === r.id)?.name ?? "project"}`;
     return nav.find((n) => n.name === r.name)?.label ?? "";
   });
   $effect(() => {
@@ -149,6 +154,10 @@
             <ProjectForm />
           {:else if router.route.name === "projectEdit"}
             <ProjectForm id={router.route.id} />
+          {:else if router.route.name === "projectSnapshots"}
+            <ProjectSnapshots id={router.route.id} />
+          {:else if router.route.name === "migrate"}
+            <Migrate />
           {:else if router.route.name === "runtimes"}
             <Runtimes />
           {:else if router.route.name === "sites"}
@@ -168,6 +177,7 @@
   </div>
 {/if}
 <Toasts />
+<SnapshotOffer />
 {#if !app.stopped && app.phase === "ready"}<TourGuide />{/if}
 {#if quitting}
   <ConfirmDialog

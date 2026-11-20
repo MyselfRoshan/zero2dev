@@ -79,6 +79,7 @@ var tools = []struct {
 	{"mysqld", "mysql", []string{"--version"}},
 	{"postgres", "postgres", []string{"--version"}},
 	{"redis-server", "redis", []string{"--version"}},
+	{"mailpit", "mailpit", []string{"version", "--no-release-check"}}, // without the flag it asks GitHub for updates
 	// VS Code / VSCodium are never run: their version is read from package.json (editors.go).
 	{"code", "vscode", nil},
 	{"codium", "vscodium", nil},
@@ -104,7 +105,19 @@ func probe(binary string, args []string) string {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	out, _ := exec.CommandContext(ctx, binary, args...).CombinedOutput()
-	return versionRE.FindString(string(out))
+	return parseVersion(string(out))
+}
+
+// compiledRE matches Go tools that print "<path> v1.33.0 compiled with go1.25.3"
+// (Mailpit): the path comes first and may hold digits of its own.
+var compiledRE = regexp.MustCompile(`\sv?(\d+(?:\.\d+){1,3})\s+compiled with\s`)
+
+// parseVersion finds the version in a tool's version output.
+func parseVersion(out string) string {
+	if m := compiledRE.FindStringSubmatch(out); m != nil {
+		return m[1]
+	}
+	return versionRE.FindString(out)
 }
 
 func argsFor(kind, binary string) []string {
@@ -155,7 +168,7 @@ func (m *Manager) Detect() []Detected {
 
 var display = map[string]string{
 	"node": "Node.js", "php": "PHP", "go": "Go", "java": "Java", "caddy": "Caddy", "nginx": "nginx",
-	"mariadb": "MariaDB", "mysql": "MySQL", "postgres": "PostgreSQL", "redis": "Redis",
+	"mariadb": "MariaDB", "mysql": "MySQL", "postgres": "PostgreSQL", "redis": "Redis", "mailpit": "Mailpit",
 	"vscode": "VS Code", "vscodium": "VSCodium", "notepadpp": "Notepad++", "heidisql": "HeidiSQL", "dbeaver": "DBeaver",
 }
 
@@ -242,6 +255,10 @@ func (m *Manager) Add(rt model.Runtime) error {
 	if err != nil {
 		return err
 	}
+	// Best effort: a missing link only means a double-click in bin starts
+	// VS Code without Zero2Dev's settings; launches from Zero2Dev and the next
+	// start repair it.
+	_ = m.EnsureEditorData(rt)
 	m.changed()
 	return nil
 }
@@ -302,6 +319,11 @@ func (m *Manager) Delete(id string) error {
 	}
 	if rt.Source == "installed" {
 		if dir := m.installDir(rt.Binary); dir != "" {
+			// The data link first: removing the folder must never reach the
+			// settings and extensions it points at.
+			if err := m.removeEditorLink(*rt); err != nil {
+				return apperr.Internal("cannot remove the data link of %s: %v", rt.Name, err)
+			}
 			if err := os.RemoveAll(dir); err != nil {
 				return apperr.Internal("cannot remove %s: %v", dir, err)
 			}
@@ -336,12 +358,20 @@ func (m *Manager) Delete(id string) error {
 
 // installDir returns <bin>/<first component> for a binary below
 // the runtimes dir, or "" if the binary is elsewhere (never delete outside).
+// An adopted runtime (Import) lives in <bin>/adopted/<kind>-<version>/, so
+// its folder is the second component: removing one never removes the others.
 func (m *Manager) installDir(binary string) string {
 	root := m.Bin
 	rel, err := filepath.Rel(root, binary)
 	if err != nil || rel == "." || strings.HasPrefix(rel, "..") {
 		return ""
 	}
-	first := strings.Split(filepath.ToSlash(rel), "/")[0]
-	return filepath.Join(root, first)
+	parts := strings.Split(filepath.ToSlash(rel), "/")
+	if strings.EqualFold(parts[0], "adopted") {
+		if len(parts) < 3 { // not inside a runtime's own folder
+			return ""
+		}
+		return filepath.Join(root, parts[0], parts[1])
+	}
+	return filepath.Join(root, parts[0])
 }
