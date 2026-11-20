@@ -1,4 +1,10 @@
 import type {
+  DetectResult,
+  Framework,
+  NewProjectPlan,
+  NewProjectRequest,
+  TaskList,
+  TaskRequest,
   CatalogEntry,
   CatalogRefresh,
   CatalogStatus,
@@ -316,4 +322,12 @@ export const api = {
   deleteMigrationBackups: (id: string) => request<Migration>("DELETE", `/api/migrations/${enc(id)}/backups`),
   /** Removes a reverted or failed migration from the history. */
   deleteMigration: (id: string) => request<void>("DELETE", `/api/migrations/${enc(id)}`),
+
+  // ---- 0.0.6: tasks, detection, frameworks, New project (docs/API.md, the 0.0.6 amendment) ----
+  listTasks: (serviceId: string) => request<TaskList>("GET", `/api/services/${enc(serviceId)}/tasks`),
+  runTask: (serviceId: string, b: TaskRequest) => request<Job>("POST", `/api/services/${enc(serviceId)}/tasks`, b),
+  detectProject: (dir: string) => request<DetectResult>("GET", `/api/project/detect?dir=${encodeURIComponent(dir)}`),
+  listFrameworks: () => request<{ frameworks: Framework[] }>("GET", "/api/frameworks"),
+  planNewProject: (b: NewProjectRequest) => request<NewProjectPlan>("POST", "/api/new-project/plan", b),
+  startNewProject: (b: NewProjectRequest) => request<Job>("POST", "/api/new-project", b),
 };

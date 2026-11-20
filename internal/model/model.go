@@ -279,6 +279,8 @@ const (
 	JobMigrate         = "migrate"
 	JobMigrateRevert   = "migrate-revert"
 	JobMigrateCleanup  = "migrate-cleanup"
+	JobTask            = "task"        // 0.0.6: a one-off task of a service (npm install ...)
+	JobNewProject      = "new-project" // 0.0.6: New project from a framework
 )
 
 // Portable says which user-level caches and global package folders of the
@@ -366,13 +368,13 @@ type LogLine struct {
 
 // ServiceKinds and RuntimeKinds are the accepted enums.
 var (
-	ServiceKinds = []string{"custom", "node", "php", "go", "java", "caddy", "nginx", "mariadb", "mysql", "postgres", "redis", "mailpit"}
-	RuntimeKinds = []string{"node", "php", "go", "java", "caddy", "nginx",
+	ServiceKinds = []string{"custom", "node", "php", "go", "java", "python", "caddy", "nginx", "mariadb", "mysql", "postgres", "redis", "mailpit"}
+	RuntimeKinds = []string{"node", "php", "go", "java", "python", "composer", "caddy", "nginx",
 		"mariadb", "mysql", "postgres", "redis", "mailpit",
 		"vscode", "vscodium", "notepadpp",
 		"heidisql", "dbeaver", "other"}
 	// RemoteKinds can have their version lists fetched from the publishers.
-	RemoteKinds = []string{"node", "go", "caddy", "php", "java", "nginx",
+	RemoteKinds = []string{"node", "go", "caddy", "php", "java", "python", "composer", "nginx",
 		"mariadb", "mysql", "postgres", "redis", "mailpit", "vscode", "vscodium", "notepadpp", "heidisql", "dbeaver"}
 )
 
@@ -384,12 +386,14 @@ const (
 	CatEditor   = "editor"
 	CatDBTool   = "dbtool"
 	CatMail     = "mail"
+	CatTool     = "tool" // a program other programs run (Composer)
 )
 
 // KindCategory maps every runtime kind (except "other") to its category.
 var KindCategory = map[string]string{
-	"node": CatLanguage, "php": CatLanguage, "go": CatLanguage, "java": CatLanguage,
-	"caddy": CatServer, "nginx": CatServer,
+	"node": CatLanguage, "php": CatLanguage, "go": CatLanguage, "java": CatLanguage, "python": CatLanguage,
+	"composer": CatTool,
+	"caddy":    CatServer, "nginx": CatServer,
 	"mariadb": CatDatabase, "mysql": CatDatabase, "postgres": CatDatabase, "redis": CatDatabase,
 	"mailpit": CatMail,
 	"vscode":  CatEditor, "vscodium": CatEditor, "notepadpp": CatEditor,
@@ -408,7 +412,7 @@ func Launchable(kind string) bool {
 var dataDirNames = map[string]string{
 	"vscode": "code", "vscodium": "codium", "notepadpp": "notepadpp", "heidisql": "heidisql", "dbeaver": "dbeaver",
 	"mariadb": "mariadb", "mysql": "mysql", "postgres": "postgres", "redis": "redis", "mailpit": "mailpit",
-	"php": "php", "node": "node", "go": "go",
+	"php": "php", "node": "node", "go": "go", "python": "python", "composer": "composer",
 }
 
 // DataDirName is the folder name of a kind's data inside the data folder

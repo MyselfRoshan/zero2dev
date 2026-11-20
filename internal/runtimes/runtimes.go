@@ -167,7 +167,7 @@ func (m *Manager) Detect() []Detected {
 }
 
 var display = map[string]string{
-	"node": "Node.js", "php": "PHP", "go": "Go", "java": "Java", "caddy": "Caddy", "nginx": "nginx",
+	"node": "Node.js", "php": "PHP", "go": "Go", "java": "Java", "python": "Python", "composer": "Composer", "caddy": "Caddy", "nginx": "nginx",
 	"mariadb": "MariaDB", "mysql": "MySQL", "postgres": "PostgreSQL", "redis": "Redis", "mailpit": "Mailpit",
 	"vscode": "VS Code", "vscodium": "VSCodium", "notepadpp": "Notepad++", "heidisql": "HeidiSQL", "dbeaver": "DBeaver",
 }

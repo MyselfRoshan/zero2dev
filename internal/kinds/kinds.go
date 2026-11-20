@@ -101,6 +101,31 @@ type Profile struct {
 	Fixed         []Fixed    `json:"fixed,omitempty"`
 	Env           []FixedEnv `json:"env,omitempty"`
 	Options       []Option   `json:"options"`
+	// Tasks are the ready-made one-off tasks of the kind (npm install, composer install ...),
+	// run from the service page (0.0.6, internal/tasks).
+	Tasks []Task `json:"tasks,omitempty"`
+}
+
+// Task is one ready-made one-off task of a service kind.
+//
+// Program is run without a shell: first as a program next to the service's runtime
+// (npm.cmd beside node.exe, pip beside python.exe), else on the service's PATH. Args may use
+// the service's settings as {s.key} and {port}. Composer's program is "composer": it is the
+// installed Composer, run with the service's PHP.
+type Task struct {
+	ID      string   `json:"id"`
+	Label   string   `json:"label"`
+	Program string   `json:"program"`
+	Args    []string `json:"args"`
+	Help    string   `json:"help,omitempty"`
+	// Confirm, when set, is asked before the task runs (a migration, a reset): the dashboard
+	// shows it in a confirm dialog.
+	Confirm string `json:"confirm,omitempty"`
+	// When is a file or folder that must exist in the project folder for the task to be offered
+	// (package.json, composer.json, requirements.txt).
+	When string `json:"when,omitempty"`
+	// Timeout in seconds; 0 is the default of 10 minutes.
+	Timeout int `json:"timeout,omitempty"`
 }
 
 var profiles []Profile

@@ -159,6 +159,12 @@ try {
       hash: `#/projects/${projectId}/snapshots`,
       title: "Project snapshots: take, restore, clone",
     },
+    {
+      name: "create",
+      hash: "#/create",
+      title: "Create a project from a framework",
+      ready: "[data-testid=create-page]",
+    },
     { name: "runtimes", hash: "#/runtimes", title: "Runtimes: installed versions and the catalog" },
     { name: "sites", hash: "#/sites", title: "Sites: local domains" },
     { name: "site-new", hash: "#/sites?new", title: "New site form" },

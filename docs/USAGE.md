@@ -275,6 +275,11 @@ Mailpit is a pretend mail server. Your app sends its e-mails to it, and you read
 
 ---
 
+<!-- 0.0.6 python: "## Python services" goes here (virtual environment, run modes, pip). -->
+<!-- 0.0.6 composer: "## Composer, pnpm and Yarn" goes here. -->
+<!-- 0.0.6 tasks: "## Run a task" and "detect the project type" go here. -->
+<!-- 0.0.6 new-project: "## Create a project from a framework" goes here. -->
+
 ## Snapshots: undo for a whole project
 
 A *snapshot* is a named copy of a project as it is now: the settings of its services, the runtime version each one uses, its sites, its `php.ini` files and the data of its databases. The code in the project folders is not copied. Snapshots are kept in `data\snapshots`, so they move with the data folder.

@@ -15,12 +15,15 @@ const DATA_DIR = {
   php: "php",
   node: "node",
   go: "go",
+  python: "python",
+  composer: "composer",
 };
 const PROG = {
   node: "node.exe",
   php: "php.exe",
   go: "go.exe",
   java: "java.exe",
+  python: "python.exe",
   caddy: "caddy.exe",
   nginx: "nginx.exe",
   mariadb: "mariadbd.exe",

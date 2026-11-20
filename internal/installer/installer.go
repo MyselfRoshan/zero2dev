@@ -80,7 +80,7 @@ type Options struct {
 // New creates an Installer.
 func New(home string, st *store.Store, rt *runtimes.Manager, em Emitter) *Installer {
 	return &Installer{
-		home: home, Bin: filepath.Join(home, "bin"), st: st, rt: rt, em: em, Version: "0.0.5",
+		home: home, Bin: filepath.Join(home, "bin"), st: st, rt: rt, em: em, Version: "0.0.6",
 		log:     &fileLog{path: filepath.Join(home, "logs", "installer.log")},
 		Catalog: func() ([]model.CatalogEntry, error) { return catalog.Load(home) },
 		Rename:  os.Rename, Sleep: time.Sleep, RenameAttempts: 20,
@@ -412,9 +412,20 @@ func (in *Installer) process(j *job, e model.CatalogEntry, archive, want, got st
 		return "", stepErr("Extracting", err)
 	}
 	defer os.RemoveAll(stage) // no-op after a successful rename
-	if strings.HasSuffix(strings.ToLower(archive), ".zip") {
+	switch low := strings.ToLower(archive); {
+	case strings.HasSuffix(low, ".zip"):
 		err = extractZip(archive, stage, e.StripComponents)
-	} else {
+	case strings.HasSuffix(low, ".phar"):
+		// One file, not an archive (Composer): it is put in as it is, and a launcher next to it runs it.
+		name := e.FileName
+		if sf, ok := singleFileKinds[e.Kind]; ok {
+			name = sf.file
+		}
+		err = installFile(archive, stage, name)
+		if sf, ok := singleFileKinds[e.Kind]; ok && err == nil {
+			err = os.WriteFile(filepath.Join(stage, sf.launcher), []byte(sf.content), 0o755)
+		}
+	default:
 		err = extractTarGz(archive, stage, e.StripComponents)
 	}
 	if err != nil {

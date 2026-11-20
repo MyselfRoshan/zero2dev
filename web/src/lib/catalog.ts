@@ -17,6 +17,8 @@ export const KIND_LABEL: Record<string, string> = {
   java: "Java",
   node: "Node.js",
   go: "Go",
+  python: "Python",
+  composer: "Composer",
   caddy: "Caddy",
   other: "Other",
 };
@@ -24,7 +26,7 @@ export const kindLabel = (k: string): string => KIND_LABEL[k] ?? k;
 
 /** A category of the Runtimes page. Web servers serve sites; they are not what services run on. */
 export interface RuntimeGroup {
-  id: "languages" | "servers" | "databases" | "mail" | "editors" | "dbtools";
+  id: "languages" | "tools" | "servers" | "databases" | "mail" | "editors" | "dbtools";
   title: string;
   text: string;
   kinds: RuntimeKind[];
@@ -32,7 +34,18 @@ export interface RuntimeGroup {
 
 /** Runtime cards by category, in display order. */
 export const RUNTIME_GROUPS: RuntimeGroup[] = [
-  { id: "languages", title: "Languages", text: "What your services run on.", kinds: ["node", "php", "go", "java"] },
+  {
+    id: "languages",
+    title: "Languages",
+    text: "What your services run on.",
+    kinds: ["node", "php", "go", "java", "python"],
+  },
+  {
+    id: "tools",
+    title: "Tools",
+    text: "Programs your languages use, run with the version a service uses.",
+    kinds: ["composer"],
+  },
   {
     id: "servers",
     title: "Web servers",
@@ -255,6 +268,8 @@ export const KIND_SUMMARY: Record<string, string> = {
   php: "PHP and its built-in web server",
   go: "The Go compiler and tools",
   java: "Eclipse Temurin JDK",
+  python: "Python, with pip and virtual environments",
+  composer: "PHP's package manager, run with a service's PHP",
   caddy: "Web server with automatic local HTTPS",
   nginx: "Fast web server and reverse proxy",
   mariadb: "MySQL-compatible database server",

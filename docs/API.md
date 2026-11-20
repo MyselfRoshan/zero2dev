@@ -1515,3 +1515,84 @@ Only keys below `HKCU\Software\` are ever opened. The registry is reached throug
 | `goCache` | `GOMODCACHE=<data>\go\path\pkg\mod`, `GOCACHE=<data>\go\cache` | - |
 
 The preview shows the `PATH` entry as `<folders>;%PATH%`.
+
+## Amendment: languages, tasks and new projects (0.0.6)
+
+New kinds, one-off tasks of a service, project detection, the shipped frameworks list and New project. Everything here is `501 not_supported` until its work is in (Wave 0 left only the shapes).
+
+### Kinds
+
+- **`python`** is a service kind and a runtime kind (category `language`, data folder `<home>\python`). Python is installed from python-build-standalone (`install_only` `.tar.gz`, `stripComponents` 1, binary `python.exe`; it has `venv` and `pip`). A service of this kind runs in a virtual environment of its own at `<home>\python\venvs\<serviceId>`, made before the first start (and again, with a log line, when the runtime changed) and removed with the service.
+- **`composer`** is a runtime kind only (category `tool`, data folder `<home>\composer`). It is one downloaded file, `composer.phar`, put in as it is with a `composer.bat` next to it that runs `php "%~dp0composer.phar" %*`. The runtime's binary is `composer.bat`. A task runs Composer with the service's PHP: the program `composer` of a task is resolved to `php <composer.phar>`.
+- **Catalog:** a download whose file name ends in `.phar` is a single file, not an archive (the installer's `file` format). Its checksum works as for archives.
+- **Job types** `task` and `new-project`. `job.done` carries `serviceId` for a task and `projectId` and `path` (the project folder) for a new project, like the other jobs.
+- **Kind profiles** (`GET /api/kinds`, `internal/kinds/profiles.json`) gain `tasks`: `[ { id, label, program, args, help?, confirm?, when?, timeout? } ]`. `program` is run without a shell, first next to the service's runtime (`npm.cmd` beside `node.exe`, `pip.exe` in the virtual environment's `Scripts`), else on the service's `PATH`. `args` may use `{s.<setting>}` and `{port}`. `confirm` is a text the dashboard asks first. `when` is a file or folder that must exist in the service's folder for the task to be offered. `timeout` is in seconds (default 600).
+
+### One-off tasks
+
+| Method | Path | Body | Response |
+| --- | --- | --- | --- |
+| GET | `/api/services/{id}/tasks` | none | `TaskList` |
+| POST | `/api/services/{id}/tasks` | `{ "preset": "npm-install" }` or `{ "program": "npm", "args": ["run", "build"] }` | `202 Job` (`task`) |
+
+`TaskList` is `{ "presets": [kind task ...], "scripts": [ { "name", "command" } ], "running": "job_..." }`. `presets` are the tasks of the service's kind whose `when` exists; `scripts` are the `scripts` of a Node service's `package.json` (run with the service's package manager); `running` is the id of the task job running for the service, `""` when none.
+
+- A task runs in the service's folder with the environment the service starts with (`Supervisor.Environ`: the runtime on `PATH`, `JAVA_HOME`/`GOROOT`, the database variables, the `.env` file, the user's variables). A service that is running may have a task; nothing is stopped.
+- **No shell.** The program and each argument are passed as they are. A program is a name without a path or a file below the service's runtime folders; arguments are text without a NUL or a line break.
+- Every output line (stdout and stderr, in the order they came) is written to the service's log with the stream `task` and published as `log.line`; the first line is `$ program args`. The job's `step` is the label of the task, its percent stays at 0 until it ends. A non-zero exit fails the job with `<program> exited with code N` and the last output lines.
+- **Errors:** `404` unknown service or preset; `400` both or neither of `preset` and `program`, a bad program or argument; `409` a task of the service runs (`details.jobId`), the service is busy (another operation holds it), or a needed program is missing (`composer` is not installed: the message says to install it from Runtimes).
+- Timeout: the preset's `timeout`, else 10 minutes; the process tree is ended and the job fails with `timed out after ...`.
+
+### Project detection
+
+`GET /api/project/detect?dir=<folder>` returns
+
+```json
+{ "kind": "node", "framework": "nextjs", "name": "my-shop", "confidence": "high",
+  "settings": { "package": "..." }, "envFile": ".env", "port": 3000,
+  "markers": ["package.json", "next.config.js"] }
+```
+
+`kind` is `""` (and the rest empty) when the folder says nothing. The markers are, in order: `composer.json` (`laravel/framework`, `symfony/*`, WordPress files), `package.json` (`next`, `vite`, `@nestjs/core`, `astro`, `express` and its `scripts`), `go.mod` (`gin-gonic/gin`, `gofiber/fiber`), `pom.xml` or `build.gradle` (Spring Boot), `manage.py` / `requirements.txt` / `pyproject.toml` (Django, FastAPI, Flask), `index.html`. `400` for a folder that does not exist. It only reads the folder.
+
+### Frameworks
+
+`GET /api/frameworks` returns `{ "frameworks": [Framework ...] }`, the list shipped with Zero2Dev (`internal/frameworks/frameworks.json`) or `<data>\frameworks.json` when that exists (`409` when it is damaged). Shape (`format: 1`):
+
+```json
+{ "id": "laravel", "label": "Laravel", "language": "php", "summary": "...", "homepage": "https://laravel.com",
+  "runtime": { "kind": "php", "min": "8.2" }, "composer": true,
+  "database": { "kinds": ["mariadb", "mysql", "postgres"], "default": "mariadb", "optional": true },
+  "steps": [ { "type": "run", "label": "Creating the Laravel project", "program": "composer", "args": ["create-project", "laravel/laravel", "{slug}"], "in": "parent" } ],
+  "services": [ { "name": "{name}", "kind": "php", "port": 8000, "usesDatabase": true } ],
+  "site": { "type": "php", "root": "public", "https": true },
+  "env": [ { "key": "DB_DATABASE", "value": "{db}" } ], "envFile": ".env" }
+```
+
+- `language`: `php`, `javascript`, `python`, `go`, `java`, `static`. `runtime.kind` is a runtime kind or `""`; `min`/`max` are inclusive version bounds.
+- Step `type`: `run` (a program with `args`, run in `in` = `parent` (default) or `project`, with the runtime of the framework; `composer`, `npm`, `npx`, `pip` ... are the runtime's own tools), `download` (`url` https, `checksum` `sha256:<hex>`, `sha1:<hex>` or a https URL of a file holding it, `strip`) or `files` (`files`: relative path with `/` to content).
+- Placeholders in strings: `{name}` `{slug}` `{dir}` `{parent}` `{port}` `{domain}` `{db}` `{dbUser}` `{dbPassword}` `{dbHost}` `{dbPort}` `{dbUrl}` `{appKey}` `{random}`. Values are checked before use (a name becomes a slug of letters, digits and `-`); arguments are never joined into a shell line.
+- `env` lines go to `envFile` (default `.env`); `ifMissing` writes a line only when the key is not there.
+- Validation on load: unique ids, known languages and kinds, a `run` step names a program, a `download` step has https and a checksum, `files` paths are relative without `..`, a service that `usesDatabase` needs a `database`, and a framework has a service or a site.
+
+### New project
+
+| Method | Path | Body | Response |
+| --- | --- | --- | --- |
+| POST | `/api/new-project/plan` | `NewProjectRequest` | `Plan` |
+| POST | `/api/new-project` | `NewProjectRequest` | `202 Job` (`new-project`) |
+
+`NewProjectRequest`: `{ "framework": "laravel", "name": "My Shop", "parent": "D:\\www", "databaseKind": "mariadb", "domain": "", "port": 0, "openEditor": true }`. The project folder is `<parent>\<slug>`; `domain` defaults to `<slug>.localhost`; `port` 0 picks a free one.
+
+`Plan` is `{ "dir", "slug", "domain", "port", "installs": [ { "kind", "version", "catalogId", "name", "reason" } ], "database": { "kind", "name", "user", "serviceId" } | null, "steps": ["Installing PHP 8.4.1", ...], "creates": ["Service My Shop (PHP, port 8000)", ...], "problems": [...], "warnings": [...] }`. Nothing is changed. A plan with `problems` cannot be started (`409` with the first problem as the message): the folder exists and is not empty, the parent does not exist, the domain or port is taken, no runtime version fits the framework, a database kind is not offered.
+
+**The job** (`new-project`) does, in this order, and reports each as its `step` with a percent:
+1. Checks the plan again.
+2. Installs what is missing (each runtime and Composer through the installer, one after another).
+3. Starts the database service (created first when none exists) and creates the database and a user with all privileges on it only (a random password, stored only in the `.env`).
+4. Runs the steps of the framework in order (their output goes to the log of the new project's first service once it exists, before that to the job's log).
+5. Writes the `.env`, keeping lines the generator wrote.
+6. Creates the services, the site (the site server is set up when needed) and the project; the services use the database.
+7. Opens the folder in the first installed editor when `openEditor`.
+
+On success `job.done` has `projectId` and `path`. A failure stops the job, removes what it created (services, site, project, database and user), keeps the generated folder, and says so in the error (`The folder D:\www\my-shop was kept.`). Events: `services.changed`, `sites.changed`, `projects.changed`.

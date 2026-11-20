@@ -567,6 +567,45 @@
     ]
   },
   {
+    "kind": "python",
+    "label": "Python",
+    "summary": "Runs a Python script or module in a virtual environment of its own.",
+    "folder": {
+      "use": "required",
+      "label": "Project folder",
+      "hint": "Your app's code. Its virtual environment is kept in the data folder, not here."
+    },
+    "port": {
+      "use": "optional",
+      "default": 8000,
+      "hint": "Your app also gets it as the PORT variable."
+    },
+    "health": true,
+    "dataDir": "shared",
+    "extraArgs": "Arguments for your app",
+    "extraArgsHint": "Added after the script, for your app to read (sys.argv). {port} is replaced with the port.",
+    "options": [
+      {
+        "key": "script",
+        "group": "Run",
+        "label": "Script",
+        "common": true,
+        "type": "text",
+        "default": "main.py",
+        "placeholder": "main.py",
+        "required": true,
+        "at": "end",
+        "pattern": "^[A-Za-z0-9_./\\\\-]+$",
+        "emit": {
+          "arg": [
+            "{v}"
+          ]
+        },
+        "help": "The Python file to run, relative to the project folder. (0.0.6: more run modes and the virtual environment are added by the python work.)"
+      }
+    ]
+  },
+  {
     "kind": "java",
     "label": "Java",
     "summary": "Runs a JAR or a Java main class.",

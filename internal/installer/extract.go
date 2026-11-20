@@ -212,3 +212,32 @@ func extractTarGz(archive, dest string, strip int) error {
 		}
 	}
 }
+
+// installFile puts one downloaded file (composer.phar) into dest under name.
+// Nothing is unpacked: the file itself is the program, run by another runtime.
+func installFile(file, dest, name string) error {
+	if name == "" || name == "." || name == ".." || strings.ContainsAny(name, `/\:`) {
+		return fmt.Errorf("invalid file name %q", name)
+	}
+	in, err := os.Open(file)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.OpenFile(filepath.Join(dest, name), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o755)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, io.LimitReader(in, maxExtracted)); err != nil {
+		out.Close()
+		return err
+	}
+	return out.Close()
+}
+
+// singleFileKinds are the runtime kinds whose download is one file, not an archive, and the
+// launcher written next to it. Composer is run by PHP: composer.bat finds php on PATH, so
+// a service's own PHP (first on its PATH) wins, and a terminal uses the default one.
+var singleFileKinds = map[string]struct{ file, launcher, content string }{
+	"composer": {"composer.phar", "composer.bat", "@echo off\r\nphp \"%~dp0composer.phar\" %*\r\n"},
+}

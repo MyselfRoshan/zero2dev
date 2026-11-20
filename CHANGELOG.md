@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.0.6
+
+<!-- Each part writes its bullets under its own heading. -->
+
+### Python
+
+<!-- python: runtime, virtual environment per service, run modes, pip -->
+
+### Composer, pnpm and Yarn
+
+<!-- composer + package managers -->
+
+### Tasks and project detection
+
+<!-- tasks: one-off tasks of a service; detect: the form fills itself in from the folder -->
+
+### Create a project from a framework
+
+<!-- new-project: the frameworks list, the generator, services, database, site, .env, editor -->
+
 ## 0.0.5
 
 ### Databases

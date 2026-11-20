@@ -1,0 +1,51 @@
+{
+  "format": 1,
+  "frameworks": [
+    {
+      "id": "html",
+      "label": "HTML and CSS",
+      "language": "static",
+      "summary": "A starter page served by the site server.",
+      "runtime": { "kind": "" },
+      "steps": [
+        {
+          "type": "files",
+          "label": "Writing the starter page",
+          "files": {
+            "index.html": "<!doctype html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n  <title>{name}</title>\n  <link rel=\"stylesheet\" href=\"style.css\">\n</head>\n<body>\n  <h1>{name}</h1>\n  <p>It works.</p>\n</body>\n</html>\n",
+            "style.css": "body { font-family: system-ui, sans-serif; margin: 2rem; }\n"
+          }
+        }
+      ],
+      "services": [],
+      "site": { "type": "static", "root": ".", "https": true }
+    },
+    {
+      "id": "go-nethttp",
+      "label": "Go (net/http)",
+      "language": "go",
+      "summary": "A small web server with the standard library only.",
+      "runtime": { "kind": "go", "min": "1.21" },
+      "steps": [
+        {
+          "type": "run",
+          "label": "Creating the Go module",
+          "program": "go",
+          "args": ["mod", "init", "{slug}"],
+          "in": "project"
+        },
+        {
+          "type": "files",
+          "label": "Writing main.go",
+          "files": {
+            "main.go": "package main\n\nimport (\n\t\"fmt\"\n\t\"net/http\"\n\t\"os\"\n)\n\nfunc main() {\n\tport := os.Getenv(\"PORT\")\n\tif port == \"\" {\n\t\tport = \"{port}\"\n\t}\n\thttp.HandleFunc(\"/\", func(w http.ResponseWriter, r *http.Request) {\n\t\tfmt.Fprintln(w, \"{name} works.\")\n\t})\n\thttp.ListenAndServe(\"127.0.0.1:\"+port, nil)\n}\n"
+          }
+        }
+      ],
+      "services": [
+        { "name": "{name}", "kind": "go", "settings": { "package": "." }, "port": 8080 }
+      ],
+      "site": { "type": "proxy", "https": true }
+    }
+  ]
+}
