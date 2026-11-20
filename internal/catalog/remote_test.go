@@ -191,7 +191,7 @@ func TestRefreshCachesAndMerges(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if st.CheckedAt == nil || len(st.Sources) != 6+3+len(ghSpecs) {
+	if st.CheckedAt == nil || len(st.Sources) != 6+3+1+len(ghSpecs) {
 		t.Fatalf("status %+v", st)
 	}
 	for _, src := range st.Sources {

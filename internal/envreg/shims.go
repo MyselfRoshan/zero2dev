@@ -36,12 +36,21 @@ var shimmed = map[string][]string{
 	"php":      {"php"},
 	"java":     {"java", "javac", "jar"},
 	"go":       {"go", "gofmt"},
-	"python":   {"python", "pip"}, // 0.0.6: pip is looked for in Scripts\ (agent python)
+	"python":   {"python", "pip"}, // pip.exe is in the Scripts folder below python.exe
 	"composer": {"composer"},      // 0.0.6: composer.bat next to composer.phar (agent composer)
 	"mysql":    {"mysql", "mysqldump"},
 	"mariadb":  {"mariadb", "mysql", "mariadb-dump"},
 	"postgres": {"psql", "pg_dump", "pg_restore"},
 	"redis":    {"redis-cli"},
+}
+
+// toolDirs are the folders a runtime's other commands are looked for in, in order: next to the
+// binary and, for Python, in its Scripts folder.
+func toolDirs(kind, dir string) []string {
+	if kind == "python" {
+		return []string{dir, filepath.Join(dir, "Scripts")}
+	}
+	return []string{dir}
 }
 
 // ownBinary reports whether the first command of the kind is the runtime's
@@ -131,11 +140,18 @@ func FilesAt(home string, d store.Data, exists func(path string) bool, readDir f
 			if i == 0 && ownBinary(kind) {
 				target = rt.Binary
 			} else {
-				// The tool may be an .exe or (npm) a .cmd next to the binary.
-				for _, e := range []string{ext, ".cmd", ".bat"} {
-					if p := filepath.Join(dir, cmd+e); exists(p) {
-						target = p
-						break
+				// The tool may be an .exe or (npm) a .cmd next to the binary; Python keeps pip.exe in
+				// the Scripts folder below it.
+			find:
+				for _, tdir := range toolDirs(kind, dir) {
+					for _, e := range []string{ext, ".cmd", ".bat"} {
+						if p := filepath.Join(tdir, cmd+e); exists(p) {
+							target = p
+							if tdir != dir && !containsFold(dirs, tdir) {
+								dirs = append(dirs, tdir) // the tools its packages install are on the activated PATH too
+							}
+							break find
+						}
 					}
 				}
 			}

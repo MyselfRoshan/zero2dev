@@ -139,14 +139,18 @@ func (s *Supervisor) resolveWith(svc model.Service, d store.Data, lenient bool) 
 	r.warnings = append(r.warnings, plan.Warnings...)
 	if plan.Program != "" && strings.TrimSpace(svc.Command) == "" {
 		// e.g. npm next to node.exe: the same Node version runs the script.
-		if p := siblingProgram(runtimeBin, plan.Program); p != "" {
+		if filepath.IsAbs(plan.Program) { // a Python service runs the python of its virtual environment
+			bin = plan.Program
+		} else if p := siblingProgram(runtimeBin, plan.Program); p != "" {
 			bin = p
 		} else {
 			bin = plan.Program
 		}
 	}
 
-	if filepath.IsAbs(bin) {
+	if madeByPre(plan, bin) {
+		// the python.exe of a virtual environment that a pre-step makes before the start
+	} else if filepath.IsAbs(bin) {
 		if st, err := os.Stat(bin); err != nil || st.IsDir() {
 			if !lenient {
 				return nil, apperr.Conflict("command %s not found", bin)
@@ -186,6 +190,10 @@ func (s *Supervisor) resolveWith(svc model.Service, d store.Data, lenient bool) 
 	if extraPath != "" {
 		env = prependPath(env, extraPath)
 	}
+	if svc.Kind == "python" && !svc.CustomArgs && svc.ID != "" {
+		// The virtual environment first: python, pip and the tools of the packages come from it.
+		env = prependPath(env, kinds.VenvScripts(kinds.VenvDir(s.home, svc.ID), runtime.GOOS == "windows"))
+	}
 	r.env = append(env, r.added...)
 	r.dirs = append(r.dirs, plan.Dirs...)
 	r.files = plan.Files
@@ -204,6 +212,17 @@ func (s *Supervisor) resolveWith(svc model.Service, d store.Data, lenient bool) 
 	r.db = s.planDB(svc, bin, svc.CustomArgs)
 	r.args = append(r.args, dbStartArgs(svc)...) // Redis: --requirepass when it has a password
 	return r, nil
+}
+
+// madeByPre reports whether bin is a file a pre-step of the plan makes (the python.exe of a virtual
+// environment before its first start), so it is no problem that it does not exist yet.
+func madeByPre(plan *kinds.Plan, bin string) bool {
+	for _, st := range plan.Pre {
+		if st.Skip != "" && st.Skip == bin {
+			return true
+		}
+	}
+	return false
 }
 
 // siblingProgram finds name (name.cmd / name.exe on Windows) next to the runtime binary.

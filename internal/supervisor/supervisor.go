@@ -10,10 +10,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"zero2dev/internal/apperr"
+	"zero2dev/internal/kinds"
 	"zero2dev/internal/model"
 	"zero2dev/internal/store"
 )
@@ -496,6 +498,9 @@ func (s *Supervisor) Remove(id string) error {
 	}
 	_ = os.Remove(s.logPath(id))
 	_ = os.Remove(s.logPath(id) + ".1")
+	if id != "" && !strings.ContainsAny(id, "/\\") && id != "." && id != ".." {
+		_ = os.RemoveAll(kinds.VenvDir(s.home, id)) // a Python service's virtual environment
+	}
 	return nil
 }
 

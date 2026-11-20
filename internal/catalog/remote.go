@@ -149,6 +149,7 @@ func (r *Remote) Refresh(ctx context.Context) (Status, []string, error) {
 		{"mariadb", hostLabel(or(r.MariaDBURL, DefaultMariaDBURL)), r.fetchMariaDB},
 		{"postgres", hostLabel(or(r.PostgresPage, DefaultPostgresPage)), r.fetchPostgres},
 		{"vscode", hostLabel(or(r.VSCodeURL, DefaultVSCodeURL)), r.fetchVSCode},
+		{"python", "github.com/" + pythonRepo, r.fetchPython},
 	}
 	for _, s := range ghSpecs {
 		fetchers = append(fetchers, struct {
