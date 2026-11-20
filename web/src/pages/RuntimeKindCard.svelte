@@ -35,6 +35,7 @@
   } from "../lib/store.svelte";
   import type { CatalogEntry, Runtime, RuntimeKind } from "../lib/types";
   import ConfirmDialog from "../ui/ConfirmDialog.svelte";
+  import BringInNote from "../ui/BringInNote.svelte";
   import Icon from "../ui/Icon.svelte";
   import KindIcon from "../ui/KindIcon.svelte";
   import InstallFailure from "../ui/InstallFailure.svelte";
@@ -155,6 +156,7 @@
       {#if open && layout === "list"}Close{:else if installed.length}Manage{:else}<Icon name="download" size={14} /> Install…{/if}
     </button>
   </div>
+  <BringInNote {kind} />
 
   {#if open && layout === "list"}{@render details()}{/if}
 </article>

@@ -17,6 +17,11 @@
 <!-- /mailpit -->
 
 <!-- migrate-backend + migrate-ui: Bring in -->
+- **Bring in** page (`#/migrate`): lists what was found on this PC (editors and tools, registered runtimes, caches and global packages, databases on another server) with each item's size and where it goes. Choose **Copy** (keep the originals) or **Move**; Move is greyed out with the reason for runtimes and databases. Blockers such as "Install VS Code in Zero2Dev first" or "Close VS Code first" come with a link or a **Check again** button, and a warning says when Zero2Dev's folder already holds data (it is saved first).
+- Nothing starts before a review dialog that says what will happen ("This copies 414 MB ..."). Progress shows while the job runs, and a notice says what was done.
+- Databases: a form for the server (type, host, port, user, password), **List databases**, then pick the databases and the Zero2Dev service to copy into, with a check for each field.
+- **History** with **Revert**: each way back (discard the copy, copy back, move back) is explained in plain words and confirmed first.
+- Entry points: **Adopt into Zero2Dev** for registered runtimes in the Runtimes page's detected list, and a note on the runtime cards when an installed VS Code, VSCodium, Notepad++, HeidiSQL or DBeaver (or a registered runtime) can be brought in.
 
 <!-- /migrate -->
 

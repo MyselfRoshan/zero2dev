@@ -152,6 +152,12 @@ try {
     { name: "sites", hash: "#/sites", title: "Sites: local domains" },
     { name: "site-new", hash: "#/sites?new", title: "New site form" },
     { name: "environment", hash: "#/environment", title: "Environment: PATH folders and variables" },
+    {
+      name: "migrate",
+      hash: "#/migrate?source=vscode",
+      title: "Bring in: installed programs, the plan, history",
+      ready: "[data-testid=migrate-plan]",
+    },
     { name: "logs", hash: "#/logs", title: "Logs of every service" },
     { name: "settings", hash: "#/settings", title: "Settings" },
     { name: "help", hash: "#/help", title: "Help and guided tours" },
