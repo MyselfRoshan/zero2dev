@@ -17,10 +17,13 @@ Status: **done** (shipped and tested), **in progress** (code exists but is not f
 | 0.0.3 | Databases, code editors, database tools, settings for each service type, no console window (tray icon), a new dashboard, in-app tutorials, and an Ant Design look with your own accent colour | done |
 | 0.0.4 | **Projects**: one click starts the whole stack, in the right order, and tells you when something crashes; a `.env` file and database variables for every service; runtimes usable from your own terminals; Node.js 26 LTS | done (a few checks on a real Windows desktop are still open, see below) |
 | 0.0.5 | **Data**: databases you can create, fill and reset; snapshots of a whole environment; Mailpit; **Import from this PC** your installed editors, runtimes and databases | done (checks on a real Windows desktop are still open, see below) |
-| 0.0.6 | **More languages** and **one-click new projects** for each language and framework | planned |
-| 0.0.7 | **WSL aware**: run, detect and open projects that live in WSL | planned |
-| 0.0.8 | **Real domains**: ports 80/443, `.test` domains, sharing | planned |
-| Later | Updates, signing, other systems, command line | planned |
+| Engineering | **Taskfile**, one place for the version, release scripts in Go, real-program tests in CI, copy-safe folders (alongside 0.0.6, no visible change) | planned |
+| 0.0.6 | **More languages** (Python, Rust), **Vite+**, an **API client**, the **project file**, CPU and memory per service, and **one-click new projects** for each language and framework | planned |
+| 0.0.7 | **Real domains**: ports 80/443, `.test` domains, sharing | planned |
+| Before 0.1.0 | **Code signing** | planned |
+| Later | Updates, command line, installable dashboard | planned |
+
+What Zero2Dev deliberately does not do (WSL, Docker, other platforms, and more) is listed under [Not planned](#not-planned).
 
 ## What is done
 
@@ -109,10 +112,25 @@ Release 0.0.5: **done**. The tests use a fake for the database programs, the reg
 - **Import, clean-up and space**: copy VS Code, then **Remove the old files** in History: `%APPDATA%\Code\User` and `.vscode\extensions` are gone, Zero2Dev's VS Code still has everything, and **Move back** puts them back. The free space shown on the plan matches the real drive. **Delete backups** really frees the disk space.
 - **VS Code and VSCodium `data` link**: double-click `Code.exe` and `VSCodium.exe` in `bin` and see the same settings and extensions as from **Open**; remove a version and check that `data\code` is untouched.
 
+## Engineering: alongside 0.0.6
+
+No visible change for users. Each stage makes the releases after it cheaper and safer to ship. Windows contributors should
+not need bash, and the checks should run the real program, not only the mock.
+
+| Stage | What | Why it helps | Status |
+| --- | --- | --- | --- |
+| 1 | **Taskfile** (go-task) replaces the Makefile and `build.ps1`: the same commands on Windows and Linux (`task build`, `task test`, `task smoke`, `task bump`) | One entry point instead of PowerShell, make and bash; Task is a single program, installed once (for example `winget install Task.Task`) | planned |
+| 2 | **The version in one place**: `VERSION` is embedded in the program (a root Go package with `go:embed`), so `main.go` and `installer.go` hold no copy. `task bump` also rewrites `web/package.json` and runs `scripts/winres.mjs` for the exe's version info | Today the version is written in `VERSION`, `web/package.json`, `main.go`, `installer.go` and the committed `.syso` | planned |
+| 3 | **Release scripts in Go** (version bump, release check, smoke test) instead of bash, `sed`, `awk`, `python3` and `curl`. `scripts/winres.mjs` stays: Node is needed for the web build anyway | They run on Windows and can be unit-tested; Task's own shell has no `sed` or `awk` on Windows | planned |
+| 4 | **Real-program test in CI**, on Windows and Linux: the built program with a temporary home, a tiny Node service, live logs, health check, clean stop, and a short Playwright pass against it. The mock suite stays for fast UI checks. `scripts/smoke.sh` and `web/e2e/real-daemon.cjs` exist today but CI runs neither, and `real-daemon.cjs` looks out of date | A change to a Go handler that breaks the dashboard now fails CI | planned |
+| 5 | **Nightly desktop checks** (not blocking a release): real MariaDB, PostgreSQL, Redis and Mailpit on a Windows runner (create, import, export, reset, snapshot, restore) | Automates much of the open "real Windows desktop" list under 0.0.5; it needs the network, so it must not block a release | planned |
+| 6 | **Copy or move the folder**: an installed runtime is re-pointed also when its old folder still exists (a copy to a USB stick still runs the original's programs today), and the revert records of **Import from this PC** are checked after a move. Both with tests | The README promises that a copied or moved folder keeps working | planned |
+
 ## 0.0.6: more languages and one-click new projects
 
 Starting a new project today means installing the runtime, running the framework's own generator in a terminal, creating a
-database, then filling in a service and a site by hand. **New project** does all of it from one form.
+database, then filling in a service and a site by hand. **New project** does all of it from one form. The same release adds
+Rust, Vite+ and an API client, and the project file that describes what **New project** builds.
 
 | Stage | What | Why it helps | Status |
 | --- | --- | --- | --- |
@@ -125,54 +143,63 @@ database, then filling in a service and a site by hand. **New project** does all
 | 7 | Zero2Dev **installs what is missing** (the runtime version the framework needs, Composer, a database) and **runs the framework's own generator** with it | The project is made the way its framework intends, with the right versions | planned |
 | 8 | It then **creates the project**: its services, its database with a user, a `name.localhost` site, a `.env` with the connection filled in, and opens the folder in the installed editor | From nothing to a running app in the browser in one click | planned |
 | 9 | Frameworks are a **list shipped with Zero2Dev** (like the runtime catalog), so new ones are added without code | The list can grow quickly and be updated between releases | planned |
+| 10 | **Vite+** (`vp`): a project that uses it (a `vite-plus` dependency or a `vp` script) gets its commands (`vp dev`, `vp build`, `vp run`, `vp test`) offered as the service's script, and `vp create` joins the generators below. Vite+ manages Node.js and the package manager itself (`vp env install`, `vp env pin`), so Zero2Dev **tells the user that a Vite+ project can get its Node from Vite+ instead of from Zero2Dev's Node runtime**, and shows which of the two the service will use. The choice is made once per service, so a project never has two Node versions fighting over `PATH` | Vite+ projects work out of the box, and nobody installs Node twice by accident | planned |
+| 11 | **Rust** (Cargo) as a language: the toolchain is installed with rustup into `data\rust` (`RUSTUP_HOME` and `CARGO_HOME`), and a service type runs `cargo run`. The toolchain choice is settled when the stage starts: the MSVC toolchain needs the Visual Studio Build Tools (an administrator install), the GNU toolchain should not (to be tested) | A Rust project runs without a global rustup and without changing the system | planned |
+| 12 | **API client** as a new tool category, like Database tools: installed portable, its data in `data\<tool>`, **Open** on the project folder. **Both of these are offered**, so the user picks by what matters to them (checked on 2026-11-20 from the release pages): **Bruno** (MIT; Windows zip, 177 MB; its collections are plain files in the project folder, so they go into Git, snapshots and the project file) and **Hoppscotch Desktop** (portable zip, about 45 MB, the small one; its collections are kept in the app or an account, not in the project). Each must pass three checks before it ships: a portable zip, a published checksum (not verified yet), and settings that can move into `data\`. **Yaak** (MIT, about 45 MB) was looked at and left out: it only comes as an installer, so it cannot stay in the portable folder | Test the API a service exposes without a separate install, with a light choice and a project-friendly choice | planned |
+| 13 | **Project file** (`zero2dev.json`): export a project, and **Import project** from a file or a cloned repository. It describes what **New project** creates, so the two share one format. Paths are relative to the file, runtimes are a kind plus a version, and secrets are never written | `git clone`, Import, Start: a new team member has the same stack | planned |
+| 14 | **CPU and memory per service** on the dashboard and the service page, summed over the service's whole process tree (every service already runs in its own Windows job object) | Find the service that slows the machine down | planned |
 
 Frameworks in the first list, each with the generator Zero2Dev runs:
 
 | Language | Frameworks | Generator |
 | --- | --- | --- |
 | PHP | Laravel, Symfony, WordPress, plain PHP | `composer create-project`, WordPress download (SHA-1 listed by wordpress.org) |
-| JavaScript / TypeScript | Express, NestJS, Next.js, Vite (React, Vue, Svelte), Astro | `npm create ...`, `npx create-next-app` |
+| JavaScript / TypeScript | Express, NestJS, Next.js, Vite (React, Vue, Svelte), Astro | `npm create ...`, `npx create-next-app`, `vp create` for a Vite+ project |
 | Python | Django, FastAPI, Flask | `django-admin startproject`, a starter folder for FastAPI and Flask, in a virtual environment |
 | Go | net/http, Gin, Fiber | `go mod init` and a starter `main.go` |
 | Java | Spring Boot | a project from start.spring.io (Maven or Gradle) |
+| Rust | Axum (a starter) | `cargo new` and a starter `main.rs` |
 | Static | HTML and CSS | a starter folder served by the site server |
 
-## 0.0.7: WSL aware
-
-Many Windows developers keep their code in WSL. Today Zero2Dev only sees Windows programs and Windows folders.
+## 0.0.7: real domains and sharing
 
 | Stage | What | Why it helps | Status |
 | --- | --- | --- | --- |
-| 1 | **Find WSL**: list the installed distributions and whether each is running | Zero2Dev knows WSL is there without any setup | planned |
-| 2 | **WSL folders**: accept `\\wsl$\Ubuntu\home\me\app` and `/home/me/app`, and convert between them | Pick a project folder inside WSL from the same folder picker | planned |
-| 3 | **Run a service inside WSL** (`wsl.exe -d <distro> --cd <folder> -- <command>`), with its logs, health check and clean stop like any other service | A Node or PHP app in WSL is started and stopped from Zero2Dev | planned |
-| 4 | **Runtimes inside WSL**: detect `node`, `php`, `go`, `python` and databases installed in a distribution, and install Linux builds there from the catalog | Use the Linux versions of the tools without leaving Zero2Dev | planned |
-| 5 | **Ports and sites**: reach a WSL service on `127.0.0.1` (WSL forwards localhost) and point a `*.localhost` site at it | `shop.localhost` works the same whether the app runs in Windows or WSL | planned |
-| 6 | **Open in** VS Code or VSCodium connected to WSL, and a terminal in the distribution | Edit and run commands where the code lives | planned |
-| 7 | **Warnings that save time**: a WSL project kept on `/mnt/c` (slow file access), or a Windows project run inside WSL | Points at the setup mistakes that make WSL feel slow | planned |
-| 8 | **New project** and **snapshots** work for WSL projects too | The same one-click creation and undo inside WSL | planned |
-
-Zero2Dev stays a Windows program: it never installs WSL, never changes a distribution's configuration, and only runs what
-the user set up as a service.
-
-## 0.0.8: real domains and sharing
-
-| Stage | What | Why it helps | Status |
-| --- | --- | --- | --- |
-| 1 | **Ports 80 and 443** for sites (optional, asks for permission once) | `http://shop.localhost` without `:8080` | planned |
-| 2 | **Hosts-file domains** such as `shop.test` (optional, with a clear undo) | For apps that need a real-looking domain or cookies across subdomains | planned |
+| 1 | **Ports 80 and 443** for sites (optional). Windows does not keep them for administrators, so no permission is needed: Zero2Dev checks that they are free, names what holds them (IIS, the World Wide Web Publishing Service, another web server, a reserved port range) and says how to free them | `http://shop.localhost` without `:8080` | planned |
+| 2 | **Hosts-file domains** such as `shop.test` (optional; this is the one place that needs administrator permission, asked for once, with a clear undo) | For apps that need a real-looking domain or cookies across subdomains | planned |
 | 3 | **Share a site** for a few hours through a tunnel (for example cloudflared) | Show work to a client or test a webhook without deploying | planned |
+
+## Before 0.1.0
+
+| What | Why it helps | Status |
+| --- | --- | --- |
+| **Code signing** of the release `.exe` through the free open-source program of the SignPath Foundation, from the release workflow (the program's terms and the repository's eligibility need checking first) | Fewer SmartScreen and antivirus warnings on a downloaded program that starts other programs | planned |
 
 ## Later
 
 | What | Why it helps | Status |
 | --- | --- | --- |
-| **Project file** (`zero2dev.json` in the repository) that creates the project's services, sites and databases | A new team member clones the repository and clicks **Import project** | planned |
 | **Command line**: `zero2dev start <project>`, `zero2dev stop --all`, `zero2dev logs <service>` | Scripts and editors can drive Zero2Dev | planned |
-| **CPU and memory per service** on the dashboard | Find the service that slows the machine down | planned |
 | **Auto-update** of Zero2Dev itself, verified | No manual download for each release | planned |
-| **Code signing** | Fewer antivirus and SmartScreen warnings | planned |
-| **Linux and macOS** at the same level as Windows (today the catalog has Linux builds of Node, Go and Caddy only, and Java from Adoptium; no tray) | The same tool for the whole team | planned |
+| **Installable dashboard**: a web app manifest and icons, so the browser offers **Install** and the dashboard opens in its own window with a taskbar icon. No service worker, so nothing is cached and there are no stale pages after an update | An app-like window at almost no cost | planned |
+
+## Not planned
+
+Zero2Dev is the **portable, no-administrator, no-Docker, Windows-native stack for several languages**. Anything that pulls
+away from that is left out on purpose:
+
+| Not planned | Why |
+| --- | --- |
+| **Docker or container features** | Containers are a different tool with its own ecosystem; Zero2Dev exists for people who do not want one |
+| **WSL support** (running services in a distribution, Linux runtimes, remote editors) | WSL needs a Windows feature and a distribution installed, and people who keep their code there already have Linux tooling. It was planned as 0.0.7 and is removed |
+| **Dev Containers and Nix-style reproducibility** | The project file and snapshots cover what a team needs from Zero2Dev, with the runtimes Zero2Dev installs |
+| **A database administration tool** (a table browser, a query editor, more database engines for their own sake) | HeidiSQL and DBeaver do this, and Zero2Dev already opens them on a database. Snapshots, import and export stay |
+| **Linux and macOS as supported platforms** | Those systems have good native tooling (Homebrew, system packages, version managers), and the tray, the job objects, the no-administrator story and the runtime catalog are Windows-specific. The Linux build keeps compiling and runs the race-detector tests in CI, with no promise of the same features; macOS is not built or tested at all |
+| **Replacing `state.json` with SQLite** | The file is written atomically (a temporary file, then a rename), the data is small and readable, and Zero2Dev has no third-party Go modules. If corruption is ever reported, a copy of the last good file is the first thing to add |
+| **A service helper or `netsh http add urlacl`** to open ports 80 and 443 | Windows has no administrator-only ports, and `urlacl` only applies to programs built on the Windows HTTP Server API, which Caddy and nginx are not. Installing a service would itself need administrator permission |
+| **Mock Service Worker** for UI tests | `web/mock/server.mjs` is already a complete fake daemon that the end-to-end test drives through the real API client; the real-program checks are added next to it (see Engineering) |
+| **A full PWA with a service worker** (`vite-plugin-pwa`) | The dashboard needs the running daemon to show anything, so offline support has no use, and a cache in front of an interface that is embedded in each release can show an old version after an update |
+| **Package managers as the only source of runtimes** (winget, Scoop, Nix) | Version lists are already read from each publisher, so the catalog is not a hand-kept list; its upkeep is the readers that follow each publisher's pages. A package manager's manifests may help as a second source for one runtime whose page is hard to read, judged for that runtime |
 
 ---
 
