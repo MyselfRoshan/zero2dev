@@ -6,6 +6,10 @@
 
 <!-- db-backend + db-ui: databases (create, users, import, export, reset, password) -->
 
+- **Databases on the service page.** A MariaDB, MySQL or PostgreSQL service page has a **Databases** section: the databases with their sizes and the users, **Create database**, **Create user** (with a generated password and all privileges on one database), **Import a dump** (`.sql` or `.sql.gz`, into an existing or a new database, with a progress bar) and **Export** (a name ending in `.gz` compresses it; an existing file is replaced only after a confirm). **Browse...** opens the Windows Open and Save as dialogs. Tools that need the running server are off while it is stopped, and the page says why.
+- **Administrator password.** **Set password**, **Change password** and **Remove password** while the server runs, on Redis too. **Connection** shows the password hidden, with **Show** and **Copy**, and the URL includes it (URL-escaped). The hint under it says what the password changes.
+- **Reset a database.** A danger button, only while the service is stopped, behind a confirmation that names the databases and the data folder it deletes. A snapshot is offered first, as before an import.
+
 <!-- /databases -->
 
 <!-- snapshot-backend + snapshot-ui: snapshots, restore, clone, offers before risky actions -->

@@ -241,7 +241,22 @@ Good to know:
 - A MariaDB, MySQL or PostgreSQL service page has **Open in HeidiSQL** and **Open in DBeaver** when those are installed. They connect straight to the database. HeidiSQL keeps its settings in `data\heidisql`, DBeaver its workspace in `data\dbeaver\workspace`.
 - Programs opened this way are not services: they keep running when Zero2Dev stops.
 
-<!-- db-ui: "### Working with a database" (create a database and a user, import and export a dump, password, reset) goes here. -->
+### Working with a database
+
+A MariaDB, MySQL or PostgreSQL service page has a **Databases** section. It lists the databases on the server with their sizes, and the users. Most of its tools work inside the running server, so they are off while it is stopped, and the section says why. **Reset** is the other way round: it works only while the server is stopped. A Redis service page has only the password and reset.
+
+- **Create database:** enter a name of 1-64 letters, digits or `_`. The system databases (`mysql`, `information_schema`, `performance_schema`, `sys`, `postgres`, `template0`, `template1`) are not listed and cannot be used.
+- **Create user:** a user name, a password (**Generate** makes a random one) and, optionally, the database the user gets all privileges on. Your app then logs in with this user.
+- **Import a dump:** pick the database, or **A new database...** to create one first. Then enter the path of a `.sql` file or a compressed `.sql.gz`, or click **Browse...**. The statements run in that database, with a progress bar. If one fails, the import stops and what came before it stays. The file itself is only read.
+- **Export:** pick the database and where to save it (**Browse...** suggests `shop-2026-11-18.sql`). A name ending in `.gz` writes a compressed dump. The file appears only when the export has finished. If it already exists, Zero2Dev asks before replacing it.
+- While an import or an export runs, the other tools wait until it has finished. Its progress stays on the page when you leave and come back.
+
+**Administrator password.** The server starts without one (`root`, or `postgres`). **Set password** gives the administrator a password while the server runs; **Change password** and **Remove password** do what they say.
+- Zero2Dev keeps the password and uses it to stop the server cleanly. Apps that use the database get it in `DB_PASSWORD` and `DATABASE_URL` (Redis: `REDIS_URL`) from their next start, so restart them. **Open in HeidiSQL** and **Open in DBeaver** use it too.
+- **Connection** shows it hidden, with **Show** and **Copy**. The URL includes it once one is set.
+- PostgreSQL still lets programs on this PC connect without a password. The password is there for apps and tools that ask for one.
+
+**Reset** deletes the server's data folder: every database, every user and the password. The confirmation names the databases and the folder. The next start sets the server up again, empty and without a password. Stop the service first. Zero2Dev offers to take a snapshot before a reset or an import, so you can go back.
 
 <!-- mailpit: "### Catch e-mails with Mailpit" goes here. -->
 

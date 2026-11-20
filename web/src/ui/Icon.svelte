@@ -55,6 +55,10 @@
   import reorder from "@iconify-icons/lucide/arrow-up-down";
   import undo from "@iconify-icons/lucide/undo-2";
   import sparkles from "@iconify-icons/lucide/sparkles";
+  import eye from "@iconify-icons/lucide/eye";
+  import eyeOff from "@iconify-icons/lucide/eye-off";
+  import upload from "@iconify-icons/lucide/upload";
+  import userPlus from "@iconify-icons/lucide/user-plus";
 
   type Props = { name: string; size?: number; label?: string };
   let { name, size = 16, label }: Props = $props();
@@ -64,6 +68,7 @@
     info, power, grid, list, help, book, activity, database, arrowRight, lightbulb, rocket, lifebuoy,
     circleCheck, clock, compass, playCircle, sun, moon, monitor, palette, projects, terminal, variable,
     chevronUp, chevronDown, reorder, undo, sparkles,
+    eye, eyeOff, upload, userPlus,
   };
   const icon = $derived(icons[name as keyof typeof icons]);
 </script>
