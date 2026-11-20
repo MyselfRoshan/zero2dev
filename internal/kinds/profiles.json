@@ -1339,7 +1339,7 @@
           "--bind",
           "127.0.0.1"
         ],
-        "help": "Only this PC can connect. There is no password."
+        "help": "Only this PC can connect. There is no password until you set one under Database tools; Zero2Dev then adds --requirepass."
       },
       {
         "args": [

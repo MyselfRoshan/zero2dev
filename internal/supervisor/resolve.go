@@ -59,7 +59,7 @@ func (s *Supervisor) Preview(svc model.Service) Preview {
 	for _, f := range r.files {
 		files = append(files, f.Path)
 	}
-	return Preview{Program: r.bin, Args: nonNil(r.args), Env: nonNil(r.shown), Workdir: r.workdir, DataDir: r.dataDir, Files: files, Warnings: nonNil(r.warnings)}
+	return Preview{Program: r.bin, Args: maskArgs(r.args), Env: maskEnv(r.shown), Workdir: r.workdir, DataDir: r.dataDir, Files: files, Warnings: nonNil(r.warnings)}
 }
 
 func nonNil(s []string) []string {
@@ -200,6 +200,7 @@ func (s *Supervisor) resolveWith(svc model.Service, d store.Data, lenient bool) 
 		r.workdir = s.home
 	}
 	r.db = s.planDB(svc, bin, svc.CustomArgs)
+	r.args = append(r.args, dbStartArgs(svc)...) // Redis: --requirepass when it has a password
 	return r, nil
 }
 
