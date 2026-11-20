@@ -1376,4 +1376,130 @@ Sources (`program`): `vscode`, `vscodium`, `notepadpp`, `heidisql`, `dbeaver`, `
   - A database copy drops the databases it created in the Zero2Dev service.
 - `Settings.portable` is switched on by a migration of `npm-global`, `composer` or `go-cache`, and off by its revert.
 
-*(To be completed by the migrate-backend work: the exact items per program, HeidiSQL's settings format and the adoption details.)*
+#### Items per program
+
+`<data>` is the data folder. `items[].label` is what `MigrateRequest.items` names.
+
+| Program | Item (`label`, `kind`) | From | To |
+| --- | --- | --- | --- |
+| `vscode` | `Settings` (dir) | `%APPDATA%\Code\User` | `<data>\code\user-data\User` |
+| | `Extensions` (dir) | `%USERPROFILE%\.vscode\extensions` | `<data>\code\extensions` |
+| `vscodium` | `Settings` (dir) | `%APPDATA%\VSCodium\User` | `<data>\codium\user-data\User` |
+| | `Extensions` (dir) | `%USERPROFILE%\.vscode-oss\extensions` | `<data>\codium\extensions` |
+| `notepadpp` | `Settings` (dir) | `%APPDATA%\Notepad++` | `<data>\notepadpp` |
+| `dbeaver` | `Workspace` (dir) | `%APPDATA%\DBeaverData\workspace6` | `<data>\dbeaver\workspace` |
+| `heidisql` | `Sessions and settings` (registry) | `HKEY_CURRENT_USER\Software\HeidiSQL` | `<data>\heidisql\portable_settings.txt` |
+| `npm-global` | `Global packages` (dir) | `%APPDATA%\npm` | `<data>\node\global` |
+| `npm-cache` | `Download cache` (dir) | `%LOCALAPPDATA%\npm-cache` | `<data>\node\npm-cache` |
+| `go-cache` | `Module cache` (dir) | `%USERPROFILE%\go\pkg\mod` | `<data>\go\path\pkg\mod` |
+| | `Build cache` (dir) | `%LOCALAPPDATA%\go-build` | `<data>\go\cache` |
+| `composer` | `Composer home` (dir) | `%APPDATA%\Composer` | `<data>\composer` |
+| `runtime` | `Program` (runtime) | the runtime's installation folder | `<bin>\adopted\<kind>-<version>` |
+| `database` | `Databases` (databases) | `<kind>://<host>:<port>` | the target service's name |
+
+The targets are the folders Zero2Dev's own editors use (`VSCODE_PORTABLE`, `-settingsDir`, `--psettings`, `-data`). The Go folders are the ones the Go setting "Keep Go's downloads and build cache in the data folder" uses.
+
+- **Found, size, target:**
+  - `found` is true when at least one item exists, and the database source is always found.
+  - `sizeBytes` is the size of the files, or for HeidiSQL the size of the file it would write.
+  - Only items that exist are brought in. When none of the chosen items exists, the answer is `409` "`nothing of <label> was found on this PC`".
+  - `targetHasData` means a target is a file with bytes in it, or a folder that is not empty.
+- **Blockers:**
+  - "`Install <program> in Zero2Dev first`": the editors and database tools need a Zero2Dev-installed runtime of that kind.
+  - "`Close <program> first`": the process check looks for `Code.exe`, `VSCodium.exe`, `notepad++.exe`, `heidisql.exe` or `dbeaver.exe`, and for an adopted editor its own exe.
+  - "`<label> was already brought in (mig_...); revert that first`": only one live migration per source. The database source has no such limit.
+  - Runtimes: "`The program <binary> is missing`", or a folder that is not the program's own (a drive root, the Windows folder, a shim folder such as `chocolatey\bin` or `scoop\shims`).
+  - Databases: "`Add a MariaDB, MySQL or PostgreSQL service in Zero2Dev first`", or "`Database tools are not available in this build`".
+- **Other errors:**
+  - `400`: `mode` other than `copy`/`move`, an unknown item label, or a `move` of a copy-only source.
+  - `404`: an unknown `source`, or an unknown migration on revert.
+  - `409`: a blocker; a second job on the same source (`details.jobId`); a revert of a reverted migration or of one that is still running.
+  - Revert with a `how` not in `revertOptions` is `400`.
+- **Revert options:**
+  - A copy offers `["discard", "copy-back"]` and a move offers `["move-back"]`.
+  - A runtime or database migration offers `["discard"]`.
+  - A failed migration is rolled back at once. It is listed as `failed` with `revertOptions: []`. When the rollback also failed, it keeps its options, so the user can finish the job.
+- **Order of a bring-in:**
+  1. The current target is moved to `backup-target\<n>-<label>\`.
+  2. A copy is copied and then checked: the same number of files and bytes.
+  3. A move is a rename on one volume. Across volumes it is copied, checked, and the original is deleted only then. If the delete fails, the original is put back from the copy.
+- **What each revert does:**
+  - **discard** deletes the target and puts `backup-target` back.
+  - **copy-back** first moves whatever is at the original place to `backup-original\<n>-<label>\`. Then it copies the portable data there. The portable copy stays, and the migration is `reverted`.
+  - **move-back** saves the original place the same way, moves the portable data back, and then puts `backup-target` back.
+- **VS Code extensions.** `extensions\extensions.json` holds absolute paths, which are rewritten to the new folder, and back on copy-back and move-back:
+  - `location.fsPath`, with the drive letter in lower case;
+  - `location.path` (`/d:/...`);
+  - `location.external` (`file:///d%3A/...`), when it was there.
+
+  An entry is rewritten when it has a `relativeLocation`, or when its location is inside the old folder.
+- **`migration.json`** is the `Migration` plus `format: 1`, the steps with their backup paths, the adopted runtime's paths, and the database server (`kind`, `host`, `port`, `user`; never the password). While the job runs, the record has `state: "running"` and is left out of `GET /api/migrations`. A record still `running` after a restart is listed as `failed`.
+
+#### HeidiSQL's settings format
+
+HeidiSQL keeps its settings in `HKCU\Software\HeidiSQL`. Its portable build, and its "Export settings" command, use a text file instead: UTF-8 (a BOM is accepted on reading), one value per line, CRLF between lines:
+
+```
+MainWinMaximized<|||>3<|||>1
+Servers\Local\Host<|||>1<|||>127.0.0.1
+Servers\Local\StartupScript<|||>1<|||>line1<{{{><}}}>line2
+```
+
+- The fields are separated by `<|||>`: the value's path relative to the HeidiSQL key (subkeys joined with `\`), the type, and the value.
+- The type is Delphi's `TRegDataType`:
+  - `1` is a string. CR is written as `<{{{>` and LF as `<}}}>`.
+  - `3` is an integer: a `REG_DWORD` as a signed decimal (`0xFFFFFFFF` is `-1`).
+- `REG_EXPAND_SZ` is written as a string. Other types (binary, multi-string, QWORD) cannot go in the file. They are left out of it and kept in the backup.
+- After writing the file, Zero2Dev reads it back and compares it with the key.
+- **Move:** before the key is deleted (`RegDeleteTree`), it is saved in `backup-original\<n>-sessions-and-settings\` as:
+  - `registry.json`, every value with its raw bytes;
+  - `HeidiSQL.reg`, a Registry Editor 5.00 file that can be double-clicked to restore the key.
+- **Move-back** writes the file's values (with what HeidiSQL changed since) into the key again. The values the file could not hold come from `registry.json`. Whatever the key held by then is saved first.
+- **Copy-back** writes the file's values over the key, after saving it.
+
+Only keys below `HKCU\Software\` are ever opened. The registry is reached through `advapi32.dll`, with no dependencies.
+
+#### Runtime adoption
+
+- **Sources.** There is one `runtime:<id>` source per runtime with `source: "registered"`, except binaries already inside the bin folder.
+- **The installation folder** is the binary's folder (symlinks resolved), or the folder above it when that one is called `bin`: Go, Java, MariaDB, PostgreSQL. For example, `C:\Program Files\nodejs\node.exe` gives `C:\Program Files\nodejs`, and `C:\Program Files\Go\bin\go.exe` gives `C:\Program Files\Go`.
+- **The copy:**
+  - It goes to `<bin>\adopted\<kind>-<version>`, with `-2`, `-3` and so on when the name is taken. A version that is not known is `unknown`.
+  - For a database server, a top-level `data` folder is left out: Zero2Dev keeps its own data.
+  - The copy is checked like any other copy.
+- **The runtime keeps its `id`.** Only these change:
+  - `binary` becomes the same file inside the copy;
+  - `source` becomes `"installed"`.
+
+  Services, defaults and environment entries that name the runtime keep working, and `runtimes.changed` is published. The installed program is not touched.
+- **Discard** puts back the registered `binary` and `source: "registered"`, removes the copy, and publishes `runtimes.changed`.
+  - It is `409` "`the original program <binary> is gone; keep the adopted copy`" when the original is gone.
+  - A runtime deleted in the meantime only has its copy removed.
+
+#### Databases
+
+- **`POST /api/migrations/databases`** and the `database` source check:
+  - `kind` (`mariadb`, `mysql` or `postgres`), `host` and `user` are required;
+  - `port` is 1-65535;
+  - the password has no line breaks.
+
+  Any of these is `400`.
+- **The client programs** come from the target service's runtime. For the list, they come from a MariaDB/MySQL (or PostgreSQL) runtime in Zero2Dev, else the answer is `409` "`Install MariaDB or MySQL in Zero2Dev first: its client programs are needed`".
+- **Before the job:**
+  - Names follow the database rules, and system databases are `400`.
+  - The target service must exist (`404`) and be of a matching kind: MariaDB/MySQL for `mariadb`/`mysql`, PostgreSQL for `postgres` (`400`). It must not be the source server itself (`400`).
+  - Zero2Dev lists the target's databases (`409` "`cannot reach <service>; start it first`"). A database that already exists there is `409`. That way the revert drops only databases this migration created.
+- **The job** calls `CopyFromServer`, and its percent and step are the job's.
+- **Discard** calls `DropDatabases` for the copied databases. A service deleted in the meantime has nothing to drop.
+
+#### Portable caches
+
+`profiles.json` gives the `node`, `php` and `go` kinds a `portable` list: `{ setting, env: [{ name, value, help }], path?, help }`, where `{home}` is the data folder. While `Settings.portable.<setting>` is on, a service of that kind (and its terminal) gets these, after the kind's own variables and before the database, `.env` and user variables:
+
+| Setting | Variables | First on `PATH` |
+| --- | --- | --- |
+| `npmGlobal` | `npm_config_prefix=<data>\node\global` | `<data>\node\global` |
+| `composer` | `COMPOSER_HOME=<data>\composer` | `<data>\composer\vendor\bin` |
+| `goCache` | `GOMODCACHE=<data>\go\path\pkg\mod`, `GOCACHE=<data>\go\cache` | - |
+
+The preview shows the `PATH` entry as `<folders>;%PATH%`.
