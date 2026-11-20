@@ -1,4 +1,4 @@
-// Pure helpers for the Bring in page (#/migrate) and its entry points: grouping the sources found
+// Pure helpers for the Import page (#/migrate) and its entry points: grouping the sources found
 // on this PC, sizes, the review text shown before a migration starts, plain-words explanations of
 // the revert choices, blockers turned into actions, and the database copy form's checks.
 import type {
@@ -128,7 +128,7 @@ export function sourceSummary(s: MigrateSource): string {
   if (!s.found) return "Not found on this PC";
   if (s.program === "database") return "Pick a server and the databases to copy";
   const present = s.items.filter((i) => i.exists);
-  if (!present.length) return "Found, but there is nothing to bring in";
+  if (!present.length) return "Found, but there is nothing to import";
   const names = present.map((i) => i.label);
   const list = names.length <= 3 ? joinWords(names) : `${names.length} items`;
   return `${list}, ${fmtSize(totalSize(present))}`;
@@ -263,9 +263,9 @@ export function noteFor(
     if (migrations.some((m) => m.source === s.id && m.state === "done")) return null;
     const what = kind === "heidisql" || kind === "dbeaver" ? "settings and connections" : "settings";
     return {
-      text: `Your installed ${s.label} ${what} can be brought in.`,
+      text: `Your installed ${s.label} ${what} can be imported.`,
       href: sourceHref(s.id),
-      link: "Bring them in",
+      link: "Import them",
     };
   }
   const ofKind = new Set(runtimes.filter((r) => r.kind === kind && r.source === "registered").map((r) => r.id));
@@ -277,7 +277,7 @@ export function noteFor(
       href: sourceHref(mine[0].id),
       link: "Adopt into Zero2Dev",
     };
-  return { text: `${mine.length} versions are registered by path.`, href: "#/migrate", link: "Adopt them in Bring in" };
+  return { text: `${mine.length} versions are registered by path.`, href: "#/migrate", link: "Adopt them in Import" };
 }
 
 // ---------- database copy form ----------
@@ -307,7 +307,7 @@ export type DbField = "host" | "port" | "user" | "databases" | "target";
 
 const LOCAL = /^(localhost|127\.0\.0\.1|::1|\[::1\])$/i;
 
-/** Checks before "List databases". `zero2dev` are the services Zero2Dev runs (a copy from one of them is not what Bring in is for). */
+/** Checks before "List databases". `zero2dev` are the services Zero2Dev runs (a copy from one of them is not what Import is for). */
 export function validateDbForm(f: DbForm, zero2dev: Service[] = []): Partial<Record<DbField, string>> {
   const e: Partial<Record<DbField, string>> = {};
   const host = f.host.trim();
@@ -343,4 +343,262 @@ export function validateDbCopy(
 export function joinWords(words: string[]): string {
   if (words.length <= 1) return words.join("");
   return `${words.slice(0, -1).join(", ")} and ${words[words.length - 1]}`;
+}
+
+// ---------- is it worth importing? ----------
+
+export type AdviceLevel = "recommended" | "optional" | "skip";
+export interface Advice {
+  level: AdviceLevel;
+  reason: string;
+}
+
+export const adviceLabel = (l: AdviceLevel): string =>
+  l === "recommended" ? "Recommended" : l === "optional" ? "Optional" : "Not worth it";
+
+const SMALL = "Small, and it keeps your keybindings, snippets, themes and saved connections.";
+
+/** Whether an item is worth importing, and why. Without an item: the source as a whole. */
+export function adviceFor(s: MigrateSource, item?: MigrateItem): Advice {
+  switch (s.program) {
+    case "vscode":
+    case "vscodium":
+      return item?.label === "Extensions"
+        ? {
+            level: "recommended",
+            reason: "Keeps the exact versions you use. Large, but it saves downloading them all again.",
+          }
+        : { level: "recommended", reason: SMALL };
+    case "notepadpp":
+    case "heidisql":
+    case "dbeaver":
+      return { level: "recommended", reason: SMALL };
+    case "npm-global":
+      return {
+        level: "recommended",
+        reason: "Your global tools (npm install -g). They work in Zero2Dev's terminal afterwards.",
+      };
+    case "composer":
+      return {
+        level: "recommended",
+        reason: "Your global PHP packages and auth.json. They work in Zero2Dev's terminal afterwards.",
+      };
+    case "go-cache":
+      return { level: "optional", reason: "It rebuilds by itself, but bringing it in saves a long first build." };
+    case "npm-cache":
+      return {
+        level: "skip",
+        reason: "It fills up again by itself, and it is mostly wasted space. Skip it unless you work offline.",
+      };
+    case "runtime":
+      return {
+        level: "optional",
+        reason: "Only if you want Zero2Dev to own this install. It is copy only; the installed program stays.",
+      };
+    case "database":
+      return { level: "optional", reason: "A one-off copy of the databases you pick. The server keeps its own." };
+    default:
+      return { level: "optional", reason: "" };
+  }
+}
+
+/** The labels to tick when a plan opens: the recommended items, or all when there is one item or none is recommended. */
+export function defaultChecked(s: MigrateSource): string[] {
+  const present = s.items.filter((i) => i.exists);
+  if (present.length <= 1) return present.map((i) => i.label);
+  const rec = present.filter((i) => adviceFor(s, i).level === "recommended");
+  return (rec.length ? rec : present).map((i) => i.label);
+}
+
+// ---------- status of a source ----------
+
+export interface SourceStatus {
+  key: "new" | "copied" | "moved" | "adopted" | "blocked";
+  text: string;
+  tone: "ok" | "idle" | "accent";
+}
+
+/** The migration that holds a source now: done and not reverted. */
+export const activeMigration = (history: Migration[] | null, sourceId: string): Migration | undefined =>
+  history?.find((m) => m.source === sourceId && m.state === "done");
+
+export function sourceStatus(s: MigrateSource, history: Migration[] | null): SourceStatus {
+  const act = activeMigration(history, s.id);
+  if (act) {
+    const key = act.mode === "move" ? "moved" : act.program === "runtime" ? "adopted" : "copied";
+    return { key, text: stateLabel(act).text, tone: "ok" };
+  }
+  if (s.blockers.length) return { key: "blocked", text: "Not ready", tone: "idle" };
+  return { key: "new", text: "Not imported", tone: "accent" };
+}
+
+/** Whether a row can be ticked for a batch: found, ready, not the database form, not imported already. */
+export const selectable = (s: MigrateSource, history: Migration[] | null): boolean =>
+  s.found && s.program !== "database" && !s.blockers.length && !activeMigration(history, s.id);
+
+// ---------- summary and the recommended list ----------
+
+export interface Recommended {
+  source: MigrateSource;
+  items: MigrateItem[];
+  bytes: number;
+}
+
+/** What is worth importing and can start now, source by source. */
+export function recommended(sources: MigrateSource[], history: Migration[] | null): Recommended[] {
+  const out: Recommended[] = [];
+  for (const s of sources) {
+    if (!selectable(s, history)) continue;
+    const items = s.items.filter((i) => i.exists && adviceFor(s, i).level === "recommended");
+    if (items.length) out.push({ source: s, items, bytes: totalSize(items) });
+  }
+  return out;
+}
+
+export interface Summary {
+  found: number;
+  bringable: number;
+  broughtIn: number;
+  backups: number;
+}
+
+export function summary(sources: MigrateSource[], history: Migration[]): Summary {
+  const found = sources.filter((s) => s.found && s.program !== "database" && s.items.some((i) => i.exists));
+  const open = found.filter((s) => !activeMigration(history, s.id));
+  return {
+    found: found.length,
+    bringable: totalSize(open.flatMap((s) => s.items.filter((i) => i.exists))),
+    broughtIn: history.filter((m) => m.state === "done").length,
+    backups: backupTotal(history),
+  };
+}
+
+// ---------- free space ----------
+
+export interface FreeSpace {
+  state: "unknown" | "ok" | "tight" | "short";
+  needed: number;
+  free: number;
+  text: string;
+}
+
+/** Compares what is about to be written with the free space of the drive. A move counts like a copy: across drives it needs the room. */
+export function freeSpace(s: MigrateSource, needed: number): FreeSpace {
+  const free = s.targetFreeBytes;
+  if (!(free > 0) || needed <= 0) return { state: "unknown", needed, free: 0, text: "" };
+  const n = fmtSize(needed);
+  const f = fmtSize(free);
+  if (free < needed)
+    return {
+      state: "short",
+      needed,
+      free,
+      text: `Needs ${n}, but only ${f} is free on Zero2Dev's drive. Free some space first.`,
+    };
+  if (free < needed * 1.2)
+    return { state: "tight", needed, free, text: `Needs ${n}, and ${f} is free on Zero2Dev's drive. That is tight.` };
+  return { state: "ok", needed, free, text: `Needs ${n}; ${f} is free on Zero2Dev's drive.` };
+}
+
+// ---------- several at once ----------
+
+export type BatchState = "waiting" | "running" | "done" | "failed";
+export interface BatchEntry {
+  sourceId: string;
+  label: string;
+  mode: MigrateMode;
+  /** The `items` of the request: [] means all. */
+  items: string[];
+  bytes: number;
+  state: BatchState;
+  error: string;
+  /** Percent while it runs. */
+  percent: number;
+}
+
+/** One entry per ticked source: its recommended items, moved when asked and allowed, else copied. */
+export function buildBatch(
+  sources: MigrateSource[],
+  history: Migration[] | null,
+  ids: string[],
+  preferMove: boolean,
+): BatchEntry[] {
+  const out: BatchEntry[] = [];
+  for (const id of ids) {
+    const s = sources.find((x) => x.id === id);
+    if (!s || !selectable(s, history)) continue;
+    const labels = defaultChecked(s);
+    const items = pickedItems(s, labels);
+    if (!items.length) continue;
+    out.push({
+      sourceId: s.id,
+      label: s.label,
+      mode: preferMove && modeAllowed(s, "move") ? "move" : "copy",
+      items: requestItems(s, labels),
+      bytes: totalSize(items),
+      state: "waiting",
+      error: "",
+      percent: 0,
+    });
+  }
+  return out;
+}
+
+export const nextWaiting = (b: BatchEntry[]): BatchEntry | undefined => b.find((e) => e.state === "waiting");
+export const batchBusy = (b: BatchEntry[]): boolean => b.some((e) => e.state === "running" || e.state === "waiting");
+
+export function batchSummary(b: BatchEntry[]): string {
+  const done = b.filter((e) => e.state === "done").length;
+  const failed = b.filter((e) => e.state === "failed");
+  if (!failed.length) return `All ${done} are in Zero2Dev now.`;
+  const names = failed.map((e) => e.label).join(", ");
+  return `${done} of ${b.length} were imported. ${names} ${failed.length === 1 ? "was" : "were"} not: what was there before is kept.`;
+}
+
+// ---------- history ----------
+
+export type HistoryFilter = "all" | "active" | "reverted" | "failed";
+export const HISTORY_FILTERS: { id: HistoryFilter; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "active", label: "In use" },
+  { id: "reverted", label: "Reverted" },
+  { id: "failed", label: "Failed" },
+];
+
+export function filterHistory(list: Migration[], state: HistoryFilter, program = ""): Migration[] {
+  return list.filter(
+    (m) =>
+      (state === "all" || (state === "active" ? m.state === "done" : m.state === state)) &&
+      (!program || m.program === program),
+  );
+}
+
+export const backupTotal = (list: Migration[]): number =>
+  list.reduce((n, m) => n + (m.backupBytes > 0 ? m.backupBytes : 0), 0);
+
+/** "took 12 s", from the start to the end of the job; "" when unknown. */
+export function tookText(m: Migration): string {
+  if (!m.finishedAt) return "";
+  const ms = new Date(m.finishedAt).getTime() - new Date(m.createdAt).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return "";
+  if (ms < 1000) return "took under a second";
+  const s = Math.round(ms / 1000);
+  return s < 60 ? `took ${s} s` : `took ${Math.floor(s / 60)} min ${s % 60} s`;
+}
+
+export function cleanupText(m: Migration): string {
+  return `Deletes the old ${m.label} files that the copy left behind (${fmtSize(m.originalsBytes)}). Zero2Dev checks that its copy is complete first. Afterwards the installed ${m.label} starts fresh, and Revert can put the files back from Zero2Dev's copy.`;
+}
+
+export function backupsText(m: Migration): string {
+  return `Deletes the backups of ${m.label} (${fmtSize(m.backupBytes)}): what Zero2Dev's folder held before, and anything a revert saved. Your data in Zero2Dev stays, but a revert will no longer bring those back.`;
+}
+
+/** Why the old files of a copy cannot be removed (runtimes and databases), or "". */
+export function noCleanupReason(m: Migration): string {
+  if (m.state !== "done") return "";
+  if (m.program === "runtime")
+    return "The old program belongs to the installer that put it there, so Zero2Dev leaves it.";
+  if (m.program === "database") return "The databases stay on the server you copied them from.";
+  return "";
 }

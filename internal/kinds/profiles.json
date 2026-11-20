@@ -35,7 +35,7 @@
           }
         ],
         "path": "{home}/node/global",
-        "help": "After Bring in moved or copied npm's global packages into the data folder: npm installs global packages there, and their commands are on PATH."
+        "help": "After an import moved or copied npm's global packages into the data folder: npm installs global packages there, and their commands are on PATH."
       }
     ],
     "options": [
@@ -234,7 +234,7 @@
           }
         ],
         "path": "{home}/composer/vendor/bin",
-        "help": "After Bring in moved or copied Composer's home into the data folder: Composer uses it, and the commands of global packages are on PATH."
+        "help": "After an import moved or copied Composer's home into the data folder: Composer uses it, and the commands of global packages are on PATH."
       }
     ],
     "options": [
@@ -512,7 +512,7 @@
             "help": "Compiled packages stay in the data folder."
           }
         ],
-        "help": "After Bring in moved or copied Go's module and build caches into the data folder: Go uses them there, also when the setting below is off. They are the same folders that setting uses."
+        "help": "After an import moved or copied Go's module and build caches into the data folder: Go uses them there, also when the setting below is off. They are the same folders that setting uses."
       }
     ],
     "options": [

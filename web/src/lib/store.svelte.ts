@@ -286,7 +286,7 @@ function onJobDone(e: JobDoneEvent) {
     runtimeId: e.runtimeId,
     percent: e.state === "done" ? 100 : (jobs[e.id]?.percent ?? 0),
   });
-  // Database, snapshot and Bring in jobs report their result where they were started.
+  // Database, snapshot and Import jobs report their result where they were started.
   const type = e.type ?? jobs[e.id]?.type;
   if (type && type !== "install" && type !== "import" && type !== "xdebug") return;
   const entry = lists.catalog.find((c) => installJobs[c.id] === e.id);

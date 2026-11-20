@@ -299,25 +299,25 @@ The list shows each snapshot's name, when it was taken, its size, its services a
 - Importing a dump into a database, or resetting it: **Take a snapshot first?** offers **Take snapshot and continue**, **Continue without** and **Cancel**. The action goes ahead only once the snapshot is finished.
 
 
-## Bring in: use your installed VS Code and other programs in Zero2Dev
+## Import from this PC: use your installed VS Code and other programs in Zero2Dev
 
-**Bring in** (in the menu) copies or moves the settings and data of programs installed on this PC into Zero2Dev's portable folder, so Zero2Dev's copies of those programs start with what you already had. Every step can be reverted.
+**Import from this PC** (in the menu) copies or moves the settings and data of programs installed on this PC into Zero2Dev's portable folder, so Zero2Dev's copies of those programs start with what you already had. Every step can be reverted.
 
-1. Open **Bring in**. Zero2Dev lists what it found, in four groups:
+1. Open **Import from this PC**. Zero2Dev lists what it found, in four groups:
    - **Editors and tools:** VS Code, VSCodium, Notepad++, HeidiSQL, DBeaver.
    - **Runtimes:** programs you registered by path.
    - **Caches and global packages:** global npm packages, and the npm, Go and Composer caches.
    - **Databases:** on a server you name.
 
    Each line says what it holds and how big it is. Programs that were not found are named in one line under their group.
-2. Press **Bring in…** (or **Adopt…** for a runtime) on a line. The plan shows every item, where it comes from and where it goes. Untick what you do not want.
+2. Press **Import…** (or **Adopt…** for a runtime) on a line. The plan shows every item, where it comes from and where it goes. Untick what you do not want.
 3. Choose how:
    - **Copy** keeps the originals, so the installed program keeps working as before.
    - **Move** saves the originals, then removes them from their old place. Runtimes and databases can only be copied; the page says why next to the greyed-out Move.
 4. If something must happen first, the plan says so. For example, *Install VS Code in Zero2Dev first* comes with a link to Runtimes, and for *Close VS Code first* you close it and press **Check again**. When Zero2Dev's folder already holds data, that data is saved first and comes back if you revert.
 5. Press **Review**. A dialog says exactly what will happen, such as "This copies 414 MB (settings and extensions) of VS Code into Zero2Dev's folder". Press **Start copying** (or **Start moving**, or **Adopt into Zero2Dev**). Progress shows at the top, then a notice says what was done.
 
-**Runtimes.** Adopting a registered runtime copies its folder into Zero2Dev. Services that use it keep working, now from the copy. On the Runtimes page, **Detect on this PC** offers **Adopt into Zero2Dev** next to registered programs, and the runtime cards show a note when something can be brought in.
+**Runtimes.** Adopting a registered runtime copies its folder into Zero2Dev. Services that use it keep working, now from the copy. On the Runtimes page, **Detect on this PC** offers **Adopt into Zero2Dev** next to registered programs, and the runtime cards show a note when something can be imported.
 
 **Databases.** Choose the server type, enter the host, port, user and password, and press **List databases**. Tick the databases, pick the Zero2Dev service to copy into (it must be running), then press Review. The server you copy from is not changed, and the password is not stored.
 
@@ -325,6 +325,20 @@ The list shows each snapshot's name, when it was taken, its size, its services a
 - **Discard the copy** removes the copy in Zero2Dev and brings back what was there before. For a runtime, Zero2Dev uses the program from its old place again. For databases, the copied databases are dropped.
 - **Copy back to the installed program** copies what Zero2Dev has now over the originals, which are saved first.
 - **Move back** puts moved items back where they were.
+
+**Is it worth importing?** Every item has a label:
+- **Recommended:** small and worth it: your editor settings, extensions, saved connections, global npm and Composer packages.
+- **Optional:** the Go caches (they rebuild by themselves, but a first build takes long), adopting a runtime, copying databases.
+- **Not worth it:** the npm download cache. It fills up again by itself.
+
+**Several at once.** At the top, **Select recommended** ticks the programs worth importing. You can also tick rows by hand. A bar shows how many are selected and how big they are; **Review** lists each program with its items and the free space, and **Start** brings them in one after another. A failure does not stop the others. Each one is its own entry in History.
+
+**Free space.** The plan says how much room it needs and how much is free on Zero2Dev's drive. It warns when that is tight, and waits until you free some space when it is not enough.
+
+**History.** The **History** tab shows every migration, with a filter. **Details** lists the items (from, to, size), when it ran and how long it took, and what was backed up. There you can also:
+- **Remove the old files:** after a **Copy**, the originals are still where they were. Once you have checked Zero2Dev's copy, this deletes them to free the space. Zero2Dev checks its copy first and removes nothing when it is not complete. Afterwards the migration counts as a move, so **Move back** can still put the files back. Runtimes and databases keep their originals (they belong to another installer or server).
+- **Delete backups:** what Zero2Dev's folder held before is saved when you import something. Delete it when you do not need it back; Revert will no longer bring it back.
+- **Remove from history** for a migration that was reverted or failed.
 
 Logins that Windows keeps for a program (such as VS Code Settings Sync) are not moved. Sign in again in Zero2Dev's copy.
 

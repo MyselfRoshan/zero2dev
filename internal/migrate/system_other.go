@@ -7,3 +7,6 @@ package migrate
 func systemRegistry() Registry { return emptyRegistry{} }
 
 func processRunning(string) bool { return false }
+
+// diskFree: unknown off Windows (0).
+func diskFree(string) int64 { return 0 }

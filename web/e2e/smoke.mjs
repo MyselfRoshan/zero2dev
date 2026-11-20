@@ -360,7 +360,7 @@ await step("create a service (validation first, then success)", async () => {
   await page.getByLabel("Script", { exact: true }).fill("server.js");
   await page.getByLabel("Project folder", { exact: true }).fill("C:\\work\\demo");
   await page.getByText(/Your app's code, with package.json/).waitFor();
-  await page.getByLabel("Port").fill("3100");
+  await page.locator("#main").getByLabel("Port").fill("3100");
   await page
     .getByTestId("preview-command")
     .getByText(/node\.exe server\.js/)
@@ -510,7 +510,7 @@ await step("port conflict shows a clear message", async () => {
   await page.getByLabel("Name", { exact: true }).fill("Second");
   await page.getByLabel("Program").fill("C:\\tools\\x.exe");
   await page.getByLabel("Working folder", { exact: true }).fill("C:\\work\\second");
-  await page.getByLabel("Port").fill("3100");
+  await page.locator("#main").getByLabel("Port").fill("3100");
   await page.getByRole("button", { name: "Create service" }).click();
   await page.locator('tr[data-service="Second"]').waitFor();
   await page.locator('tr[data-service="Second"]').getByRole("button", { name: "Start Second", exact: true }).click();
@@ -582,7 +582,7 @@ await step("php 8.4.1 and 7.1.33 side by side: default, per-service version, rem
   assert.deepEqual(ropts, ["Default (PHP 7.1.33)", "PHP 8.4.1", "PHP 7.1.33 (default)"]);
   await page.getByLabel("Version").selectOption({ label: "PHP 8.4.1" });
   await page.getByLabel("Project folder", { exact: true }).fill("C:\\work\\legacy");
-  await page.getByLabel("Port").fill("8099");
+  await page.locator("#main").getByLabel("Port").fill("8099");
   await page.getByRole("button", { name: "Create service" }).click();
   const row = page.locator('tr[data-service="Legacy PHP"]');
   await row.getByTestId("svc-runtime").getByText("PHP 8.4.1").waitFor();

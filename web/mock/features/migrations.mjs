@@ -1,4 +1,4 @@
-// Mock of the 0.0.5 Bring in routes (docs/API.md, the 0.0.5 amendment, "Bring in (migrations)").
+// Mock of the 0.0.5 Import routes (docs/API.md, the 0.0.5 amendment, "Import (migrations)").
 //   export async function handle(ctx, m, p, body, res, url) -> true when it answered the request.
 // ctx: { state, emit, send, fail, id, now, sleep, procs, setState, addLog, startProc, stopProc, fakeJob }
 //
@@ -109,6 +109,18 @@ const history = []; // Migration[], newest first
 const running = new Set(); // programs the e2e marks as running
 const busy = new Map(); // source id -> job id while a job works on it
 const adopted = new Map(); // runtimeId -> the registered binary it came from
+let freeBytes = 38_000 * 1_000_000; // free space of the data drive (the e2e changes it)
+const GB = 1_000 * 1_000_000;
+
+/** A record as GET shows it: the numbers the daemon works out when it is asked. */
+function view(m) {
+  const copyOfFiles = m.state === "done" && m.mode === "copy" && !["runtime", "database"].includes(m.program);
+  return {
+    ...m,
+    canCleanup: copyOfFiles && !m.cleaned,
+    originalsBytes: copyOfFiles && !m.cleaned ? m.items.reduce((n, i) => n + i.sizeBytes, 0) : 0,
+  };
+}
 
 const dataDir = (ctx) => ctx.state.settings.homeDir;
 const exeDir = (ctx) => ctx.state.settings.homeDir.replace(/\\data$/, "");
@@ -143,6 +155,7 @@ function programSource(ctx, program) {
     // Zero2Dev's own Notepad++ and DBeaver write a default config on first start; a copy fills it.
     targetHasData: !!cur || (editor && installedIn(ctx, program) && ["notepadpp", "dbeaver"].includes(program)),
     note: d.note,
+    targetFreeBytes: freeBytes,
   };
 }
 
@@ -166,6 +179,7 @@ function runtimeSource(ctx, rt) {
     copyOnlyReason: RUNTIME_REASON,
     blockers: [],
     targetHasData: false,
+    targetFreeBytes: freeBytes,
     runtimeId: rt.id,
     note: "Services that use it keep working: the same runtime then runs from Zero2Dev's folder.",
   };
@@ -184,6 +198,7 @@ function databaseSource(ctx) {
     copyOnlyReason: DB_REASON,
     blockers: dbServices(ctx).length ? [] : ["Create a MariaDB, MySQL or PostgreSQL service in Zero2Dev first"],
     targetHasData: false,
+    targetFreeBytes: freeBytes,
     note: "Each database is copied with a dump and an import. The users and passwords of that server are not copied.",
   };
 }
@@ -253,9 +268,9 @@ function startMigration(ctx, body, res) {
   const unknown = wanted.find((l) => !present.some((i) => i.label === l));
   if (unknown) return fail(res, 400, "bad_request", `unknown item ${unknown}`);
   const items = wanted.length ? present.filter((i) => wanted.includes(i.label)) : present;
-  if (src.program !== "database" && !items.length) return fail(res, 400, "bad_request", "nothing to bring in");
+  if (src.program !== "database" && !items.length) return fail(res, 400, "bad_request", "nothing to import");
   if (src.program !== "database" && active(src.id))
-    return fail(res, 409, "conflict", `${src.label} was brought in already; revert that first`);
+    return fail(res, 409, "conflict", `${src.label} was imported already; revert that first`);
 
   let db = null;
   let target = null;
@@ -318,6 +333,9 @@ function startMigration(ctx, body, res) {
         label: src.label,
         mode: body.mode,
         createdAt: ctx.now(),
+        finishedAt: ctx.now(),
+        // What Zero2Dev's folder held before is saved: 3 MB for a program that had a default config.
+        backupBytes: src.targetHasData ? 3 * MB : 0,
         state: "done",
         revertedAt: null,
         items: took,
@@ -389,6 +407,9 @@ function revert(ctx, mig, body, res) {
       busy.delete(mig.source);
       mig.state = "reverted";
       mig.revertedAt = ctx.now();
+      mig.finishedAt = mig.revertedAt;
+      mig.backupBytes = 0; // a revert puts the saved data back, so nothing is left to keep
+      mig.revertOptions = [];
       if (mig.program === "runtime" && mig.runtimeId) {
         const rt = ctx.state.runtimes.find((r) => r.id === mig.runtimeId);
         if (rt && adopted.has(rt.id)) {
@@ -400,6 +421,32 @@ function revert(ctx, mig, body, res) {
       }
       if (PORTABLE_KEY[mig.program] && ctx.state.settings.portable)
         ctx.state.settings.portable = { ...ctx.state.settings.portable, [PORTABLE_KEY[mig.program]]: false };
+      ctx.emit("migrations.changed", {});
+      return { migrationId: mig.id };
+    },
+  });
+  busy.set(mig.source, job.id);
+  return send(res, 202, job);
+}
+
+function cleanup(ctx, mig, res) {
+  const { send, fail } = ctx;
+  if (!view(mig).canCleanup) return fail(res, 409, "conflict", "only a finished copy has originals to remove");
+  if (busy.has(mig.source)) return busyError(ctx, res, mig.label, busy.get(mig.source));
+  if (running.has(mig.program)) return fail(res, 409, "conflict", `Close ${mig.label} first`);
+  const job = ctx.fakeJob({
+    type: "migrate-cleanup",
+    fields: { migrationId: mig.id },
+    steps: ["Checking the copy", "Removing the old files"],
+    ms: 300,
+    work: () => {
+      busy.delete(mig.source);
+      // The originals are gone, so it is a move now and only "move back" undoes it.
+      mig.cleaned = true;
+      mig.mode = "move";
+      mig.revertOptions = ["move-back"];
+      mig.description = mig.description.replace(/^Copied/, "Moved");
+      mig.finishedAt = ctx.now();
       ctx.emit("migrations.changed", {});
       return { migrationId: mig.id };
     },
@@ -428,8 +475,40 @@ export async function handle(ctx, m, p, body, res) {
     return true;
   }
   if (p === "/api/migrations" && (m === "GET" || m === "POST")) {
-    if (m === "GET") send(res, 200, history);
+    if (m === "GET") send(res, 200, history.map(view));
     else startMigration(ctx, body, res);
+    return true;
+  }
+  const cm = p.match(/^\/api\/migrations\/([^/]+)\/cleanup$/);
+  if (cm && m === "POST") {
+    const mig = history.find((x) => x.id === decodeURIComponent(cm[1]));
+    if (!mig) fail(res, 404, "not_found", `migration ${cm[1]} not found`);
+    else cleanup(ctx, mig, res);
+    return true;
+  }
+  const bm = p.match(/^\/api\/migrations\/([^/]+)\/backups$/);
+  if (bm && m === "DELETE") {
+    const mig = history.find((x) => x.id === decodeURIComponent(bm[1]));
+    if (!mig) fail(res, 404, "not_found", `migration ${bm[1]} not found`);
+    else if (busy.has(mig.source)) busyError(ctx, res, mig.label, busy.get(mig.source));
+    else {
+      mig.backupBytes = 0;
+      ctx.emit("migrations.changed", {});
+      send(res, 200, view(mig));
+    }
+    return true;
+  }
+  const dm = p.match(/^\/api\/migrations\/([^/]+)$/);
+  if (dm && m === "DELETE") {
+    const i = history.findIndex((x) => x.id === decodeURIComponent(dm[1]));
+    if (i < 0) fail(res, 404, "not_found", `migration ${dm[1]} not found`);
+    else if (history[i].state === "done")
+      fail(res, 409, "conflict", `revert ${history[i].label} first: its data is still in use`);
+    else {
+      history.splice(i, 1);
+      ctx.emit("migrations.changed", {});
+      send(res, 204);
+    }
     return true;
   }
   const mm = p.match(/^\/api\/migrations\/([^/]+)\/revert$/);
@@ -441,6 +520,11 @@ export async function handle(ctx, m, p, body, res) {
   }
   // Mock only (used by the e2e): mark an installed program as running, so its source shows
   // "Close <program> first".
+  if (m === "POST" && p === "/api/mock/migrations/free") {
+    freeBytes = typeof body?.gb === "number" ? body.gb * GB : 38_000 * 1_000_000;
+    send(res, 204);
+    return true;
+  }
   if (m === "POST" && p === "/api/mock/migrations/running") {
     if (body?.running) running.add(body.program);
     else running.delete(body?.program);

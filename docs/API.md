@@ -1077,7 +1077,7 @@ Each subsection below is owned by one part of the work. The details marked *(to 
 - **`Service.adminPassword`** (`string`, `""` for none) is the database administrator's password, and it is in every `Service` response.
   - It is **not** part of `ServiceInput`: create and update ignore it and keep the stored value.
   - Only `PUT .../database/password` changes it, and a reset clears it.
-- **`Settings.portable`** `{ "npmGlobal": false, "composer": false, "goCache": false }` says which runtime caches and global package folders live in the data folder. Only Bring in changes it; `PUT /api/settings` ignores it.
+- **`Settings.portable`** `{ "npmGlobal": false, "composer": false, "goCache": false }` says which runtime caches and global package folders live in the data folder. Only Import changes it; `PUT /api/settings` ignores it.
 - **New events:** `snapshots.changed` `{ ownerId }` and `migrations.changed` `{}`. A restore or a clone also publishes `services.changed`, `sites.changed` and `projects.changed`.
 
 ### File dialog
@@ -1216,7 +1216,7 @@ A failed job's `error` is `importing into <db> failed: <message>` or `exporting 
 - **Open in:** HeidiSQL gets `--password=<password>`; DBeaver gets `|password=<password>` in `-con`, except when the password contains `|`, which `-con` cannot carry (DBeaver then asks for it).
 - **First start:** when Zero2Dev creates new MariaDB, MySQL or PostgreSQL data files (for example, after the folder was deleted by hand), a stored password is cleared, because the new database has none. `services.changed` is published.
 
-#### Copying from another server (`dbtools.ServerCopier`, used by Bring in)
+#### Copying from another server (`dbtools.ServerCopier`, used by Import from this PC)
 
 - `ListRemote` and `CopyFromServer` take the server's `kind`, `host` (default `127.0.0.1`), `port`, `user` (default `root` or `postgres`) and `password`. The client programs come from `ClientDir`, else the folder of the default runtime of that kind (MariaDB and MySQL also try each other's), else the destination service's folder.
 - Each database is dumped with the export arguments above and piped straight into the import. No temporary file is written.
@@ -1332,7 +1332,7 @@ Snapshots live in `<data>\snapshots\<ownerId>\<snapshotId>\` and move with the d
 
 - `GET /api/services/{id}/snapshots` of a service that exists and is not a database is `400`. For an id that names nothing (a deleted owner), both lists answer the snapshots that are left, or `[]`.
 
-### Bring in (migrations)
+### Import from this PC (migrations)
 
 Copies or moves the settings and data of programs installed on this PC into Zero2Dev's portable folders, and back. Every migration is recorded in `<data>\migrations\<migrationId>\` (`migration.json` plus the backups). Ids have the prefix `mig_`.
 
@@ -1343,6 +1343,16 @@ Copies or moves the settings and data of programs installed on this PC into Zero
 | POST | `/api/migrations` | `MigrateRequest` | `202 Job` (`migrate`) |
 | GET | `/api/migrations` | none | `Migration[]`, newest first |
 | POST | `/api/migrations/{id}/revert` | `{ "how": "discard" \| "copy-back" \| "move-back" }` | `202 Job` (`migrate-revert`) |
+| POST | `/api/migrations/{id}/cleanup` | none | `202 Job` (`migrate-cleanup`): removes the originals of a finished copy |
+| DELETE | `/api/migrations/{id}/backups` | none | `200 Migration`: deletes `backup-target\` and `backup-original\` |
+| DELETE | `/api/migrations/{id}` | none | `204`: removes a reverted or failed migration and its backups |
+
+**Added after the first 0.0.5 draft.**
+- `MigrateSource.targetFreeBytes`: free bytes on the drive the data goes to (the bin folder's drive for a `runtime`); `0` when unknown.
+- `Migration` gains `finishedAt` (when its last job ended), `backupBytes` (what the backup folders hold), `canCleanup` and `originalsBytes` (what a clean-up frees). The last three are worked out on every `GET`.
+- **Clean-up** removes the originals a copy left behind. It is `409` unless the migration is a `done` copy of a `dir`, `file` or `registry` program whose originals are still there (never for `runtime` or `database`), or while the program runs (`Close X first`) or a job runs. Every copy is verified first (file counts and bytes; for VS Code's extensions the file count, since `extensions.json` was rewritten); one mismatch fails the job with `nothing was removed: ...` and touches nothing. A registry key is saved (`registry.json`, `.reg`) before it is deleted. Afterwards the record is a move: `mode: "move"`, `revertOptions: ["move-back"]`, so Revert puts the originals back from Zero2Dev's copy.
+- **Delete backups** is `409` while a job runs on the migration. The portable data and the originals are not touched; a later revert has nothing to bring back from them.
+- **Delete a record** is `409` unless the state is `reverted` or `failed` with `revertOptions: []`.
 
 ```json
 {
@@ -1402,12 +1412,12 @@ The targets are the folders Zero2Dev's own editors use (`VSCODE_PORTABLE`, `-set
 - **Found, size, target:**
   - `found` is true when at least one item exists, and the database source is always found.
   - `sizeBytes` is the size of the files, or for HeidiSQL the size of the file it would write.
-  - Only items that exist are brought in. When none of the chosen items exists, the answer is `409` "`nothing of <label> was found on this PC`".
+  - Only items that exist are imported. When none of the chosen items exists, the answer is `409` "`nothing of <label> was found on this PC`".
   - `targetHasData` means a target is a file with bytes in it, or a folder that is not empty.
 - **Blockers:**
   - "`Install <program> in Zero2Dev first`": the editors and database tools need a Zero2Dev-installed runtime of that kind.
   - "`Close <program> first`": the process check looks for `Code.exe`, `VSCodium.exe`, `notepad++.exe`, `heidisql.exe` or `dbeaver.exe`, and for an adopted editor its own exe.
-  - "`<label> was already brought in (mig_...); revert that first`": only one live migration per source. The database source has no such limit.
+  - "`<label> was already imported (mig_...); revert that first`": only one live migration per source. The database source has no such limit.
   - Runtimes: "`The program <binary> is missing`", or a folder that is not the program's own (a drive root, the Windows folder, a shim folder such as `chocolatey\bin` or `scoop\shims`).
   - Databases: "`Add a MariaDB, MySQL or PostgreSQL service in Zero2Dev first`", or "`Database tools are not available in this build`".
 - **Other errors:**
@@ -1419,7 +1429,7 @@ The targets are the folders Zero2Dev's own editors use (`VSCODE_PORTABLE`, `-set
   - A copy offers `["discard", "copy-back"]` and a move offers `["move-back"]`.
   - A runtime or database migration offers `["discard"]`.
   - A failed migration is rolled back at once. It is listed as `failed` with `revertOptions: []`. When the rollback also failed, it keeps its options, so the user can finish the job.
-- **Order of a bring-in:**
+- **Order of an import:**
   1. The current target is moved to `backup-target\<n>-<label>\`.
   2. A copy is copied and then checked: the same number of files and bytes.
   3. A move is a rename on one volume. Across volumes it is copied, checked, and the original is deleted only then. If the delete fails, the original is put back from the copy.

@@ -276,7 +276,7 @@ export const api = {
   /** Opens the native folder dialog on the daemon's PC; resolves when the user closes it. */
   pickFolder: (title: string, start: string) => request<FolderPick>("POST", "/api/dialog/folder", { title, start }),
 
-  // ---- 0.0.5: databases, snapshots, Bring in (docs/API.md, the 0.0.5 amendment) ----
+  // ---- 0.0.5: databases, snapshots, Import (docs/API.md, the 0.0.5 amendment) ----
 
   /** The native Open / Save as dialog on the daemon's PC. */
   pickFile: (b: FilePickInput) => request<FolderPick>("POST", "/api/dialog/file", b),
@@ -311,4 +311,9 @@ export const api = {
   listMigrations: () => request<Migration[]>("GET", "/api/migrations"),
   startMigration: (b: MigrateRequest) => request<Job>("POST", "/api/migrations", b),
   revertMigration: (id: string, how: RevertHow) => request<Job>("POST", `/api/migrations/${enc(id)}/revert`, { how }),
+  /** Removes the originals of a finished copy (it becomes a move). */
+  cleanupMigration: (id: string) => request<Job>("POST", `/api/migrations/${enc(id)}/cleanup`),
+  deleteMigrationBackups: (id: string) => request<Migration>("DELETE", `/api/migrations/${enc(id)}/backups`),
+  /** Removes a reverted or failed migration from the history. */
+  deleteMigration: (id: string) => request<void>("DELETE", `/api/migrations/${enc(id)}`),
 };

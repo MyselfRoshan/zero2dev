@@ -75,7 +75,7 @@
   }
   const known = $derived(new Set(lists.runtimes.map((r) => r.binary.toLowerCase())));
   const detectedLabel = (d: DetectedRuntime) => (d.name === "nginx" ? "nginx" : kindLabel(d.kind));
-  // The registered runtime a detected program became (Adopt links to Bring in with it preselected).
+  // The registered runtime a detected program became (Adopt links to Import with it preselected).
   const registeredAt = (d: DetectedRuntime) =>
     lists.runtimes.find((r) => r.source === "registered" && r.binary.toLowerCase() === d.binary.toLowerCase());
   async function registerDetected(d: DetectedRuntime) {
@@ -156,7 +156,7 @@
           </tbody>
         </table>
       </div>
-      <p class="card-pad small muted foot">Registering only remembers the path; nothing is copied or changed. <b>Adopt</b> copies a registered program into Zero2Dev's folder, and <a href="#/migrate" data-testid="bring-in-hint">Bring in</a> does the same for your editors' settings and package caches.</p>
+      <p class="card-pad small muted foot">Registering only remembers the path; nothing is copied or changed. <b>Adopt</b> copies a registered program into Zero2Dev's folder, and <a href="#/migrate" data-testid="bring-in-hint">Import from this PC</a> does the same for your editors' settings and package caches.</p>
     {/if}
   </section>
 {/if}

@@ -253,6 +253,7 @@ const (
 	JobSnapshotClone   = "snapshot-clone"
 	JobMigrate         = "migrate"
 	JobMigrateRevert   = "migrate-revert"
+	JobMigrateCleanup  = "migrate-cleanup"
 )
 
 // Portable says which user-level caches and global package folders of the

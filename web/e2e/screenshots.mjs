@@ -122,6 +122,12 @@ try {
       siteIds: site ? [site.id] : [],
     });
     if (worker) await api("POST", `/api/services/${worker.id}/start`).catch(() => {});
+    // Two caches imported, so Import shows a history with details and old files to remove.
+    for (const source of ["npm-global", "go-cache"])
+      await api("POST", "/api/migrations", { source, mode: "copy" }).catch((e) =>
+        console.warn("demo migration:", e.message),
+      );
+    await new Promise((resolve) => setTimeout(resolve, 2500));
     return { service: shopApi };
   }
 
@@ -160,8 +166,14 @@ try {
     {
       name: "migrate",
       hash: "#/migrate?source=vscode",
-      title: "Bring in: installed programs, the plan, history",
+      title: "Import from this PC: installed programs, the plan, history",
       ready: "[data-testid=migrate-plan]",
+    },
+    {
+      name: "migrate-history",
+      hash: "#/migrate?tab=history",
+      title: "Import from this PC: history, details, old files and backups",
+      ready: "[data-testid=migrate-history-row]",
     },
     { name: "logs", hash: "#/logs", title: "Logs of every service" },
     { name: "settings", hash: "#/settings", title: "Settings" },

@@ -1,6 +1,6 @@
 <script module lang="ts">
-  // One shared, quiet read of what Bring in found, for every Runtimes card at once. Errors (an
-  // older daemon without Bring in, the daemon measuring folders slowly) just hide the note.
+  // One shared, quiet read of what Import found, for every Runtimes card at once. Errors (an
+  // older daemon without Import, the daemon measuring folders slowly) just hide the note.
   import { api } from "../lib/api";
   import type { MigrateSource, Migration } from "../lib/types";
 
@@ -29,7 +29,7 @@
     })();
   }
 
-  /** Called by the Bring in page after a migration or a revert, so the notes follow. */
+  /** Called by the Import page after a migration or a revert, so the notes follow. */
   export function invalidateBringIn(): void {
     found.at = 0;
   }

@@ -172,7 +172,7 @@ func run() error {
 	removeConsoleQuit := consoleQuit(quit, shutdownDone)
 	defer removeConsoleQuit()
 	defer close(shutdownDone)
-	// 0.0.5: database tools, snapshots and Bring in share one job registry.
+	// 0.0.5: database tools, snapshots and Import share one job registry.
 	loadCatalog := func() ([]model.CatalogEntry, error) { return catalog.Load(cfg.Home) }
 	jobReg := jobs.New(hub)
 	dbm := dbtools.New(st, sup, jobReg, cfg.Home)

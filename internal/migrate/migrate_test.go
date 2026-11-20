@@ -304,7 +304,7 @@ func TestVSCodeCopyAndDiscard(t *testing.T) {
 	if strings.Contains(read(t, filepath.Join(ext, "extensions.json")), filepath.ToSlash(newExt)) {
 		t.Error("the original extensions.json must not change")
 	}
-	if src := e.source(ProgVSCode); !slices.ContainsFunc(src.Blockers, func(b string) bool { return strings.Contains(b, "already brought in") }) {
+	if src := e.source(ProgVSCode); !slices.ContainsFunc(src.Blockers, func(b string) bool { return strings.Contains(b, "already imported") }) {
 		t.Fatalf("second migration must be blocked: %+v", src.Blockers)
 	}
 

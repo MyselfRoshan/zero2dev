@@ -291,7 +291,7 @@ export interface Settings {
   theme?: "system" | "light" | "dark";
   /** Dashboard accent colour, #rrggbb. Missing (older daemon) means #1677ff. */
   accent?: string;
-  /** Which runtime caches live in the data folder; changed by Bring in only (0.0.5). */
+  /** Which runtime caches live in the data folder; changed by Import only (0.0.5). */
   portable?: Portable;
 }
 
@@ -457,7 +457,7 @@ export interface JobDoneEvent {
 }
 
 // ---------------------------------------------------------------------------
-// 0.0.5: databases, snapshots, Bring in. Mirrors docs/API.md "Amendment: data,
+// 0.0.5: databases, snapshots, Import. Mirrors docs/API.md "Amendment: data,
 // databases and environment snapshots (0.0.5)".
 // ---------------------------------------------------------------------------
 
@@ -471,7 +471,8 @@ export type JobType =
   | "snapshot-restore"
   | "snapshot-clone"
   | "migrate"
-  | "migrate-revert";
+  | "migrate-revert"
+  | "migrate-cleanup";
 
 /** One database of a server. */
 export interface DbDatabase {
@@ -611,7 +612,7 @@ export interface MigrateItem {
   exists: boolean;
 }
 
-/** A program found on this PC that can be brought in (GET /api/migrations/sources). */
+/** A program found on this PC that can be imported (GET /api/migrations/sources). */
 export interface MigrateSource {
   /** "vscode", "runtime:rt_1a2b3c4d", "database" ... */
   id: string;
@@ -628,6 +629,8 @@ export interface MigrateSource {
   targetHasData: boolean;
   runtimeId?: string;
   note: string;
+  /** Free space of the drive the data goes to; 0 when the daemon cannot tell. */
+  targetFreeBytes: number;
 }
 
 export interface MigrateDatabase {
@@ -663,4 +666,12 @@ export interface Migration {
   serviceId?: string;
   runtimeId?: string;
   description: string;
+  /** When its last job ended (null for records from before 0.0.5 final). */
+  finishedAt: string | null;
+  /** What its backup folders hold. */
+  backupBytes: number;
+  /** A done copy whose originals can still be removed. */
+  canCleanup: boolean;
+  /** What removing the originals frees. */
+  originalsBytes: number;
 }

@@ -155,6 +155,13 @@ func (m *Manager) plans() []*plan {
 		}
 	}
 	out = append(out, m.databasePlan(d))
+	freeHome, freeBin := m.free(m.Home), m.free(m.Bin)
+	for _, p := range out {
+		p.src.TargetFreeBytes = freeHome
+		if p.src.Program == ProgRuntime {
+			p.src.TargetFreeBytes = freeBin
+		}
+	}
 	return out
 }
 
@@ -220,7 +227,7 @@ func (m *Manager) programPlan(pg program, e Env, d store.Data, active map[string
 		p.src.Blockers = append(p.src.Blockers, "Close "+pg.label+" first")
 	}
 	if id := active[pg.id]; id != "" {
-		p.src.Blockers = append(p.src.Blockers, pg.label+" was already brought in ("+id+"); revert that first")
+		p.src.Blockers = append(p.src.Blockers, pg.label+" was already imported ("+id+"); revert that first")
 	}
 	return p
 }

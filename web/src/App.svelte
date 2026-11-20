@@ -43,7 +43,7 @@
     { href: "#/runtimes", name: "runtimes", label: "Runtimes", icon: "runtimes" },
     { href: "#/sites", name: "sites", label: "Sites", icon: "sites" },
     { href: "#/environment", name: "environment", label: "Environment", icon: "variable" },
-    { href: "#/migrate", name: "migrate", label: "Bring in", icon: "download" },
+    { href: "#/migrate", name: "migrate", label: "Import from this PC", icon: "download" },
     { href: "#/logs", name: "logs", label: "Logs", icon: "logs" },
     { href: "#/settings", name: "settings", label: "Settings", icon: "settings" },
     { href: "#/help", name: "help", label: "Help", icon: "help" },

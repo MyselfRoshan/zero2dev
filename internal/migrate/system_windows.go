@@ -4,6 +4,8 @@ package migrate
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"unsafe"
@@ -194,6 +196,34 @@ func (hkcu) DeleteTree(path string) error {
 		return syscall.Errno(r)
 	}
 	return nil
+}
+
+var pGetDiskFreeSpaceExW = syscall.NewLazyDLL("kernel32.dll").NewProc("GetDiskFreeSpaceExW")
+
+// diskFree is the free bytes available to this user on the drive of path
+// (its nearest existing folder), or 0 when unknown.
+func diskFree(path string) int64 {
+	for p := path; p != ""; {
+		if _, err := os.Stat(p); err == nil {
+			break
+		}
+		parent := filepath.Dir(p)
+		if parent == p {
+			break
+		}
+		p = parent
+		path = p
+	}
+	ptr, err := syscall.UTF16PtrFromString(path)
+	if err != nil {
+		return 0
+	}
+	var avail, total, free uint64
+	r, _, _ := pGetDiskFreeSpaceExW.Call(uintptr(unsafe.Pointer(ptr)), uintptr(unsafe.Pointer(&avail)), uintptr(unsafe.Pointer(&total)), uintptr(unsafe.Pointer(&free)))
+	if r == 0 {
+		return 0
+	}
+	return int64(avail)
 }
 
 // processRunning reports whether a process with this image name (Code.exe)

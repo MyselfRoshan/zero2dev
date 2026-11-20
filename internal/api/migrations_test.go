@@ -12,7 +12,7 @@ import (
 	"zero2dev/internal/store"
 )
 
-// migrateEnv gives the server a Bring in manager on temp folders only.
+// migrateEnv gives the server a Import manager on temp folders only.
 func migrateEnv(t *testing.T) (*tenv, *migrate.Manager) {
 	e := newEnv(t)
 	root := t.TempDir()
@@ -101,4 +101,55 @@ func TestMigrationRoutes(t *testing.T) {
 func TestMigrationRoutesWithoutManager(t *testing.T) {
 	e := newEnv(t)
 	e.errCode("GET", "/api/migrations/sources", nil, 501)
+}
+
+func TestMigrationCleanupBackupsAndDelete(t *testing.T) {
+	e, m := migrateEnv(t)
+	os.MkdirAll(filepath.Join(m.Env.AppData, "Composer"), 0o755)
+	os.WriteFile(filepath.Join(m.Env.AppData, "Composer", "auth.json"), []byte("{}"), 0o644)
+	var j model.Job
+	if resp := e.do("POST", "/api/migrations", map[string]any{"source": "composer", "mode": "copy"}, &j); resp.StatusCode != 202 {
+		t.Fatalf("start %d", resp.StatusCode)
+	}
+	waitJobAPI(e, j.ID)
+	time.Sleep(20 * time.Millisecond)
+	var list []migrate.Migration
+	e.do("GET", "/api/migrations", nil, &list)
+	if len(list) != 1 || !list[0].CanCleanup || list[0].FinishedAt == nil {
+		t.Fatalf("list %+v", list)
+	}
+	e.errCode("POST", "/api/migrations/mig_00000000/cleanup", nil, 404)
+	e.errCode("DELETE", "/api/migrations/"+j.MigrationID, nil, 409) // still in use
+
+	var cj model.Job
+	if resp := e.do("POST", "/api/migrations/"+j.MigrationID+"/cleanup", nil, &cj); resp.StatusCode != 202 || cj.Type != model.JobMigrateCleanup {
+		t.Fatalf("cleanup %d %+v", resp.StatusCode, cj)
+	}
+	if got := waitJobAPI(e, cj.ID); got.State != "done" {
+		t.Fatalf("cleanup job %+v", got)
+	}
+	time.Sleep(20 * time.Millisecond)
+	if _, err := os.Stat(filepath.Join(m.Env.AppData, "Composer")); !os.IsNotExist(err) {
+		t.Fatal("the original Composer folder is removed")
+	}
+	e.do("GET", "/api/migrations", nil, &list)
+	if list[0].Mode != "move" || list[0].CanCleanup {
+		t.Fatalf("after cleanup %+v", list[0])
+	}
+	var mg migrate.Migration
+	if resp := e.do("DELETE", "/api/migrations/"+j.MigrationID+"/backups", nil, &mg); resp.StatusCode != 200 || mg.BackupBytes != 0 {
+		t.Fatalf("backups %d %+v", resp.StatusCode, mg)
+	}
+
+	var rj model.Job
+	e.do("POST", "/api/migrations/"+j.MigrationID+"/revert", map[string]any{"how": "move-back"}, &rj)
+	waitJobAPI(e, rj.ID)
+	time.Sleep(20 * time.Millisecond)
+	if resp := e.do("DELETE", "/api/migrations/"+j.MigrationID, nil, nil); resp.StatusCode != 204 {
+		t.Fatalf("delete record %d", resp.StatusCode)
+	}
+	e.do("GET", "/api/migrations", nil, &list)
+	if len(list) != 0 {
+		t.Fatalf("history %+v", list)
+	}
 }

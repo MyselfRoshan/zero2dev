@@ -141,7 +141,7 @@ func displayValue(key, value string) string {
 
 // portableRule is one entry of a kind's "portable" list in profiles.json:
 // what a service of that kind gets while Settings.Portable.<setting> is on
-// (Bring in switches it on, its revert off). {home} is the data folder.
+// (Import switches it on, its revert off). {home} is the data folder.
 type portableRule struct {
 	Setting string           `json:"setting"` // npmGlobal | composer | goCache
 	Env     []kinds.FixedEnv `json:"env"`

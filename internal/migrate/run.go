@@ -90,6 +90,9 @@ func (m *Manager) goJob(h *jobs.Handle, rec *record, fn func() error) {
 				rec.Error = err.Error()
 				_ = m.save(rec)
 			}
+			t := m.now()
+			rec.FinishedAt = &t
+			_ = m.save(rec)
 			m.setActive(rec.ID, false)
 			m.emit("migrations.changed")
 			if err != nil {

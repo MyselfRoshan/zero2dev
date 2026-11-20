@@ -1,5 +1,5 @@
 // Package migrate brings a program's settings and data from a normal
-// installation into Zero2Dev's portable data folder ("Bring in"), by copy or
+// installation into Zero2Dev's portable data folder ("Import"), by copy or
 // by move, and reverts it: VS Code, VSCodium, Notepad++, HeidiSQL, DBeaver,
 // runtimes found on PATH (adopted into bin\adopted\), the runtimes' user-level
 // caches and global packages (npm, Go, Composer), and databases of another
@@ -10,7 +10,7 @@
 // everything back.
 //
 // Contract (docs/API.md, "Amendment: data, databases and environment snapshots
-// (0.0.5)", section Bring in).
+// (0.0.5)", section Import).
 package migrate
 
 import (
@@ -83,7 +83,7 @@ const (
 	KindDatabases = "databases"
 )
 
-// Source is a program found on this PC that can be brought in.
+// Source is a program found on this PC that can be imported.
 type Source struct {
 	ID        string   `json:"id"` // "vscode", "runtime:rt_1a2b3c4d", "database"
 	Program   string   `json:"program"`
@@ -96,6 +96,8 @@ type Source struct {
 	TargetHas bool     `json:"targetHasData"`       // the portable place already holds data (it is backed up first)
 	RuntimeID string   `json:"runtimeId,omitempty"` // ProgRuntime: the registered runtime
 	Note      string   `json:"note"`                // e.g. "Settings Sync logins are not moved"
+	// TargetFreeBytes is the free space of the drive the data goes to (0: unknown).
+	TargetFreeBytes int64 `json:"targetFreeBytes"`
 }
 
 // Database is the "database" source's input: another server and what to copy.
@@ -133,6 +135,11 @@ type Migration struct {
 	ServiceID   string     `json:"serviceId,omitempty"` // database: the Zero2Dev service
 	RuntimeID   string     `json:"runtimeId,omitempty"` // runtime: the adopted runtime
 	Description string     `json:"description"`         // one line, e.g. "Copied VS Code: Settings, Extensions (414 MB)"
+	FinishedAt  *time.Time `json:"finishedAt"`          // when its last job ended
+	// Set by List and the manage calls, not stored:
+	BackupBytes    int64 `json:"backupBytes"`    // what backup-target\ and backup-original\ hold
+	CanCleanup     bool  `json:"canCleanup"`     // a done copy whose originals can be removed
+	OriginalsBytes int64 `json:"originalsBytes"` // what removing the originals frees
 }
 
 // Env says where the user-level folders are. Tests point them at temp folders.
@@ -166,6 +173,9 @@ type Manager struct {
 	SameVolume func(a, b string) bool
 	// Now is the clock (nil: time.Now).
 	Now func() time.Time
+	// Free reports the free bytes of the drive holding a path (nil: the real
+	// drive; 0 = unknown).
+	Free func(path string) int64
 
 	mu     sync.Mutex
 	active map[string]bool // migration ids whose job runs
@@ -248,7 +258,7 @@ func (m *Manager) isActive(id string) bool {
 	return m.active[id]
 }
 
-// Sources lists what can be brought in from this PC.
+// Sources lists what can be imported from this PC.
 func (m *Manager) Sources(ctx context.Context) ([]Source, error) {
 	plans := m.plans()
 	out := make([]Source, 0, len(plans))
@@ -270,11 +280,7 @@ func (m *Manager) List() ([]Migration, error) {
 		if m.isActive(r.ID) {
 			continue
 		}
-		mg := r.Migration
-		if mg.State == StateRunning {
-			mg.State = StateFailed
-		}
-		out = append(out, mg)
+		out = append(out, m.view(r))
 	}
 	return out, nil
 }
