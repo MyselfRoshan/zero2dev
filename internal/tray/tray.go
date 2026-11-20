@@ -21,6 +21,10 @@ type Menu struct {
 	OnStopAll  func() // "Stop all services" (Zero2Dev keeps running); no item when nil
 	OnQuit     func() // "Quit Zero2Dev"
 	FolderText string // menu text for OnFolder ("Open data folder")
+
+	// Taskbar also shows a taskbar button, so Windows marks Zero2Dev as running (the line
+	// under its icon). Clicking it calls OnOpen; closing it calls OnQuit.
+	Taskbar bool
 }
 
 // Icon is a running tray icon.

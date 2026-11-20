@@ -53,6 +53,8 @@
 
 ## 0.0.4
 
+- **zero2dev.exe has its icon,** in Explorer, on the taskbar, in Alt+Tab and in a pinned shortcut, and its name and version in Properties and Task Manager ("Zero2Dev"). The exe is DPI aware, so the tray icon is sharp on scaled screens. The resources are in `cmd/zero2dev/rsrc_windows_amd64.syso`, written by `node scripts/winres.mjs` (and by `scripts/bump-version.sh`); `scripts/release-check.sh` fails when it is out of date.
+- **A taskbar button while Zero2Dev runs,** with the line Windows draws under running programs, so you can see at a glance that it is running. Clicking it opens the dashboard; **Close window** on it quits Zero2Dev like the tray's **Quit**. Its tooltip shows the same status as the tray icon ("2 services running").
 - **Stop all stops things in a safe order.** One request to the daemon (`POST /api/services/stop-all`) stops apps first, then databases, then the web server (Caddy or nginx), so an app never loses its database while it is still running. Services in the same group stop at the same time, and the answer lists what stopped and what did not. Before, the dashboard stopped services one by one in list order, and only while the page was open.
   - The dashboard's **Stop all** uses it and says how many services stopped, or names the ones that did not.
   - The tray menu has **Stop all services** (Zero2Dev keeps running); a balloon reports the result.
