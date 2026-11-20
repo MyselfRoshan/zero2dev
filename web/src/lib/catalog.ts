@@ -269,7 +269,7 @@ export const KIND_SUMMARY: Record<string, string> = {
   go: "The Go compiler and tools",
   java: "Eclipse Temurin JDK",
   python: "Python, with pip and virtual environments",
-  composer: "PHP's package manager, run with a service's PHP",
+  composer: "PHP's package manager. It runs with the PHP of the service that uses it, so install a PHP too",
   caddy: "Web server with automatic local HTTPS",
   nginx: "Fast web server and reverse proxy",
   mariadb: "MySQL-compatible database server",

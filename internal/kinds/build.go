@@ -140,6 +140,9 @@ func Build(kind string, settings map[string]string, extra []string, c Ctx) *Plan
 		}
 	}
 	pl.Args = append(pl.Args, tail...)
+	if kind == "node" {
+		nodePackageManager(pl, eff, c)
+	}
 	if len(extra) > 0 {
 		if pl.Program == "npm" {
 			pl.Args = append(pl.Args, "--") // npm passes what follows to the script

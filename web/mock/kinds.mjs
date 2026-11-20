@@ -148,6 +148,9 @@ export function preview(svc, { home, runtimes }) {
       if (e.program?.[v]) program = program.replace(/[^\\/]*$/, `${e.program[v]}.cmd`);
     }
     args.push(...tail);
+    // pnpm and Yarn come from Corepack (the daemon makes it before the first start).
+    if (svc.kind === "node" && ["pnpm", "yarn"].includes(eff.packageManager) && program.endsWith("npm.cmd"))
+      program = `${home}\\node\\corepack\\bin\\${eff.packageManager}.cmd`;
     if ((svc.args ?? []).length) {
       if (program.endsWith("npm.cmd")) args.push("--");
       args.push(...svc.args.map(plain));

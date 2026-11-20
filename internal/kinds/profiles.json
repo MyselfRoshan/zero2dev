@@ -36,6 +36,36 @@
         ],
         "path": "{home}/node/global",
         "help": "After an import moved or copied npm's global packages into the data folder: npm installs global packages there, and their commands are on PATH."
+      },
+      {
+        "when": {
+          "setting": "packageManager",
+          "not": "npm"
+        },
+        "env": [
+          {
+            "name": "COREPACK_HOME",
+            "value": "{home}/node/corepack-home",
+            "help": "Corepack keeps the pnpm and Yarn versions it downloads in the data folder."
+          },
+          {
+            "name": "COREPACK_ENABLE_DOWNLOAD_PROMPT",
+            "value": "0",
+            "help": "Corepack downloads the package manager without asking (there is no one to answer in a service)."
+          },
+          {
+            "name": "npm_config_store_dir",
+            "value": "{home}/node/pnpm-store",
+            "help": "pnpm keeps its package store in the data folder."
+          },
+          {
+            "name": "YARN_CACHE_FOLDER",
+            "value": "{home}/node/yarn-cache",
+            "help": "Yarn keeps its download cache in the data folder."
+          }
+        ],
+        "path": "{home}/node/corepack/bin",
+        "help": "While the package manager is pnpm or Yarn: Corepack's commands (pnpm, yarn) are first on PATH, and their versions, store and cache live in the data folder."
       }
     ],
     "options": [
@@ -106,6 +136,29 @@
           ]
         },
         "help": "The name of a script in package.json. npm is taken from the same folder as the selected Node version."
+      },
+      {
+        "key": "packageManager",
+        "group": "Run",
+        "label": "Package manager",
+        "common": true,
+        "type": "select",
+        "default": "npm",
+        "choices": [
+          {
+            "value": "npm",
+            "label": "npm"
+          },
+          {
+            "value": "pnpm",
+            "label": "pnpm"
+          },
+          {
+            "value": "yarn",
+            "label": "Yarn"
+          }
+        ],
+        "help": "Runs the npm script and the install tasks with it. pnpm and Yarn come from Corepack, which Zero2Dev installs into the data folder the first time they are needed (an internet connection is needed once)."
       },
       {
         "key": "watch",
@@ -224,6 +277,22 @@
       }
     ],
     "portable": [
+      {
+        "always": true,
+        "env": [
+          {
+            "name": "COMPOSER_HOME",
+            "value": "{home}/composer",
+            "help": "Composer keeps its settings, auth.json and global packages in the data folder."
+          },
+          {
+            "name": "COMPOSER_CACHE_DIR",
+            "value": "{home}/composer/cache",
+            "help": "Composer's download cache is in the data folder too."
+          }
+        ],
+        "help": "Composer's home and cache are always in the data folder, whichever terminal or service runs it."
+      },
       {
         "setting": "composer",
         "env": [

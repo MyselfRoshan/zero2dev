@@ -1494,7 +1494,17 @@ await step(
 // ---- 0.0.5: each feature's steps live in e2e/steps/*.mjs ----
 {
   const t = { page, BASE, step, apiCall, shot, assert, customService, serviceRow, pickType };
-  for (const f of ["mail", "databases", "snapshots", "migrate", "python", "tasks", "detect", "newproject"]) {
+  for (const f of [
+    "mail",
+    "databases",
+    "snapshots",
+    "migrate",
+    "python",
+    "composer",
+    "tasks",
+    "detect",
+    "newproject",
+  ]) {
     const { default: steps } = await import(`./steps/${f}.mjs`);
     await steps(t);
   }

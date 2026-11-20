@@ -276,7 +276,36 @@ Mailpit is a pretend mail server. Your app sends its e-mails to it, and you read
 ---
 
 <!-- 0.0.6 python: "## Python services" goes here (virtual environment, run modes, pip). -->
-<!-- 0.0.6 composer: "## Composer, pnpm and Yarn" goes here. -->
+## Composer, pnpm and Yarn
+
+### Composer
+
+Composer is PHP's package manager. It is a **tool** on the **Runtimes** page (group "Tools"): pick a version and click **Install**. Composer is one file (`composer.phar`) with a small launcher next to it, and it runs with PHP, so install a PHP version too.
+
+- **Which PHP runs it:** the PHP of the service you run it for. In your own terminal, the `composer` command always uses your **default PHP**, whatever other PHP is on your PATH. Make a version the default on the Runtimes page.
+- **Where it keeps its files:** Composer's home (settings, `auth.json`, global packages) is `data\composer`, and its download cache is `data\composer\cache`. This applies to every PHP service, to **Open terminal** on a PHP service and to the `composer` command of the command line, so nothing is written to your user profile.
+- **On a new PC or after an import:** the home is created when Composer first needs it. **Import from this PC** can copy your old Composer home into the data folder.
+- If a task needs Composer and it is not installed, Zero2Dev says "Composer is not installed: install it on the Runtimes page".
+
+### pnpm and Yarn for a Node service
+
+A Node service has a **Package manager** setting under **Run**: **npm** (the default), **pnpm** or **Yarn**.
+
+1. Edit the service, set **Package manager** to pnpm or Yarn and save.
+2. Start the service. The first time, the log shows "Installing Corepack" and "Making the pnpm and yarn commands". This needs an internet connection once: Zero2Dev installs Corepack with npm into `data\node\corepack`, because Node 26 no longer comes with it. The first run of pnpm or Yarn then downloads that package manager through Corepack.
+3. After that nothing is downloaded again. An npm script runs as `pnpm run dev` or `yarn run dev`, and the install tasks of the service use the same package manager.
+
+Where things are kept (all in the data folder, so they move with it):
+
+| What | Folder |
+| --- | --- |
+| Corepack and the `pnpm` and `yarn` commands | `data\node\corepack` (the commands in its `bin` folder, first on the PATH of the service and of Open terminal) |
+| The pnpm and Yarn versions Corepack downloads | `data\node\corepack-home` |
+| pnpm's package store | `data\node\pnpm-store` |
+| Yarn's download cache | `data\node\yarn-cache` |
+
+If a project says which package manager it wants (the `packageManager` field of `package.json`), Corepack uses that version. With the setting on **npm** none of this is set up.
+
 <!-- 0.0.6 tasks: "## Run a task" and "detect the project type" go here. -->
 <!-- 0.0.6 new-project: "## Create a project from a framework" goes here. -->
 

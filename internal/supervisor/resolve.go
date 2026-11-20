@@ -147,7 +147,8 @@ func (s *Supervisor) resolveWith(svc model.Service, d store.Data, lenient bool) 
 	}
 
 	if filepath.IsAbs(bin) {
-		if st, err := os.Stat(bin); err != nil || st.IsDir() {
+		if st, err := os.Stat(bin); (err != nil || st.IsDir()) && !(len(plan.Pre) > 0 && plan.Program == bin) {
+			// (a program the pre-steps make, like pnpm from Corepack, is looked for after them)
 			if !lenient {
 				return nil, apperr.Conflict("command %s not found", bin)
 			}

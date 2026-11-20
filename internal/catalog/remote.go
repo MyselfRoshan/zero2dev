@@ -96,6 +96,7 @@ type Remote struct {
 	CaddyURL, PHPArchiveURL                   string
 	MariaDBURL, PostgresPage, VSCodeURL       string
 	GitHubAPI                                 string // base for the GitHub-hosted tools, ".../repos/"
+	ComposerURL                               string
 	Version                                   string
 
 	mu sync.Mutex
@@ -149,6 +150,7 @@ func (r *Remote) Refresh(ctx context.Context) (Status, []string, error) {
 		{"mariadb", hostLabel(or(r.MariaDBURL, DefaultMariaDBURL)), r.fetchMariaDB},
 		{"postgres", hostLabel(or(r.PostgresPage, DefaultPostgresPage)), r.fetchPostgres},
 		{"vscode", hostLabel(or(r.VSCodeURL, DefaultVSCodeURL)), r.fetchVSCode},
+		{"composer", hostLabel(or(r.ComposerURL, DefaultComposerURL)), r.fetchComposer},
 	}
 	for _, s := range ghSpecs {
 		fetchers = append(fetchers, struct {

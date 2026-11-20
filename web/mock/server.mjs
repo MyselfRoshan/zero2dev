@@ -206,7 +206,7 @@ const BUILTIN = [
   ext("java", "17.0.12", "17", "lts", "builtin"),
   ext("python", "3.13.1", "3.13", "stable", "builtin"),
   ext("python", "3.12.8", "3.12", "stable", "builtin"),
-  ext("composer", "2.8.4", "2.8", "stable", "builtin"),
+  ext("composer", "2.11.1", "2", "stable", "builtin"),
   ext("nginx", "1.26.2", "1.26", "stable", "builtin"),
   ext("mariadb", "11.4.13", "11.4", "lts", "builtin"),
   ext("mysql", "8.4.13", "8.4", "lts", "builtin"),
