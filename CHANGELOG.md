@@ -18,6 +18,17 @@
 
 <!-- migrate-backend + migrate-ui: Bring in -->
 
+- **Bring in (server).** The daemon can copy or move the settings and data of programs installed on this PC into the data folder, and revert it. The routes are under `/api/migrations`.
+  - It covers VS Code and VSCodium (settings and extensions), Notepad++, DBeaver's workspace and HeidiSQL's sessions.
+  - It covers npm's global packages and cache, Go's module and build caches, and Composer's home.
+  - It also covers registered runtimes, which are adopted into `bin\adopted\` and keep their id, and databases of another server.
+- **Records and backups.** Every migration is recorded in `data\migrations\<id>\`.
+  - Whatever the portable place held is saved first.
+  - A move across drives is copied, checked, and only then deleted.
+  - Reverting offers discard, copy back or move back. Originals are saved before they are touched.
+- **HeidiSQL.** The registry key is written as HeidiSQL's own `portable_settings.txt`. A move removes the key after saving a `.reg` backup of it.
+- **Portable caches.** After such a migration, Zero2Dev's Node.js, PHP and Go services can get `npm_config_prefix` and the global folder on `PATH`, `COMPOSER_HOME`, or `GOMODCACHE`/`GOCACHE` in the data folder (`Settings.portable`).
+
 <!-- /migrate -->
 
 ## 0.0.4

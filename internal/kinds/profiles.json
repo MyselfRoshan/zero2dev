@@ -24,6 +24,20 @@
         "help": "npm keeps its download cache in the Zero2Dev data folder instead of your user profile."
       }
     ],
+    "portable": [
+      {
+        "setting": "npmGlobal",
+        "env": [
+          {
+            "name": "npm_config_prefix",
+            "value": "{home}/node/global",
+            "help": "npm install -g puts packages in the data folder."
+          }
+        ],
+        "path": "{home}/node/global",
+        "help": "After Bring in moved or copied npm's global packages into the data folder: npm installs global packages there, and their commands are on PATH."
+      }
+    ],
     "options": [
       {
         "key": "run",
@@ -207,6 +221,20 @@
           "{docroot}"
         ],
         "help": "The folder the web server serves: the project folder, or the document root below."
+      }
+    ],
+    "portable": [
+      {
+        "setting": "composer",
+        "env": [
+          {
+            "name": "COMPOSER_HOME",
+            "value": "{home}/composer",
+            "help": "Composer keeps its settings, auth.json, global packages and cache in the data folder."
+          }
+        ],
+        "path": "{home}/composer/vendor/bin",
+        "help": "After Bring in moved or copied Composer's home into the data folder: Composer uses it, and the commands of global packages are on PATH."
       }
     ],
     "options": [
@@ -467,6 +495,24 @@
           "run"
         ],
         "help": "Compile and run the package in one step."
+      }
+    ],
+    "portable": [
+      {
+        "setting": "goCache",
+        "env": [
+          {
+            "name": "GOMODCACHE",
+            "value": "{home}/go/path/pkg/mod",
+            "help": "Downloaded modules stay in the data folder."
+          },
+          {
+            "name": "GOCACHE",
+            "value": "{home}/go/cache",
+            "help": "Compiled packages stay in the data folder."
+          }
+        ],
+        "help": "After Bring in moved or copied Go's module and build caches into the data folder: Go uses them there, also when the setting below is off. They are the same folders that setting uses."
       }
     ],
     "options": [
