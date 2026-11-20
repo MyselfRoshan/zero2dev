@@ -137,3 +137,20 @@ func TestDetectAndRegisterNeverRunEditors(t *testing.T) {
 type nopEmitter struct{}
 
 func (nopEmitter) Publish(string, any) {}
+
+func TestInstallDirKeepsOtherAdoptedRuntimes(t *testing.T) {
+	bin := t.TempDir()
+	m := &Manager{Bin: bin}
+	cases := map[string]string{
+		filepath.Join(bin, "node-22.1.0", "node.exe"):               filepath.Join(bin, "node-22.1.0"),
+		filepath.Join(bin, "adopted", "node-20.11.0", "node.exe"):   filepath.Join(bin, "adopted", "node-20.11.0"),
+		filepath.Join(bin, "adopted", "java-21", "bin", "java.exe"): filepath.Join(bin, "adopted", "java-21"),
+		filepath.Join(bin, "adopted", "stray.exe"):                  "",
+		filepath.Join(filepath.Dir(bin), "elsewhere", "node.exe"):   "",
+	}
+	for binary, want := range cases {
+		if got := m.installDir(binary); got != want {
+			t.Errorf("installDir(%s) = %q, want %q", binary, got, want)
+		}
+	}
+}

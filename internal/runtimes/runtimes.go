@@ -349,12 +349,20 @@ func (m *Manager) Delete(id string) error {
 
 // installDir returns <bin>/<first component> for a binary below
 // the runtimes dir, or "" if the binary is elsewhere (never delete outside).
+// An adopted runtime (Bring in) lives in <bin>/adopted/<kind>-<version>/, so
+// its folder is the second component: removing one never removes the others.
 func (m *Manager) installDir(binary string) string {
 	root := m.Bin
 	rel, err := filepath.Rel(root, binary)
 	if err != nil || rel == "." || strings.HasPrefix(rel, "..") {
 		return ""
 	}
-	first := strings.Split(filepath.ToSlash(rel), "/")[0]
-	return filepath.Join(root, first)
+	parts := strings.Split(filepath.ToSlash(rel), "/")
+	if strings.EqualFold(parts[0], "adopted") {
+		if len(parts) < 3 { // not inside a runtime's own folder
+			return ""
+		}
+		return filepath.Join(root, parts[0], parts[1])
+	}
+	return filepath.Join(root, parts[0])
 }

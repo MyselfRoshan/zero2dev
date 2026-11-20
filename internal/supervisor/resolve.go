@@ -164,7 +164,7 @@ func (s *Supervisor) resolveWith(svc model.Service, d store.Data, lenient bool) 
 	r.bin, r.args = bin, plan.Args
 
 	// Order (later wins): runtime home, kind settings, database, .env, user Env, PORT.
-	added, shown, warns, info, err := serviceVars(svc, d, rtUsed, plan.Env, lenient)
+	added, shown, warns, info, err := s.serviceVarsWithHome(svc, d, rtUsed, plan.Env, lenient)
 	if err != nil {
 		return nil, err
 	}
