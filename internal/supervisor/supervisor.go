@@ -224,6 +224,10 @@ func (s *Supervisor) start(id string, auto *crashState) error {
 		revert()
 		return apperr.Conflict("port %d is already in use", svc.Port)
 	}
+	if err := checkExtraPorts(*svc, portFree); err != nil {
+		revert()
+		return err
+	}
 	if err := s.prepare(id, r); err != nil {
 		s.logLine(id, "system", err.Error())
 		revert()
@@ -355,7 +359,7 @@ func (s *Supervisor) watchHealth(id string, p *proc, svc model.Service) {
 			}
 			return
 		case <-tick.C:
-			if probe(svc.Port, svc.HealthPath) {
+			if probe(svc.Port, healthPath(svc)) {
 				promote()
 				return
 			}

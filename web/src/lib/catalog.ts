@@ -7,6 +7,7 @@ export const KIND_LABEL: Record<string, string> = {
   mysql: "MySQL",
   postgres: "PostgreSQL",
   redis: "Redis",
+  mailpit: "Mailpit",
   vscode: "VS Code",
   vscodium: "VSCodium",
   notepadpp: "Notepad++",
@@ -23,7 +24,7 @@ export const kindLabel = (k: string): string => KIND_LABEL[k] ?? k;
 
 /** A category of the Runtimes page. Web servers serve sites; they are not what services run on. */
 export interface RuntimeGroup {
-  id: "languages" | "servers" | "databases" | "editors" | "dbtools";
+  id: "languages" | "servers" | "databases" | "mail" | "editors" | "dbtools";
   title: string;
   text: string;
   kinds: RuntimeKind[];
@@ -45,6 +46,12 @@ export const RUNTIME_GROUPS: RuntimeGroup[] = [
     kinds: ["mariadb", "mysql", "postgres", "redis"],
   },
   {
+    id: "mail",
+    title: "Mail",
+    text: "Catch the e-mails your apps send and read them in the browser. Nothing leaves this PC.",
+    kinds: ["mailpit"],
+  },
+  {
     id: "editors",
     title: "Code editors",
     text: "Open a project folder from its service page. Settings and extensions are kept in the data folder, not in bin.",
@@ -59,7 +66,7 @@ export const RUNTIME_GROUPS: RuntimeGroup[] = [
 ];
 
 /** Groups whose kinds can be services (editors and database tools are opened, not run as services). */
-export const SERVICE_GROUP_IDS: RuntimeGroup["id"][] = ["languages", "servers", "databases"];
+export const SERVICE_GROUP_IDS: RuntimeGroup["id"][] = ["languages", "servers", "databases", "mail"];
 
 /** Desktop programs that are opened (launched), not supervised. */
 export function isLaunchable(kind: string): boolean {
@@ -254,6 +261,7 @@ export const KIND_SUMMARY: Record<string, string> = {
   mysql: "Oracle's MySQL database server",
   postgres: "PostgreSQL database server",
   redis: "In-memory store for caches and queues",
+  mailpit: "Catches your apps' e-mails, with a web inbox",
   vscode: "Microsoft's code editor",
   vscodium: "VS Code without Microsoft's telemetry",
   notepadpp: "Lightweight text editor",

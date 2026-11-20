@@ -416,12 +416,13 @@ The browser's own directory picker never reveals an absolute path, which service
 | language | `node`, `php`, `go`, `java` | yes |
 | server | `caddy`, `nginx` | yes |
 | database | `mariadb`, `mysql`, `postgres`, `redis` | yes |
+| mail (0.0.5) | `mailpit` | yes (not a database: no dumps, no clean stop; it stops with the apps) |
 | editor | `vscode`, `vscodium`, `notepadpp` | no: opened with `launch` |
 | dbtool | `heidisql`, `dbeaver` | no: opened with `launch` |
 
 `model.KindCategory`, `model.Launchable(kind)` and `model.IsDatabase(kind)` hold this table. The UI mirrors it in `RUNTIME_GROUPS` (`web/src/lib/catalog.ts`).
 
-- **Detection:** `mariadbd`, `mysqld`, `postgres` and `redis-server` are probed with `--version`; `code` / `codium` (the `.cmd` wrappers) too.
+- **Detection:** `mariadbd`, `mysqld`, `postgres` and `redis-server` are probed with `--version`; `code` / `codium` (the `.cmd` wrappers) too. `mailpit` is probed with `version --no-release-check` (without the flag it asks GitHub for updates); the version is read from `<path> v1.33.0 compiled with ...`.
 - **Registering:** a program of kind `notepadpp`, `heidisql`, `dbeaver`, or a `vscode`/`vscodium` `.exe`, is never run to read its version (it would open a window). The version is the one given, or `unknown`.
 
 ### Checksum type `md5`
@@ -439,7 +440,7 @@ The browser's own directory picker never reveals an absolute path, which service
 | mariadb | `downloads.mariadb.org/rest-api/mariadb/` (stable lines: the newest rolling one plus LTS, at most 4), then `/{line}/latest/` and its `winx64.zip`. The URL is rewritten from http to https. | sha256 |
 | postgres | `enterprisedb.com/download-postgresql-binaries`: the Windows x86-64 `getfile.jsp` link of the 5 newest versions, resolved with one HEAD request to its `get.enterprisedb.com/postgresql/postgresql-X-N-windows-x64-binaries.zip` target | none (unverified) |
 | vscode | `update.code.visualstudio.com/api/update/win32-x64-archive/stable/latest` | sha256 (`sha256hash`) |
-| redis, vscodium, notepadpp, heidisql, dbeaver | GitHub releases (`api.github.com/repos/<repo>/releases?per_page=10`), newest stable assets matching the Windows ZIP pattern | sha256 from the asset's `digest`; none means unverified |
+| redis, vscodium, notepadpp, heidisql, dbeaver, mailpit | GitHub releases (`api.github.com/repos/<repo>/releases?per_page=10`), newest stable assets matching the Windows ZIP pattern. Mailpit names its ZIP `mailpit-windows-amd64.zip` in every release, so its version comes from the tag (`v1.33.0`; other tags are skipped); the newest 3 are kept | sha256 from the asset's `digest`; none means unverified |
 | mysql | none: entries are pinned in the built-in manifest (dev.mysql.com pages are not meant for programs) | md5 |
 
 **Archive layouts** (checked against the real archives):
@@ -450,13 +451,14 @@ The browser's own directory picker never reveals an absolute path, which service
 | mysql | 1 | `bin/mysqld.exe` |
 | postgres | 1 | `bin/postgres.exe` |
 | redis | 1 | `redis-server.exe` |
+| mailpit | 0 | `mailpit.exe` |
 | dbeaver | 1 | `dbeaver.exe` |
 | vscode | 0 | `Code.exe` |
 | vscodium | 0 | `VSCodium.exe` |
 | notepadpp | 0 | `notepad++.exe` |
 | heidisql | 0 | `heidisql.exe` |
 
-**Bin holds programs only.** Tool data goes to `<home>/<model.DataDirName(kind)>`: `code`, `codium`, `notepadpp`, `heidisql`, `dbeaver`, and for databases `mariadb`, `mysql`, `postgres`, `redis`. Nothing is created inside `bin`.
+**Bin holds programs only.** Tool data goes to `<home>/<model.DataDirName(kind)>`: `code`, `codium`, `notepadpp`, `heidisql`, `dbeaver`, and for databases `mariadb`, `mysql`, `postgres`, `redis` (and `mailpit` for Mailpit services). Nothing is created inside `bin`.
 
 ### Database services
 
@@ -498,6 +500,17 @@ The browser's own directory picker never reveals an absolute path, which service
 - Daemon shutdown waits up to 30 s.
 
 **Deleting** a database service keeps its data folder.
+
+### Mailpit services (0.0.5)
+
+Kind `mailpit` (category `mail`) catches the e-mails apps send.
+
+- **Port:** `port` is the web inbox (default 8025). The health check asks for `/livez` when the service sets no `healthPath` (`kinds.Profile.healthPath`, `kinds.HealthPath`).
+- **Setting:** `smtpPort` (number, default `1025`), where apps send mail. `maxMessages` (default `500`, `0` keeps all) becomes `--max`.
+- **Data folder:** `<home>/mailpit/<serviceId>` (`dataDir: service`), created before the start.
+- **Fixed args:** `--listen 127.0.0.1:{port} --smtp 127.0.0.1:{s.smtpPort} --database {dataSlash}/mailpit.db --smtp-auth-accept-any --smtp-auth-allow-insecure --disable-version-check`. No login is needed, and a client that sends one anyway is let in.
+- **Start:** `409` "SMTP port N is already in use" when the SMTP port is taken, and `409` when it equals the web port. With `customArgs` the SMTP port is not checked.
+- **Stop:** no shutdown command; it stops in the apps tier of Stop all.
 
 ### `POST /api/runtimes/{id}/launch` body `{ "path"?: string, "serviceId"?: string }` -> 204
 

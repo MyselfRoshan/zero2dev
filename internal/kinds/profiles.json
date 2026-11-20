@@ -1475,5 +1475,88 @@
     "extraArgs": "",
     "extraArgsHint": "One value per row. {port} is the port, {home} the Zero2Dev data folder.",
     "options": []
+  },
+  {
+    "kind": "mailpit",
+    "label": "Mailpit",
+    "summary": "Catches the e-mails your apps send, so you can read them in the browser.",
+    "folder": {
+      "use": "hidden"
+    },
+    "port": {
+      "use": "required",
+      "default": 8025,
+      "hint": "The web page with the caught e-mails. 8025 is the usual one. Your apps send mail to the SMTP port below."
+    },
+    "health": true,
+    "healthPath": "/livez",
+    "dataDir": "service",
+    "extraArgs": "Extra arguments",
+    "extraArgsHint": "Any other Mailpit option as --name value, like --webroot /mail/. Added after the generated ones.",
+    "fixed": [
+      {
+        "args": [
+          "--listen",
+          "127.0.0.1:{port}"
+        ],
+        "help": "The web page and its API on the service port, for this PC only."
+      },
+      {
+        "args": [
+          "--smtp",
+          "127.0.0.1:{s.smtpPort}"
+        ],
+        "help": "Your apps send mail to this SMTP port (the SMTP port setting). Only this PC can connect."
+      },
+      {
+        "args": [
+          "--database",
+          "{dataSlash}/mailpit.db"
+        ],
+        "help": "The caught e-mails are kept in this service's data folder."
+      },
+      {
+        "args": [
+          "--smtp-auth-accept-any",
+          "--smtp-auth-allow-insecure"
+        ],
+        "help": "No login is needed. Apps that send a user name and password anyway are let in, whatever they send."
+      },
+      {
+        "args": [
+          "--disable-version-check"
+        ],
+        "help": "Mailpit does not look online for updates. Zero2Dev's Runtimes page lists the new versions."
+      }
+    ],
+    "options": [
+      {
+        "key": "smtpPort",
+        "group": "Mail",
+        "label": "SMTP port",
+        "common": true,
+        "type": "number",
+        "default": "1025",
+        "min": 1,
+        "max": 65535,
+        "help": "Your apps send their e-mails to 127.0.0.1 on this port. 1025 is the usual one. Use a different port for each Mailpit service."
+      },
+      {
+        "key": "maxMessages",
+        "group": "Mail",
+        "label": "Keep at most",
+        "type": "number",
+        "default": "500",
+        "min": 0,
+        "max": 1000000,
+        "emit": {
+          "arg": [
+            "--max",
+            "{v}"
+          ]
+        },
+        "help": "How many e-mails to keep. The oldest ones are deleted first. 0 keeps all of them."
+      }
+    ]
   }
 ]

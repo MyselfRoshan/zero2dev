@@ -83,6 +83,7 @@ const KINDS = [
   "mysql",
   "postgres",
   "redis",
+  "mailpit",
   "vscode",
   "vscodium",
   "notepadpp",
@@ -104,6 +105,7 @@ function ext(kind, version, line, channel, source, o = {}) {
     mysql: `https://cdn.mysql.com/Downloads/MySQL-${line}/mysql-${version}-winx64.zip`,
     postgres: `https://get.enterprisedb.com/postgresql/postgresql-${version}-1-windows-x64-binaries.zip`,
     redis: gh("redis-windows/redis-windows", version, `Redis-${version}-Windows-x64-msys2.zip`),
+    mailpit: gh("axllent/mailpit", "v" + version, "mailpit-windows-amd64.zip"),
     vscode: `https://vscode.download.prss.microsoft.com/dbazure/download/stable/x/VSCode-win32-x64-${version}.zip`,
     vscodium: gh("VSCodium/vscodium", version, `VSCodium-win32-x64-${version}.zip`),
     notepadpp: gh("notepad-plus-plus/notepad-plus-plus", "v" + version, `npp.${version}.portable.x64.zip`),
@@ -121,6 +123,7 @@ function ext(kind, version, line, channel, source, o = {}) {
     mysql: "MySQL",
     postgres: "PostgreSQL",
     redis: "Redis",
+    mailpit: "Mailpit",
     vscode: "VS Code",
     vscodium: "VSCodium",
     notepadpp: "Notepad++",
@@ -152,6 +155,7 @@ function ext(kind, version, line, channel, source, o = {}) {
       mysql: "bin/mysqld.exe",
       postgres: "bin/postgres.exe",
       redis: "redis-server.exe",
+      mailpit: "mailpit.exe",
       vscode: "Code.exe",
       vscodium: "VSCodium.exe",
       notepadpp: "notepad++.exe",
@@ -185,6 +189,7 @@ const BUILTIN = [
   ext("mysql", "8.4.13", "8.4", "lts", "builtin"),
   ext("postgres", "17.11", "17", "", "builtin"),
   ext("redis", "8.10.3", "", "", "builtin"),
+  ext("mailpit", "1.33.0", "", "", "builtin"),
   ext("vscode", "1.145.0", "", "", "builtin"),
   ext("vscodium", "1.143.17232", "", "", "builtin"),
   ext("notepadpp", "8.9.8.1", "", "", "builtin"),
@@ -203,6 +208,7 @@ const REMOTE = [
   ext("mariadb", "11.8.5", "11.8", "lts", "remote"),
   ext("postgres", "18.6", "18", "", "remote"),
   ext("vscode", "1.145.1", "", "", "remote"),
+  ext("mailpit", "1.34.0", "", "", "remote"),
 ];
 const discovered = new Set();
 const SOURCES = {
@@ -216,6 +222,7 @@ const SOURCES = {
   postgres: "www.enterprisedb.com",
   vscode: "update.code.visualstudio.com",
   redis: "github.com/redis-windows/redis-windows",
+  mailpit: "github.com/axllent/mailpit",
   vscodium: "github.com/VSCodium/vscodium",
   notepadpp: "github.com/notepad-plus-plus/notepad-plus-plus",
   heidisql: "github.com/HeidiSQL/HeidiSQL",
@@ -624,7 +631,20 @@ function validateLinks(b, selfId) {
   return null;
 }
 function validateService(b, selfId = "") {
-  const kinds = ["custom", "node", "php", "go", "java", "caddy", "nginx", "mariadb", "mysql", "postgres", "redis"];
+  const kinds = [
+    "custom",
+    "node",
+    "php",
+    "go",
+    "java",
+    "caddy",
+    "nginx",
+    "mariadb",
+    "mysql",
+    "postgres",
+    "redis",
+    "mailpit",
+  ];
   const allowed = [
     "name",
     "kind",

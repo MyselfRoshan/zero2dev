@@ -104,6 +104,7 @@ await step("runtimes: a card per kind, first check, version list per kind", asyn
     "node", "php", "go", "java", // languages
     "caddy", "nginx", // web servers
     "mariadb", "mysql", "postgres", "redis", // databases
+    "mailpit", // mail
     "vscode", "vscodium", "notepadpp", // code editors
     "heidisql", "dbeaver", // database tools
   ]);

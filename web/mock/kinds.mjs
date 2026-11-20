@@ -11,6 +11,7 @@ const DATA_DIR = {
   mysql: "mysql",
   postgres: "postgres",
   redis: "redis",
+  mailpit: "mailpit",
   php: "php",
   node: "node",
   go: "go",
@@ -26,6 +27,7 @@ const PROG = {
   mysql: "mysqld.exe",
   postgres: "postgres.exe",
   redis: "redis-server.exe",
+  mailpit: "mailpit.exe",
 };
 
 export const profileOf = (kind) => PROFILES.find((p) => p.kind === kind);
