@@ -5,7 +5,9 @@ package model
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -87,6 +89,29 @@ func Deps(sv Service) []string {
 		}
 	}
 	return out
+}
+
+// GoPath is Zero2Dev's GOPATH: <home>/go/path. A Go service that keeps Go's
+// downloads in the data folder (the default setting) uses it, so the Go tools
+// installed with `go install` (air, dlv, gopls) and the module cache live there
+// and move with the data folder.
+func GoPath(home string) string { return filepath.Join(home, "go", "path") }
+
+// GoToolsDir is where `go install` puts programs under Zero2Dev's GOPATH: <GOPATH>/bin.
+func GoToolsDir(home string) string { return filepath.Join(GoPath(home), "bin") }
+
+// DefaultGoBin is where `go install` puts programs when GOPATH is not Zero2Dev's:
+// the bin folder of the first GOPATH entry (gopath, the GOPATH variable) or, when
+// it is empty, Go's own default %USERPROFILE%\go (userHome). "" when neither is known.
+func DefaultGoBin(gopath, userHome string) string {
+	first := strings.TrimSpace(strings.SplitN(gopath, string(os.PathListSeparator), 2)[0])
+	switch {
+	case first != "":
+		return filepath.Join(first, "bin")
+	case userHome != "":
+		return filepath.Join(userHome, "go", "bin")
+	}
+	return ""
 }
 
 // RuntimeHome is the environment variable that points at a runtime's install

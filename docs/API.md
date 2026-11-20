@@ -897,6 +897,7 @@ The environment of the child process, **later entries win**:
 
 1. The daemon's own environment, with the runtime's folder put first on `PATH` (as before).
 2. `JAVA_HOME` (Java) or `GOROOT` (Go), when the service runs on a runtime Zero2Dev installed or registered: the folder two levels above the binary (`<home>\bin\java.exe` gives `<home>`). Other kinds get nothing.
+   **Go tools (0.0.5):** a `go` service with `isolate` on (the default) gets `GOPATH=<home>\go\path` and `<home>\go\path\bin` first on `PATH`, before the runtime's folder, so what `go install` puts there (`air`, `dlv`, `gopls`) is found. With `isolate` off GOPATH is left alone and Go's default bin folder (the first entry of the daemon's `GOPATH`, else `%USERPROFILE%\go\bin`) is put on `PATH` instead. A `custom` service gets each of the two folders that exists. The command preview and Open terminal show the same.
 3. The kind's own variables from its settings (`NODE_ENV`, `npm_config_cache` ...).
 4. The database variables of `databaseId`.
 5. The variables of the `.env` file.
@@ -956,8 +957,9 @@ The runtimes Zero2Dev installed are not on your Windows `PATH`. Zero2Dev offers 
 
 - Each command is a `<name>.cmd` that runs the tool of the default runtime with the arguments it gets. For `node`, `php`, `java` and `go` the tool is the runtime's own binary; the other commands are looked for next to it and only get a shim when the file exists. Databases get their client tools only, never the server.
 - Where two kinds offer the same command (`mysql`), the first in the order Node, PHP, Java, Go, MySQL, MariaDB, PostgreSQL, Redis wins.
-- Java and Go shims set `JAVA_HOME` / `GOROOT` for that one run only.
-- `activate.cmd`, `activate.ps1` and `activate.sh` put the runtimes' folders first on `PATH` and set `JAVA_HOME` / `GOROOT` **for the terminal they run in**. Use `call "<home>\shims\activate.cmd"` in Command Prompt, `. '<home>\shims\activate.ps1'` in PowerShell and `. <home>/shims/activate.sh` in Git Bash.
+- Java and Go shims set `JAVA_HOME` / `GOROOT` for that one run only; the Go shims also set `GOPATH=<home>\go\path`.
+- Every `.exe` in `<home>\go\path\bin` and in Go's default bin folder (what `go install` built: `air`, `dlv`, `gopls`) gets a shim `<name>.cmd` that runs it, unless a runtime's shim or Zero2Dev's own folder has the name. They are written by the same refresh as the others, and by **Apply** on the Environment page.
+- `activate.cmd`, `activate.ps1` and `activate.sh` put the runtimes' folders first on `PATH` and set `JAVA_HOME` / `GOROOT` **for the terminal they run in**. With a Go runtime they also set `GOPATH` and put `<home>\go\path\bin` (and Go's default bin folder when it exists) on `PATH`, so a tool installed after the last refresh works there at once. Use `call "<home>\shims\activate.cmd"` in Command Prompt, `. '<home>\shims\activate.ps1'` in PowerShell and `. <home>/shims/activate.sh` in Git Bash.
 
 ### The Environment (folders and variables, one by one)
 

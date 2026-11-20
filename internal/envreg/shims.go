@@ -1,7 +1,9 @@
 package envreg
 
 import (
+	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -80,10 +82,24 @@ func shimEnv(rt model.Runtime) map[string]string {
 // and activate.sh. exists tells whether a tool next to a runtime's binary is
 // there (os.Stat in production). It is pure: nothing is written here.
 func Files(d store.Data, exists func(path string) bool) []File {
+	return FilesAt("", d, exists, nil)
+}
+
+// FilesAt is Files for the data folder home. With a home, Go's own tools are
+// included, as next to GOROOT:
+//   - go and gofmt run with GOPATH=<home>\go\path, so `go install` puts air, dlv
+//     or gopls in <home>\go\path\bin whichever terminal it runs in;
+//   - every program in that folder gets a shim of its own (air.cmd ...), and the
+//     activate scripts put the folder on PATH, so a tool installed after the last
+//     refresh works there at once;
+//
+// readDir lists a folder (os.ReadDir in production; nil lists nothing).
+func FilesAt(home string, d store.Data, exists func(path string) bool, readDir func(string) ([]os.DirEntry, error)) []File {
 	var out []File
 	seen := map[string]bool{}
 	var dirs []string
 	activateEnv := map[string]string{}
+	goSeen := false
 	for _, kind := range kindOrder {
 		rt, ok := defaultOf(d, kind)
 		if !ok {
@@ -94,6 +110,13 @@ func Files(d store.Data, exists func(path string) bool) []File {
 			dirs = append(dirs, dir)
 		}
 		env := shimEnv(rt)
+		if home != "" && kind == "go" {
+			if env == nil {
+				env = map[string]string{}
+			}
+			env["GOPATH"] = model.GoPath(home)
+			goSeen = true
+		}
 		for name, v := range env {
 			activateEnv[name] = v
 		}
@@ -121,11 +144,79 @@ func Files(d store.Data, exists func(path string) bool) []File {
 			out = append(out, File{Name: cmd + ".cmd", Content: ShimCmd(target, env)})
 		}
 	}
+	if home != "" {
+		// Zero2Dev's own tools folder first, then Go's default one (tools installed before
+		// Zero2Dev, or by a service that keeps Go's downloads in the user profile).
+		var toolDirs []string
+		for _, t := range []string{model.GoToolsDir(home), userGoBin()} {
+			if t != "" && !containsFold(toolDirs, t) {
+				toolDirs = append(toolDirs, t)
+			}
+		}
+		for _, t := range toolDirs {
+			shims := toolShims(t, seen, readDir)
+			out = append(out, shims...)
+			// The activate scripts get Zero2Dev's folder always (a tool installed after the
+			// last refresh works there at once) and Go's default folder when it exists.
+			own := strings.EqualFold(t, model.GoToolsDir(home))
+			if _, err := readDirOr(readDir, t); goSeen && (own || err == nil) && !containsFold(dirs, t) {
+				dirs = append(dirs, t)
+			}
+		}
+		if goSeen {
+			// Zero2Dev's folder before the runtimes', Go's default folder after them.
+			if t := model.GoToolsDir(home); containsFold(dirs, t) {
+				dirs = slices.DeleteFunc(dirs, func(x string) bool { return strings.EqualFold(x, t) })
+				dirs = append([]string{t}, dirs...)
+			}
+		}
+	}
 	out = append(out,
 		File{Name: "activate.cmd", Content: ActivateCmd(dirs, activateEnv)},
 		File{Name: "activate.ps1", Content: ActivatePS1(dirs, activateEnv)},
 		File{Name: "activate.sh", Content: ActivateSH(dirs, activateEnv)},
 	)
+	return out
+}
+
+// userGoBin is Go's default tools folder (%GOPATH%\bin, else %USERPROFILE%\go\bin).
+// A variable so that tests never look at the real user folder.
+var userGoBin = func() string {
+	home, _ := os.UserHomeDir()
+	return model.DefaultGoBin(os.Getenv("GOPATH"), home)
+}
+
+func readDirOr(readDir func(string) ([]os.DirEntry, error), dir string) ([]os.DirEntry, error) {
+	if readDir == nil {
+		return nil, os.ErrNotExist
+	}
+	return readDir(dir)
+}
+
+// toolShims makes a shim for every program in dir (the .exe files: air, dlv,
+// gopls ...), except a name a runtime's shim has already. A program that is
+// not an .exe (a script) is left alone.
+func toolShims(dir string, seen map[string]bool, readDir func(string) ([]os.DirEntry, error)) []File {
+	if readDir == nil {
+		return nil
+	}
+	entries, err := readDir(dir)
+	if err != nil {
+		return nil
+	}
+	var out []File
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.EqualFold(filepath.Ext(name), ".exe") {
+			continue
+		}
+		cmd := strings.TrimSuffix(name, filepath.Ext(name))
+		if cmd == "" || seen[strings.ToLower(cmd)] || strings.HasPrefix(strings.ToLower(cmd), "activate") {
+			continue
+		}
+		seen[strings.ToLower(cmd)] = true
+		out = append(out, File{Name: cmd + ".cmd", Content: ShimCmd(filepath.Join(dir, name), nil)})
+	}
 	return out
 }
 

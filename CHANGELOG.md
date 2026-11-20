@@ -36,6 +36,10 @@
 
 - **VS Code and VSCodium keep your settings however you start them.** Before, only **Open** in Zero2Dev used `data\code` / `data\codium`; double-clicking `Code.exe` in `bin` started without your extensions and settings. Each installed version now has a `data` link next to its exe that points there, which is VS Code's own portable mode. Zero2Dev makes it on install and repairs it at every start (for example after the folder moved). Removing a version deletes the link, never the settings.
 
+### Go tools
+
+- **Go tools on PATH.** Programs that `go install` builds (`air`, `dlv`, `gopls`) go to `data\go\path\bin`. Go services (with "Keep Go's downloads and build cache in the data folder" on, the default), custom services and **Open terminal** get that folder on `PATH` and `GOPATH` set to `data\go\path`, next to `GOROOT`. With the setting off Go keeps its own default (`%USERPROFILE%\go`) and its `bin` folder is on `PATH` instead. The `go` and `gofmt` shims set `GOPATH` too, every tool in the folder gets a shim of its own, and the activate scripts put the folder on `PATH`.
+
 ### Import from this PC
 
 - **A calmer Import from this PC page.** Two columns: the programs on the left, the plan of the open one in a side panel (under its row on a narrow screen). Programs and History are tabs. A summary shows what was found, what can come in, what is in and what the backups take. Blocked programs say why in plain words instead of an amber badge, and Copy / Move are two cards that explain themselves.

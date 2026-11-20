@@ -12,7 +12,7 @@ import (
 )
 
 func TestPortableVarsOffAddsNothing(t *testing.T) {
-	for _, kind := range []string{"node", "php", "go"} {
+	for _, kind := range []string{"node", "php", "java"} {
 		a, s := portableVars(`D:\z`, kind, model.Portable{}, nil, []string{"Path=C:\\bin"})
 		if len(a) != 0 || len(s) != 0 {
 			t.Errorf("%s with everything off: %q %q", kind, a, s)
@@ -65,8 +65,67 @@ func TestPortableVarsComposerAndGo(t *testing.T) {
 	if v, _ := last(a, "GOCACHE"); v != filepath.Join(home, "go", "cache") {
 		t.Fatalf("GOCACHE = %q", v)
 	}
-	if _, ok := last(a, "PATH"); ok {
-		t.Fatal("go adds no PATH entry")
+	// Go's own tools are on PATH however the switch stands (see TestGoToolsOnPath).
+	if v, _ := last(a, "PATH"); v != model.GoToolsDir(home) {
+		t.Fatalf("PATH = %q, want the Go tools folder", v)
+	}
+}
+
+func TestGoToolsOnPath(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "data")
+	sep := string(os.PathListSeparator)
+	rt := &model.Runtime{Kind: "go", Binary: filepath.Join(home, "bin", "go-1.24", "bin", "go.exe")}
+	// The daemon's GOPATH points at a folder that does not exist: never the real user's.
+	userGo := filepath.Join(t.TempDir(), "usergo")
+	environ := []string{"Path=" + filepath.Join("C:", "Windows"), "GOPATH=" + userGo}
+	a, s := portableVars(home, "go", model.Portable{}, rt, environ)
+	if v, _ := last(a, "GOPATH"); v != filepath.Join(home, "go", "path") {
+		t.Fatalf("GOPATH = %q: the data folder's while Go's downloads are kept there", v)
+	}
+	want := model.GoToolsDir(home) + sep + filepath.Dir(rt.Binary) + sep + filepath.Join("C:", "Windows")
+	if v, _ := last(a, "Path"); v != want {
+		t.Fatalf("Path = %q, want %q: tools folder, then GOROOT's bin", v, want)
+	}
+	// With the setting off Go keeps its own GOPATH: no GOPATH from Zero2Dev, and that
+	// GOPATH's bin folder (else %USERPROFILE%\go\bin) is on PATH instead.
+	off, _ := portableVarsGo(home, "go", model.Portable{}, rt, environ, false)
+	if _, ok := last(off, "GOPATH"); ok {
+		t.Fatalf("isolate off must not set GOPATH: %q", off)
+	}
+	wantOff := filepath.Join(userGo, "bin") + sep + filepath.Dir(rt.Binary) + sep + filepath.Join("C:", "Windows")
+	if v, _ := last(off, "Path"); v != wantOff {
+		t.Fatalf("isolate off: Path = %q, want %q", v, wantOff)
+	}
+	if v := defaultGoBin([]string{"A=1"}); !strings.HasSuffix(v, filepath.Join("go", "bin")) {
+		t.Fatalf("no GOPATH: %q is not <profile>\\go\\bin", v)
+	}
+	// The setting of a service: on unless it says false.
+	if !goIsolated(model.Service{}) || !goIsolated(model.Service{Settings: map[string]string{"isolate": "true"}}) || goIsolated(model.Service{Settings: map[string]string{"isolate": "false"}}) {
+		t.Fatal("goIsolated")
+	}
+	if v, _ := last(s, "Path"); !strings.HasPrefix(v, model.GoToolsDir(home)+sep) {
+		t.Fatalf("preview PATH = %q", v)
+	}
+	// A custom service (air run as a command) gets each tools folder once it exists.
+	if a, _ := portableVars(home, "custom", model.Portable{}, nil, environ); len(a) != 0 {
+		t.Fatalf("no tools folder yet: %q", a)
+	}
+	if err := os.MkdirAll(filepath.Join(userGo, "bin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	a, _ = portableVars(home, "custom", model.Portable{}, nil, environ)
+	if v, _ := last(a, "Path"); !strings.HasPrefix(v, filepath.Join(userGo, "bin")+sep) {
+		t.Fatalf("Go's default folder exists: Path = %q", v)
+	}
+	if err := os.MkdirAll(model.GoToolsDir(home), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	a, _ = portableVars(home, "custom", model.Portable{}, nil, environ)
+	if v, _ := last(a, "Path"); !strings.HasPrefix(v, model.GoToolsDir(home)+sep) {
+		t.Fatalf("custom Path = %q", v)
+	}
+	if _, ok := last(a, "GOPATH"); ok {
+		t.Fatal("a custom service does not get GOPATH")
 	}
 }
 

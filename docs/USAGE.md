@@ -175,7 +175,7 @@ Pick a **Database** (also under Advanced) and the service gets its connection as
 | --- | --- | --- |
 | Node.js | Run a **script** or an **npm script** (names from your package.json are suggested); **Restart when a file changes** `--watch` (Node 18.11+); **debugger** `--inspect` [9229]; **NODE_ENV** [development] | npm's download cache: `data\node\npm-cache` |
 | PHP | **Document root**; **Router script**; php.ini **start from** development or production; **Extensions** (tick boxes for everything in that PHP's `ext` folder) [curl, fileinfo, mbstring, openssl, mysqli, pdo_mysql, pdo_sqlite, sqlite3, zip, intl]; **memory_limit** [256M], **upload_max_filesize** / **post_max_size** [64M], **max_execution_time** [60], **display_errors** [on], **date.timezone** [UTC]; **More php.ini lines**; **Xdebug** mode, start and editor port [9003] | The service's own `php.ini`, sessions, uploads and Xdebug output: `data\php\<service id>` |
-| Go | **Package** [.]; **Build tags**; **Keep Go's downloads and build cache in the data folder** [on] | `data\go` (GOPATH, GOCACHE, GOENV) |
+| Go | **Package** [.]; **Build tags**; **Keep Go's downloads and build cache in the data folder** [on] | `data\go` (GOPATH, GOCACHE, GOENV). Tools you install with `go install` (`air`, `dlv`, `gopls`) go to `data\go\path\bin` while that setting is on, and are on `PATH` for Go services, custom services (so `air` works as a command) and **Open terminal**. With the setting off, Go keeps its own default (`%USERPROFILE%\go`, tools in `%USERPROFILE%\go\bin`) and that folder is on `PATH` instead |
 | Java | Run a **JAR** or a **main class** with a class path; **Max memory** `-Xmx`; **Pass the port as server.port** (Spring Boot); **debugger** [5005] | none |
 | MariaDB, MySQL | **Character set** [utf8mb4], **Collation**, **SQL mode** (server default, strict, permissive for old apps), **Max connections** [151], **InnoDB buffer pool** [128M], **Max packet size** [64M], **Log every query**, **Log slow queries** [after 2 s] | The database files: `data\mariadb\<service id>`, `data\mysql\...` |
 | PostgreSQL | **Max connections** [100], **Shared buffers** [128MB], **Log statements** [none], **Log statements slower than** [off], **Time zone** | `data\postgres\<service id>` |
@@ -400,7 +400,7 @@ You are told when something crashes, whether or not it restarts:
 
 The programs Zero2Dev installs are not on your Windows `PATH`, so `node` in a new terminal is not the Node you installed there. Zero2Dev keeps a folder of small shims, `data\shims\`, to fix that when you want to:
 
-- It holds a `.cmd` for every command of the **default** version of each runtime: `node`, `npm`, `npx`, `php`, `java`, `javac`, `jar`, `go` and `gofmt`, and the client tools of the databases that have them (`mysql`, `mysqldump`, `psql`, `pg_dump`, `redis-cli` ...). Java and Go shims set `JAVA_HOME` and `GOROOT` for their own run.
+- It holds a `.cmd` for every command of the **default** version of each runtime: `node`, `npm`, `npx`, `php`, `java`, `javac`, `jar`, `go` and `gofmt`, and the client tools of the databases that have them (`mysql`, `mysqldump`, `psql`, `pg_dump`, `redis-cli` ...). Java and Go shims set `JAVA_HOME` and `GOROOT` for their own run, and the Go shims also set `GOPATH` to `data\go\path`, so `go install` puts `air`, `dlv` or `gopls` in `data\go\path\bin` from any terminal. Every program in that folder, and in Go's default `%USERPROFILE%\go\bin`, gets a shim of its own (`air.cmd` ...; Zero2Dev's folder wins a name), written the next time Zero2Dev starts, a runtime changes or you press **Apply** on the Environment page.
 - It also holds `activate.cmd`, `activate.ps1` and `activate.sh`.
 - Zero2Dev rewrites the folder whenever a runtime changes: installed, removed, registered, or **Make default**. Anything you put there yourself is left alone.
 
@@ -409,7 +409,7 @@ The programs Zero2Dev installs are not on your Windows `PATH`, so `node` in a ne
 - PowerShell: `. 'D:\zero2dev\data\shims\activate.ps1'`
 - Git Bash: `. /d/zero2dev/data/shims/activate.sh`
 
-The default runtimes are then first on `PATH` in that terminal, and `JAVA_HOME` and `GOROOT` are set there. Nothing else changes. (If PowerShell says running scripts is disabled, run `Set-ExecutionPolicy -Scope Process Bypass` in that window first.) For the version a particular service uses, use **Open terminal** on its page instead.
+The default runtimes are then first on `PATH` in that terminal, and `JAVA_HOME`, `GOROOT` and `GOPATH` are set there. The Go tools folders (`data\go\path\bin`, and Go's default `%USERPROFILE%\go\bin` when it exists) are on `PATH` too, so a tool you install later works at once. Nothing else changes. (If PowerShell says running scripts is disabled, run `Set-ExecutionPolicy -Scope Process Bypass` in that window first.) For the version a particular service uses, use **Open terminal** on its page instead.
 
 **In every terminal (optional): the Environment page.** Open **Environment** in the sidebar. The top line says what Zero2Dev adds to your Windows environment right now. Below it, every folder and variable has its own switch. **Nothing is on by default**, and nothing changes until you apply.
 

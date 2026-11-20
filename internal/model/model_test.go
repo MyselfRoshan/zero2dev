@@ -2,6 +2,7 @@ package model
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -101,5 +102,23 @@ func TestProjectAndSettingsJSON(t *testing.T) {
 	b, _ = json.Marshal(EnvConfig{Path: []EnvPath{{ID: "envp_1", Source: EnvCustom, Dir: `C:\t`, Enabled: true}}, Vars: []EnvVar{}})
 	if string(b) != `{"seeded":false,"path":[{"id":"envp_1","source":"custom","dir":"C:\\t","enabled":true}],"vars":[]}` {
 		t.Fatal(string(b))
+	}
+}
+
+func TestDefaultGoBin(t *testing.T) {
+	sep := string(os.PathListSeparator)
+	for _, c := range []struct{ gopath, home, want string }{
+		{"", filepath.Join("C:", "Users", "me"), filepath.Join("C:", "Users", "me", "go", "bin")},
+		{filepath.Join("D:", "gp") + sep + filepath.Join("E:", "other"), "C:", filepath.Join("D:", "gp", "bin")},
+		{"  ", "", ""},
+		{"", "", ""},
+	} {
+		if got := DefaultGoBin(c.gopath, c.home); got != c.want {
+			t.Errorf("DefaultGoBin(%q, %q) = %q, want %q", c.gopath, c.home, got, c.want)
+		}
+	}
+	home := filepath.Join("D:", "z")
+	if GoPath(home) != filepath.Join(home, "go", "path") || GoToolsDir(home) != filepath.Join(home, "go", "path", "bin") {
+		t.Fatal("GoPath / GoToolsDir")
 	}
 }

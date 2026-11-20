@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -74,7 +75,7 @@ func serviceVarsHome(home string, svc model.Service, d store.Data, rt *model.Run
 		add(e)
 	}
 	if home != "" {
-		pAdded, pShown := portableVars(home, svc.Kind, d.Settings.Portable, rt, os.Environ())
+		pAdded, pShown := portableVarsGo(home, svc.Kind, d.Settings.Portable, rt, os.Environ(), goIsolated(svc))
 		added, shown = append(added, pAdded...), append(shown, pShown...)
 	}
 	dbVars, w := databaseEnv(svc, d)
@@ -185,6 +186,28 @@ func portableOn(p model.Portable, setting string) bool {
 // resolve puts first, then the daemon's PATH from environ) because the last
 // value of a name wins; the preview shows it as "<folders>;%PATH%".
 func portableVars(home, kind string, p model.Portable, rt *model.Runtime, environ []string) (added, shown []string) {
+	return portableVarsGo(home, kind, p, rt, environ, true)
+}
+
+// goIsolated tells whether a Go service keeps Go's downloads in the data folder:
+// the "isolate" setting, on unless it says false.
+func goIsolated(svc model.Service) bool { return svc.Settings["isolate"] != "false" }
+
+// defaultGoBin is where `go install` puts programs when GOPATH is not Zero2Dev's: the
+// bin folder of Go's own default GOPATH (the GOPATH variable of environ, else %USERPROFILE%\go).
+func defaultGoBin(environ []string) string {
+	gopath := ""
+	for _, kv := range environ {
+		if k, v, ok := strings.Cut(kv, "="); ok && strings.EqualFold(k, "GOPATH") {
+			gopath = v
+		}
+	}
+	userHome, _ := os.UserHomeDir()
+	return model.DefaultGoBin(gopath, userHome)
+}
+
+// portableVarsGo is portableVars; isolated is the Go service's setting (see goIsolated).
+func portableVarsGo(home, kind string, p model.Portable, rt *model.Runtime, environ []string, isolated bool) (added, shown []string) {
 	expand := func(v string) string {
 		return filepath.FromSlash(strings.ReplaceAll(v, "{home}", filepath.ToSlash(home)))
 	}
@@ -199,6 +222,27 @@ func portableVars(home, kind string, p model.Portable, rt *model.Runtime, enviro
 		}
 		if r.Path != "" {
 			dirs = append(dirs, expand(r.Path))
+		}
+	}
+	// Go's own tools (air, dlv, gopls: what `go install` puts in <GOPATH>/bin) are on
+	// PATH next to GOROOT's. A Go service that keeps Go's downloads in the data folder
+	// (the default) gets GOPATH=<home>/go/path and that bin folder; with the setting off
+	// GOPATH stays Go's own and its default bin folder (%USERPROFILE%\go\bin) is used.
+	// A custom service (air run as a command) gets each of the two folders that exist.
+	switch kind {
+	case "go":
+		if isolated {
+			kv := "GOPATH=" + model.GoPath(home)
+			added, shown = append(added, kv), append(shown, kv)
+			dirs = append(dirs, model.GoToolsDir(home))
+		} else if d := defaultGoBin(environ); d != "" {
+			dirs = append(dirs, d)
+		}
+	case "custom":
+		for _, d := range []string{model.GoToolsDir(home), defaultGoBin(environ)} {
+			if st, err := os.Stat(d); d != "" && err == nil && st.IsDir() && !slices.Contains(dirs, d) {
+				dirs = append(dirs, d)
+			}
 		}
 	}
 	if len(dirs) == 0 {

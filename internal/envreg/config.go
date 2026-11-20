@@ -302,7 +302,7 @@ func folderCommands(home string, d store.Data, p model.EnvPath, exists func(stri
 	}
 	switch p.Source {
 	case model.EnvShims:
-		for _, f := range Files(d, exists) {
+		for _, f := range FilesAt(home, d, exists, readDir) {
 			if !strings.HasPrefix(f.Name, "activate.") {
 				add(strings.TrimSuffix(f.Name, ".cmd"))
 			}

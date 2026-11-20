@@ -562,7 +562,7 @@
             "GOENV": "{home}/go/env"
           }
         },
-        "help": "Modules and compiled packages go to data\\go instead of your user profile. The first run downloads the modules again once."
+        "help": "Modules and compiled packages go to data\\go instead of your user profile. The first run downloads the modules again once. Programs you install with go install (air, dlv, gopls) go to data\\go\\path\\bin, which is on PATH. Off: Go keeps its own default folder (your user profile's go\\bin, also put on PATH)."
       }
     ]
   },
