@@ -38,6 +38,41 @@
         "help": "After an import moved or copied npm's global packages into the data folder: npm installs global packages there, and their commands are on PATH."
       }
     ],
+    "tasks": [
+      {
+        "id": "npm-install",
+        "label": "Install packages",
+        "program": "{s.packageManager}",
+        "args": [
+          "install"
+        ],
+        "help": "Installs the packages package.json lists into node_modules, with the package manager chosen in the service's settings (npm unless set).",
+        "when": "package.json",
+        "timeout": 1200
+      },
+      {
+        "id": "npm-build",
+        "label": "Build",
+        "program": "{s.packageManager}",
+        "args": [
+          "run",
+          "build"
+        ],
+        "help": "Runs the build script of package.json.",
+        "when": "package.json",
+        "timeout": 1200
+      },
+      {
+        "id": "npm-test",
+        "label": "Run tests",
+        "program": "{s.packageManager}",
+        "args": [
+          "test"
+        ],
+        "help": "Runs the test script of package.json.",
+        "when": "package.json"
+      }
+    ],
     "options": [
       {
         "key": "run",
@@ -235,6 +270,64 @@
         ],
         "path": "{home}/composer/vendor/bin",
         "help": "After an import moved or copied Composer's home into the data folder: Composer uses it, and the commands of global packages are on PATH."
+      }
+    ],
+    "tasks": [
+      {
+        "id": "composer-install",
+        "label": "Composer install",
+        "program": "composer",
+        "args": [
+          "install"
+        ],
+        "help": "Installs the packages composer.lock (or composer.json) lists into vendor, using the service's PHP.",
+        "when": "composer.json",
+        "timeout": 1200
+      },
+      {
+        "id": "composer-update",
+        "label": "Composer update",
+        "program": "composer",
+        "args": [
+          "update"
+        ],
+        "help": "Moves the packages to the newest versions composer.json allows and rewrites composer.lock.",
+        "confirm": "Composer update changes composer.lock and the files in vendor. Continue?",
+        "when": "composer.json",
+        "timeout": 1200
+      },
+      {
+        "id": "composer-dump-autoload",
+        "label": "Dump autoload",
+        "program": "composer",
+        "args": [
+          "dump-autoload"
+        ],
+        "help": "Rebuilds Composer's class map after you added classes or changed the autoload settings.",
+        "when": "composer.json"
+      },
+      {
+        "id": "artisan-migrate",
+        "label": "Run migrations",
+        "program": "php",
+        "args": [
+          "artisan",
+          "migrate"
+        ],
+        "help": "Applies the migrations of a Laravel project that have not run yet (php artisan migrate).",
+        "confirm": "This changes the tables of the project's database. Run the pending migrations?",
+        "when": "artisan"
+      },
+      {
+        "id": "artisan-cache-clear",
+        "label": "Clear caches",
+        "program": "php",
+        "args": [
+          "artisan",
+          "cache:clear"
+        ],
+        "help": "Empties the application cache of a Laravel project (php artisan cache:clear).",
+        "when": "artisan"
       }
     ],
     "options": [
@@ -513,6 +606,52 @@
           }
         ],
         "help": "After an import moved or copied Go's module and build caches into the data folder: Go uses them there, also when the setting below is off. They are the same folders that setting uses."
+      }
+    ],
+    "tasks": [
+      {
+        "id": "go-mod-download",
+        "label": "Download modules",
+        "program": "go",
+        "args": [
+          "mod",
+          "download"
+        ],
+        "help": "Fetches the modules go.mod lists into Go's module cache, so the first build does not have to.",
+        "when": "go.mod"
+      },
+      {
+        "id": "go-mod-tidy",
+        "label": "Tidy modules",
+        "program": "go",
+        "args": [
+          "mod",
+          "tidy"
+        ],
+        "help": "Adds the modules your code imports and drops the ones it does not, rewriting go.mod and go.sum.",
+        "when": "go.mod"
+      },
+      {
+        "id": "go-test",
+        "label": "Run tests",
+        "program": "go",
+        "args": [
+          "test",
+          "./..."
+        ],
+        "help": "Runs every test of the project (go test ./...). The output is in the service log.",
+        "when": "go.mod"
+      },
+      {
+        "id": "go-build",
+        "label": "Build",
+        "program": "go",
+        "args": [
+          "build",
+          "./..."
+        ],
+        "help": "Compiles every package to check that the project builds (go build ./...); it writes no program for a library.",
+        "when": "go.mod"
       }
     ],
     "options": [

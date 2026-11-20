@@ -14,7 +14,11 @@
 
 ### Tasks and project detection
 
-<!-- tasks: one-off tasks of a service; detect: the form fills itself in from the folder -->
+- **One-off tasks of a service.** `GET /api/services/{id}/tasks` lists what can be run: the ready-made tasks of the service's kind whose file is in the project folder (`npm install`, `composer install`, `go mod tidy`, `php artisan migrate` ...) and the scripts of a Node project's `package.json`. `POST` runs one, or a program of your own, as a job.
+- **Same environment as the service, no shell.** A task runs in the project folder with the environment the service starts with (the runtime on `PATH`, the `.env` file, the database variables), after the service's own preparation (the Python virtual environment, Corepack). The program and each argument reach the program as they are. A service that is running may have a task; a second task for the same service is refused.
+- **Output in the service's log.** Every line of a task goes to the service's log as it comes, starting with `$ program args`. A failing program fails the job with its exit code and the last lines it wrote; a task that runs too long is stopped with its whole process tree.
+- **Presets for Node, PHP and Go.** Node: install, build and test with the service's package manager (npm unless set). PHP: Composer install, update and dump-autoload, and Laravel's migrate (asks first) and cache:clear. Go: mod download, mod tidy, test and build.
+- **Project detection.** `GET /api/project/detect?dir=` reads a folder (it never writes) and says which kind and framework it holds (Laravel, Symfony, WordPress, Next.js, NestJS, Astro, Vite, Express, Gin, Fiber, Spring Boot, Django, FastAPI, Flask), a name, the usual port, the `.env` file, and settings for the kind's options, so the New service form can fill itself in.
 
 ### Create a project from a framework
 

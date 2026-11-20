@@ -1601,3 +1601,52 @@ On success `job.done` has `projectId` and `path`. A failure stops the job, remov
 
 - `kinds.Plan.Pre` is a list of `PreStep { Label, Program, Args, Skip, Dir, Timeout }`: programs that run before the service's own program (a Python service's virtual environment, the Corepack folder of a pnpm project). The supervisor runs them in order after the folders and files of the plan exist, with the service's environment, skipping a step whose `Skip` file exists; each step and its output go to the service's log, and a failing step stops the start (`409`). `Supervisor.PrepareService(svc)` runs the same steps without starting the service: a one-off task calls it first.
 - `supervisor.FindProgram(name, env)` finds a program the way the service would: a plain name is looked up in the `PATH` of `env` (as `Supervisor.Environ` builds it, so a virtual environment's `Scripts` folder wins) with the extensions of `PATHEXT`. A name with a path separator is refused; an absolute path must exist.
+
+#### Tasks and detection details
+
+**How a task finds its program.**
+
+1. A preset's `program` and `args` are expanded: `{s.<setting>}` is the service's setting (an unknown one is empty; `packageManager` is `npm` when not set), `{port}` the service's port (empty without one).
+2. The program must be a plain name: no path separator (`/` or backslash), NUL or line break (400). Each argument has no NUL or line break, and there are at most 200 (400). A preset takes no extra `args`.
+3. `composer` is run as the service's PHP with `composer.phar` in front of the arguments (`Manager.Composer`, to be connected to `supervisor.ComposerCommand`); without an installed Composer the request is `409` ("Composer is not installed: install it on the Runtimes page"). Every other name is looked up with `supervisor.FindProgram` on the `PATH` of `Supervisor.Environ(service)`, after `Supervisor.PrepareService(service)` ran. A name that is not found fails the job (not the request), because the pre-steps (a virtual environment's `pip`) may be what makes it.
+4. The process runs in the service's folder with that environment, no shell, no console window. When the timeout runs out (the preset's `timeout`, else 10 minutes) the whole process tree is ended.
+
+**Log format.** Lines go to `Supervisor.Log(serviceId, "task", text)`, so they are stored and published as `log.line` with `stream: "task"`. The first is `$ <program> <args>`; then each output line of stdout and stderr in the order it came (a trailing carriage return is dropped, a progress line that redraws itself keeps its last state); when the task fails one more line says why (`npm exited with code 1`, `npm timed out after 10m0s`). The program's own output is never reworded. The service's preparation (virtual environment, Corepack) logs its own lines after the first one.
+
+**Errors.**
+
+| Status | When |
+| --- | --- |
+| 400 | neither or both of `preset` and `program`; `args` with a preset; a program name with a path separator, NUL or line break; an argument with a NUL or line break; on detect: no `dir`, a `dir` that is not an absolute path or not a folder |
+| 404 | unknown service; the service's kind has no such preset |
+| 409 | a task of the service runs (`details.jobId`); the service is held by another operation (snapshot, restore, reset, migration); the preset's `when` file is missing; the service has no project folder or it does not exist; Composer is not installed |
+| job failed | `<program> exited with code N: <last lines>`; `<program> timed out after <t>`; `<program>: <error>` when it could not start; the service's preparation failed; `<program>: <program> was not found on the service's PATH` |
+
+A failed job is `state: "failed"` with the message in `error`; its `step` is the preset's label, or `program args` for your own program.
+
+**Detection rules.** The strongest evidence wins (a framework dependency is `high`, only the marker file `medium`); on a tie the earlier row. Settings are kept only when the kind's profile has that option and accepts the value.
+
+| Marker (in the folder) | Kind | Framework | Notes |
+| --- | --- | --- | --- |
+| `composer.json` requires `laravel/framework` | php | `laravel` | port 8000, `docroot` `public`, marker `artisan` |
+| `composer.json` requires `symfony/framework-bundle`, `symfony/symfony` or `symfony/http-kernel` | php | `symfony` | port 8000, `docroot` `public` |
+| `wp-config.php`, `wp-load.php` or `wp-content` | php | `wordpress` | high, no port |
+| other `composer.json` | php | | medium, port 8000, name from the package (`vendor/name`) |
+| `package.json` with `next` | node | `nextjs` | port 3000 |
+| `@nestjs/core` | node | `nestjs` | port 3000 |
+| `astro` | node | `astro` | port 4321 |
+| `vite` (with `react`, `vue` or `svelte`) | node | `vite-react`, `vite-vue`, `vite-svelte`, else `vite` | port 5173 |
+| `express` | node | `express` | port 3000 |
+| other `package.json` | node | | medium; name from `name` (scope dropped) |
+| `go.mod` with `gin-gonic/gin` | go | `gin` | port 8080 |
+| `go.mod` with `gofiber/fiber` | go | `fiber` | port 3000 |
+| other `go.mod` | go | `go-nethttp` | medium, port 8080, name is the last element of the module path (not `v2`); `package` is `./cmd/<x>` when that is the only `cmd/*/main.go` and there is no `main.go` |
+| `pom.xml`, `build.gradle(.kts)` mentioning Spring Boot | java | `springboot` | high, port 8080; name from `artifactId` (not the parent's) or `rootProject.name` |
+| other `pom.xml` / `build.gradle` | java | | medium |
+| `manage.py`, or `django` in `requirements.txt` / `pyproject.toml` | python | `django` | port 8000 |
+| `fastapi` | python | `fastapi` | port 8000 |
+| `flask` | python | `flask` | port 5000 |
+| other `requirements.txt` / `pyproject.toml` | python | | medium; name from `pyproject.toml` |
+| only `index.html` | `""` | | `markers: ["index.html"]`, nothing else filled in |
+
+Node settings: `run`=`npm` and `npmScript`=`dev` (else `start`) when `package.json` has such a script; otherwise `run`=`script` and `script`=`main` or the first of `server.js`, `index.js`, `app.js`, `main.js`; `packageManager`=`pnpm` or `yarn` from `pnpm-lock.yaml` or `yarn.lock` once the kind has that option. `name` falls back to the folder's name; `envFile` is `.env` when that file exists. Framework ids other than `go-nethttp` and `html` must match `frameworks.json` as it grows.
