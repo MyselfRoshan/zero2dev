@@ -38,6 +38,9 @@ var (
 	pCreateIconFromResourceEx = user32.NewProc("CreateIconFromResourceEx")
 	pDestroyIcon              = user32.NewProc("DestroyIcon")
 	pGetSystemMetrics         = user32.NewProc("GetSystemMetrics")
+	pShowWindow               = user32.NewProc("ShowWindow")
+	pSendMessageW             = user32.NewProc("SendMessageW")
+	pSetWindowTextW           = user32.NewProc("SetWindowTextW")
 	pShellNotifyIconW         = shell32.NewProc("Shell_NotifyIconW")
 	pGetModuleHandleW         = kernel32.NewProc("GetModuleHandleW")
 )
@@ -53,6 +56,23 @@ const (
 	wmApp       = 0x8000
 	wmTray      = wmApp + 1
 	wmModify    = wmApp + 2 // apply a pending tooltip or balloon on the tray thread
+	wmMinimize  = wmApp + 3 // put the taskbar window back to minimized
+
+	wmSize        = 0x0005
+	wmQueryOpen   = 0x0013
+	wmSetIcon     = 0x0080
+	wmSysCmd      = 0x0112
+	scMaximize    = 0xF030
+	scRestore     = 0xF120
+	sizeMinimized = 1
+	iconSmall     = 0
+	iconBig       = 1
+
+	wsCaption         = 0x00C00000
+	wsSysMenu         = 0x00080000
+	wsMinimizeBox     = 0x00020000
+	wsExAppWindow     = 0x00040000
+	swShowMinNoActive = 7
 
 	ninBalloonUserClick = 0x0405
 
@@ -75,6 +95,7 @@ const (
 
 	hwndMessage = ^uintptr(2) // (HWND)-3
 	smCxSmIcon  = 49
+	smCxIcon    = 11
 
 	cmdOpen    = 1
 	cmdFolder  = 2
@@ -132,6 +153,8 @@ type icon struct {
 	hwnd       uintptr
 	hIcon      uintptr
 	taskbarMsg uint32
+	win        uintptr // the taskbar button's window (Menu.Taskbar), 0 without one
+	bigIcon    uintptr
 	mu         sync.Mutex
 	tip        string
 	info       [2]string // pending balloon title, text
@@ -199,12 +222,15 @@ func (t *icon) loop(ready chan<- error) {
 	current = t
 	tb, _, _ := pRegisterWindowMessageW.Call(uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr("TaskbarCreated"))))
 	t.taskbarMsg = uint32(tb)
-	t.hIcon = loadIcon()
+	t.hIcon = loadIcon(smCxSmIcon, 16)
 	if !t.add() {
 		pDestroyWindow.Call(hwnd)
 		current = nil
 		ready <- fmt.Errorf("Shell_NotifyIcon failed")
 		return
+	}
+	if t.menu.Taskbar {
+		t.createTaskbarWindow(hinst)
 	}
 	ready <- nil
 
@@ -219,10 +245,11 @@ func (t *icon) loop(ready chan<- error) {
 	}
 }
 
-func loadIcon() uintptr {
-	want, _, _ := pGetSystemMetrics.Call(smCxSmIcon)
+// loadIcon makes an icon from the embedded .ico at the size a system metric asks for.
+func loadIcon(metric uintptr, fallback uintptr) uintptr {
+	want, _, _ := pGetSystemMetrics.Call(metric)
 	if want == 0 {
-		want = 16
+		want = fallback
 	}
 	data, _, err := iconEntry(iconFile, int(want))
 	if err != nil {
@@ -230,6 +257,66 @@ func loadIcon() uintptr {
 	}
 	h, _, _ := pCreateIconFromResourceEx.Call(uintptr(unsafe.Pointer(&data[0])), uintptr(len(data)), 1, 0x00030000, want, want, 0)
 	return h
+}
+
+// createTaskbarWindow adds a taskbar button, so Windows shows Zero2Dev as running (the
+// line under its icon, and under a pinned zero2dev.exe). The window never opens: it is
+// created minimized and off-screen; clicking the button opens the dashboard instead, and
+// closing it ("Close window") quits Zero2Dev like the tray's Quit.
+func (t *icon) createTaskbarWindow(hinst uintptr) {
+	title := syscall.StringToUTF16Ptr(t.title())
+	const off = ^uintptr(32000 - 1) // -32000: off-screen if anything restores it anyway
+	w, _, _ := pCreateWindowExW.Call(wsExAppWindow, uintptr(unsafe.Pointer(className)), uintptr(unsafe.Pointer(title)),
+		wsCaption|wsSysMenu|wsMinimizeBox, off, off, 320, 200, 0, 0, hinst, 0)
+	if w == 0 {
+		return // the tray icon still works
+	}
+	t.win = w
+	t.bigIcon = loadIcon(smCxIcon, 32)
+	pSendMessageW.Call(w, wmSetIcon, iconBig, t.bigIcon)
+	pSendMessageW.Call(w, wmSetIcon, iconSmall, t.hIcon)
+	// Twice: the first ShowWindow of a process may use the shortcut's "Run" setting instead.
+	pShowWindow.Call(w, swShowMinNoActive)
+	pShowWindow.Call(w, swShowMinNoActive)
+}
+
+// title is the taskbar button's text: the tray tooltip ("Zero2Dev: 2 services running").
+func (t *icon) title() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.tip == "" {
+		return "Zero2Dev"
+	}
+	return t.tip
+}
+
+func (t *icon) taskbarProc(hwnd uintptr, message uint32, wParam, lParam uintptr) uintptr {
+	switch message {
+	case wmSysCmd:
+		switch wParam & 0xFFF0 {
+		case scRestore, scMaximize: // a click on the taskbar button, or Alt+Tab to it
+			t.run(cmdOpen)
+			return 0
+		}
+	case wmQueryOpen: // any other way of restoring it: stay a taskbar button
+		return 0
+	case wmSize:
+		if wParam != sizeMinimized {
+			pPostMessageW.Call(hwnd, wmMinimize, 0, 0)
+		}
+		return 0
+	case wmMinimize:
+		pShowWindow.Call(hwnd, swShowMinNoActive)
+		return 0
+	case wmClose: // "Close window" on the taskbar button
+		t.run(cmdQuit)
+		return 0
+	case wmDestroy:
+		t.win = 0
+		return 0
+	}
+	r, _, _ := pDefWindowProcW.Call(hwnd, uintptr(message), wParam, lParam)
+	return r
 }
 
 func (t *icon) data() *notifyIconData {
@@ -253,9 +340,14 @@ func (t *icon) add() bool {
 func (t *icon) remove() {
 	d := t.data()
 	pShellNotifyIconW.Call(nimDelete, uintptr(unsafe.Pointer(d)))
-	if t.hIcon != 0 {
-		pDestroyIcon.Call(t.hIcon)
-		t.hIcon = 0
+	if t.win != 0 {
+		pDestroyWindow.Call(t.win)
+	}
+	for _, h := range []*uintptr{&t.hIcon, &t.bigIcon} {
+		if *h != 0 {
+			pDestroyIcon.Call(*h)
+			*h = 0
+		}
 	}
 }
 
@@ -274,6 +366,9 @@ func (t *icon) applyPending() {
 		d.dwInfoFlags = niifInfo
 	}
 	pShellNotifyIconW.Call(nimModify, uintptr(unsafe.Pointer(d)))
+	if t.win != 0 && tip != "" {
+		pSetWindowTextW.Call(t.win, uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(tip))))
+	}
 }
 
 func (t *icon) SetTooltip(text string) {
@@ -360,6 +455,9 @@ func (t *icon) run(cmd int) {
 
 func wndProc(hwnd uintptr, message uint32, wParam, lParam uintptr) uintptr {
 	t := current
+	if t != nil && t.win != 0 && hwnd == t.win {
+		return t.taskbarProc(hwnd, message, wParam, lParam)
+	}
 	if t == nil || hwnd != t.hwnd {
 		r, _, _ := pDefWindowProcW.Call(hwnd, uintptr(message), wParam, lParam)
 		return r

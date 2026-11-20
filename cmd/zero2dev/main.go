@@ -191,6 +191,7 @@ func run() error {
 	var ti tray.Icon
 	ti, terr := tray.Start(tray.Menu{
 		Tooltip:  "Zero2Dev",
+		Taskbar:  true, // a taskbar button: Windows shows it as running
 		OnOpen:   func() { openBrowser(url) },
 		OnFolder: func() { openFolder(cfg.Home) },
 		OnStopAll: func() {

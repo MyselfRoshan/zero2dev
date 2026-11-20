@@ -11,17 +11,17 @@ Contents: [1. Start](#1-start-zero2dev) · [2. Install Caddy](#2-install-a-runti
 ## 1. Start Zero2Dev
 
 1. Put `zero2dev.exe` in a folder you own, for example `D:\zero2dev\`. (Download it from the GitHub release, or build it with `build.ps1`.)
-2. Double-click it. No window opens: Zero2Dev starts in the background, puts its icon in the notification area (next to the clock) and opens your browser at a link like `http://127.0.0.1:7000/#token=...`. The token is your password; the page saves it and removes it from the address bar.
+2. Double-click it. No window opens: Zero2Dev starts in the background, puts its icon in the notification area (next to the clock) and on the taskbar, underlined like any running program, and opens your browser at a link like `http://127.0.0.1:7000/#token=...`. The token is your password; the page saves it and removes it from the address bar.
 3. The first run creates a `data` folder next to the exe. Messages go to `data\logs\zero2dev.log` (started from PowerShell, `.\zero2dev.exe` prints them in the terminal instead).
 
 **Getting back to it and stopping it.**
 
 | To | Do |
 | --- | --- |
-| Open the dashboard again | Click the Zero2Dev icon in the notification area, or double-click `zero2dev.exe` again (a second start just opens the dashboard of the one already running) |
+| Open the dashboard again | Click the Zero2Dev icon on the taskbar or in the notification area, or double-click `zero2dev.exe` again (a second start just opens the dashboard of the one already running) |
 | Open the data folder | Right-click the icon > **Open data folder** |
 | Stop every service but keep Zero2Dev open | Right-click the icon > **Stop all services**, or **Stop all** on the dashboard or the Services page. Apps stop first, then databases, then the web server (and a service that others wait for stops after them); a message says how many stopped |
-| Quit | Right-click the icon > **Quit Zero2Dev**, or **Quit Zero2Dev** at the bottom of the sidebar. Your running services are stopped cleanly first (the dialog lists them) |
+| Quit | Right-click the icon in the notification area > **Quit Zero2Dev**, right-click the taskbar button > **Close window**, or **Quit Zero2Dev** at the bottom of the sidebar. Your running services are stopped cleanly first (the dialog lists them) |
 
 If Zero2Dev cannot start (another program uses its port, or the data folder is damaged), a message box says why.
 
