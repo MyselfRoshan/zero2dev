@@ -1139,7 +1139,77 @@ For services of kind `mariadb`, `mysql`, `postgres` and `redis`. Any other kind 
     - the command preview, which shows it as `********`.
   - PostgreSQL still accepts local connections without a password (`trust`). The password is there for apps and tools that insist on one.
 
-*(To be completed by the db-backend work: the exact client arguments and error messages.)*
+#### Client programs and their arguments
+
+Found in the server binary's folder, then its `bin\` subfolder, then the sibling `..\bin\` folder (with `.exe` on Windows). MariaDB tries `mariadb` before `mysql` and `mariadb-dump` before `mysqldump`; MySQL the other way round. They run without a shell and without a console window, and every value is one argument written with `=`.
+
+| What | Program and arguments |
+| --- | --- |
+| Connection (MariaDB/MySQL) | `--no-defaults --host=127.0.0.1 --port=<port> --protocol=tcp --user=root --default-character-set=utf8mb4`, with `MYSQL_PWD` always set (empty without a password) |
+| Connection (PostgreSQL) | `--host=127.0.0.1 --port=<port> --username=postgres --no-password`, with `PGCLIENTENCODING=UTF8` and `PGPASSWORD` when there is a password |
+| Connection (Redis) | `-h 127.0.0.1 -p <port>`, with `REDISCLI_AUTH` when there is a password |
+| Listing, `CREATE DATABASE`, `CREATE USER`, `ALTER USER`, `DROP DATABASE` | `mariadb <connection> --batch --skip-column-names [--database=<db>]` or `psql <connection> --no-psqlrc --quiet --tuples-only --no-align --field-separator=<tab> --set=ON_ERROR_STOP=1 --dbname=<db or postgres>`. The SQL is written to the program's stdin, so a password inside it is never on a command line. These runs time out after one minute. |
+| Import | `mariadb <connection> --max-allowed-packet=1073741824 --database=<db>` or `psql <connection> --no-psqlrc --quiet --set=ON_ERROR_STOP=1 --dbname=<db>`, with the (unzipped) dump on stdin. No time limit. |
+| Export | `mariadb-dump <connection> --single-transaction --routines --triggers --max-allowed-packet=1073741824 <db>` or `pg_dump <connection> --no-owner --format=plain --encoding=UTF8 --dbname=<db>`, stdout written to `<filePath>.tmp` (through gzip for `.gz`). No time limit. |
+| Redis password | `redis-cli <connection> -x CONFIG SET requirepass`, with the new password on stdin (`-x` reads the last argument from stdin). Any answer but `OK` is an error. |
+
+The SQL Zero2Dev sends:
+- **Create a database:** ``CREATE DATABASE `shop` CHARACTER SET utf8mb4;`` or `CREATE DATABASE "shop" ENCODING 'UTF8';`.
+- **Create a user (MariaDB/MySQL):** `CREATE USER` for both `'app'@'%'` and `'app'@'localhost'` (so an anonymous `''@'localhost'` account cannot shadow it), then ``GRANT ALL PRIVILEGES ON `shop`.*`` to both, then `FLUSH PRIVILEGES`.
+- **Create a user (PostgreSQL):** `CREATE ROLE "app" LOGIN PASSWORD '...'` and `GRANT ALL PRIVILEGES ON DATABASE "shop"`. Then, inside `shop`: `GRANT ALL` on the schema `public` and on all of its tables and sequences, since PostgreSQL 15 and later no longer let every role create tables there.
+- **Password (MariaDB/MySQL):** `ALTER USER 'root'@'<host>' IDENTIFIED BY '...'` for every host in `SELECT Host FROM mysql.user WHERE User = 'root'`, then `FLUSH PRIVILEGES`. Removing it uses `IDENTIFIED BY ''`.
+- **Password (PostgreSQL):** `ALTER USER postgres WITH PASSWORD '...'`, or `WITH PASSWORD NULL`.
+- **Quoting:** names are checked against `^[A-Za-z0-9_]{1,64}$` and quoted with backticks or double quotes. In MariaDB/MySQL strings, `\` becomes `\\` and `'` becomes `''`. In PostgreSQL strings, `'` becomes `''` (`standard_conforming_strings` is on).
+- **Passwords** are 1-128 characters on one line (`""` only for `PUT .../password`). The password of a new user is required.
+- **Listings** leave out the system databases, and for MariaDB/MySQL also the empty, `PUBLIC`, `mysql.*` and `mariadb.*` accounts. PostgreSQL lists the roles that can log in. Sizes are `data_length + index_length` per schema, or `pg_database_size`.
+
+Each operation writes `system` lines to the service's log: `<what>: <program> <arguments>` before it runs, and `<what> failed: <message>` when it fails. A password in a failure message is replaced by `********`.
+
+#### Error messages
+
+| Status | Message | When |
+| --- | --- | --- |
+| 404 | `service <id> not found` | |
+| 400 | `<name> is not a database` | any other kind |
+| 400 | `<name> is Redis, which has no databases to create` (`users to create`, `dumps to import`, `dumps to export`) | Redis on a SQL route |
+| 400 | `database name must be 1-64 letters, digits or _` / `user name must be 1-64 letters, digits or _` | |
+| 400 | `<db> is a system database; Zero2Dev does not change it` | |
+| 400 | `password must be 1-128 characters on one line` (new user) / `password must be at most 128 characters on one line` (admin password) | |
+| 400 | `database <db> does not exist` | export, a user's grant |
+| 400 | `database <db> does not exist; create it first` | import without `create` |
+| 400 | `filePath must be an absolute path on this PC` | |
+| 400 | `<file> does not exist` / `<file> is a folder, not a dump file` | import |
+| 400 | `folder <dir> does not exist` / `<file> is a folder` | export |
+| 409 | `start <name> first` / `stop <name> first` | |
+| 409 | `database <db> exists` / `user <user> exists` | |
+| 409 | `<file> exists` | export without `overwrite` |
+| 409 | `<name> has no port` | |
+| 409 | `the <kind> program <program>.exe was not found in <folder>; this <kind> build does not include its client programs` | missing client |
+| 409 | `another job is already working on this (<type>, <jobId>)`, with `details.jobId` | a second import or export |
+| 409 | `a job is working on <name> (<jobId>); try again when it is done`, with `details.jobId` | reset during an import or export |
+| 409 | `<name> is busy (<what>)` | reset while a snapshot, restore or migration holds it |
+| 409 | `<name> has its own command line, so Zero2Dev does not know its data folder; reset it yourself` | reset with `customArgs` (`supports.reset` is `false`, `dataDir` is `""`) |
+| 409 | `cannot delete <dir>: <error>; is a program still using it?` | reset |
+| 409 | `redis-cli: <reply>` | Redis did not answer `OK` |
+| 500 | the client's message, e.g. `mariadb: ERROR 1045 (28000): Access denied for user 'root'@'localhost'` | a client program failed (the last 8 lines of its stderr) |
+
+A failed job's `error` is `importing into <db> failed: <message>` or `exporting <db> failed: <message>`.
+
+#### Password threading
+
+- **Clean stop:** `mariadb-admin` / `mysqladmin` get `MYSQL_PWD`, and `redis-cli shutdown` gets `REDISCLI_AUTH`. The password is read when the stop runs, so one set while the server runs is used.
+- **Redis:** `--requirepass <password>` is added at the end of `redis-server`'s arguments. The start log and the command preview show it as `--requirepass ********`.
+- **Connection variables:** `DB_PASSWORD=<password>`, `DATABASE_URL=mysql://root:<escaped>@127.0.0.1:<port>/` (or `postgresql://postgres:<escaped>@…/postgres`), and `REDIS_URL=redis://:<escaped>@127.0.0.1:<port>`. The command preview shows `DB_PASSWORD=********` and `…://root:********@…`.
+- **Open in:** HeidiSQL gets `--password=<password>`; DBeaver gets `|password=<password>` in `-con`, except when the password contains `|`, which `-con` cannot carry (DBeaver then asks for it).
+- **First start:** when Zero2Dev creates new MariaDB, MySQL or PostgreSQL data files (for example, after the folder was deleted by hand), a stored password is cleared, because the new database has none. `services.changed` is published.
+
+#### Copying from another server (`dbtools.ServerCopier`, used by Bring in)
+
+- `ListRemote` and `CopyFromServer` take the server's `kind`, `host` (default `127.0.0.1`), `port`, `user` (default `root` or `postgres`) and `password`. The client programs come from `ClientDir`, else the folder of the default runtime of that kind (MariaDB and MySQL also try each other's), else the destination service's folder.
+- Each database is dumped with the export arguments above and piped straight into the import. No temporary file is written.
+- The databases must not exist in the destination yet: `409` "`database <db> already exists in <name>`". Kinds must match (MariaDB/MySQL into MariaDB/MySQL, PostgreSQL into PostgreSQL): `400` otherwise.
+- Progress steps are `Copying <db>`, then `Copied`. When a copy fails, the error is the side that failed first (`dumping <db> from <host>:<port> failed: …` or `importing <db> failed: …`), and the databases this call created are dropped again.
+- `DropDatabases` runs `DROP DATABASE IF EXISTS` for each name.
 
 ### Snapshots
 

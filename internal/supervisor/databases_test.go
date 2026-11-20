@@ -64,6 +64,9 @@ func dbHelper() bool {
 		println("Creation of the database was successful")
 		os.Exit(0)
 	case "mariadb-admin":
+		if f := os.Getenv("Z2D_PWD_FILE"); f != "" { // what the clean stop logged in with
+			os.WriteFile(f, []byte("MYSQL_PWD="+os.Getenv("MYSQL_PWD")+"\nargs="+strings.Join(os.Args[1:], " ")), 0o644)
+		}
 		c, err := net.Dial("tcp", "127.0.0.1:"+arg("--port="))
 		if err != nil {
 			os.Exit(4)
@@ -200,6 +203,141 @@ func TestDatabaseFailedSetupCleansUp(t *testing.T) {
 	if s.State("svc_db") != "stopped" {
 		t.Fatalf("state %s", s.State("svc_db"))
 	}
+}
+
+// The clean stop logs in with the password stored when it runs (set while the
+// server ran), in MYSQL_PWD and never on the command line or in the log.
+func TestDatabaseCleanStopUsesAdminPassword(t *testing.T) {
+	s, st, home, _ := dbSetup(t)
+	pwFile := filepath.Join(home, "pw.txt")
+	st.Update(func(d *store.Data) error {
+		d.Services[0].Env["Z2D_PWD_FILE"] = pwFile
+		return nil
+	})
+	if err := s.Start("svc_db"); err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, s, "svc_db", "running", 5*time.Second)
+	const pw = "s3cret p@ss"
+	st.Update(func(d *store.Data) error {
+		d.Services[0].AdminPassword = pw
+		return nil
+	})
+	if err := s.StopWait("svc_db"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(pwFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	env, args, _ := strings.Cut(string(got), "\nargs=")
+	if env != "MYSQL_PWD="+pw || strings.Contains(args, "p@ss") {
+		t.Fatalf("stop tool saw %q", got)
+	}
+	if strings.Contains(joinLogs(s.Logs("svc_db", 400)), pw) {
+		t.Fatal("the password must never be logged")
+	}
+}
+
+// New data files have no password: a stored one is forgotten on first start.
+func TestDatabaseFirstStartClearsAdminPassword(t *testing.T) {
+	s, st, _, _ := dbSetup(t)
+	st.Update(func(d *store.Data) error {
+		d.Services[0].AdminPassword = "old"
+		return nil
+	})
+	if err := s.Start("svc_db"); err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, s, "svc_db", "running", 5*time.Second)
+	if pw := st.Snapshot().Services[0].AdminPassword; pw != "" {
+		t.Fatalf("password %q kept", pw)
+	}
+	if !strings.Contains(joinLogs(s.Logs("svc_db", 200)), "stored administrator password was cleared") {
+		t.Fatal("the log must say why")
+	}
+}
+
+func TestWithAdminPasswordPerKind(t *testing.T) {
+	home := t.TempDir()
+	st, _ := store.Open(filepath.Join(home, "state.json"))
+	st.Update(func(d *store.Data) error {
+		d.Services = append(d.Services,
+			model.Service{ID: "m", Kind: "mariadb", AdminPassword: "a"},
+			model.Service{ID: "r", Kind: "redis", AdminPassword: "b"},
+			model.Service{ID: "p", Kind: "postgres", AdminPassword: "c"},
+			model.Service{ID: "n", Kind: "mysql"})
+		return nil
+	})
+	s := New(home, st, &recorder{})
+	base := []string{"X=1"}
+	for id, want := range map[string]string{"m": "MYSQL_PWD=a", "r": "REDISCLI_AUTH=b", "p": "PGPASSWORD=c", "n": ""} {
+		got := s.withAdminPassword(id, base)
+		if want == "" && len(got) != 1 || want != "" && (len(got) != 2 || got[1] != want) {
+			t.Errorf("%s: %q", id, got)
+		}
+	}
+	if len(base) != 1 {
+		t.Fatal("the service's environment must not be changed")
+	}
+}
+
+func TestRedisRequirepassAndMasking(t *testing.T) {
+	home := t.TempDir()
+	st, _ := store.Open(filepath.Join(home, "state.json"))
+	svc := model.Service{ID: "svc_r", Name: "cache", Kind: "redis", Port: 6390, AdminPassword: "p@ss:w/rd"}
+	app := model.Service{ID: "svc_a", Name: "app", Kind: "custom", Command: os.Args[0], Port: 3000, DatabaseID: "svc_r"}
+	st.Update(func(d *store.Data) error {
+		d.Services = append(d.Services, svc, app)
+		return nil
+	})
+	s := New(home, st, &recorder{})
+	r, err := s.resolveWith(svc, st.Snapshot(), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if args := strings.Join(r.args, " "); !strings.HasSuffix(args, "--requirepass p@ss:w/rd") {
+		t.Fatalf("args %q", args)
+	}
+	pv := s.Preview(svc)
+	if args := strings.Join(pv.Args, " "); !strings.Contains(args, "--requirepass ********") || strings.Contains(args, "p@ss") {
+		t.Fatalf("preview args %q", args)
+	}
+	ap := s.Preview(app)
+	env := strings.Join(ap.Env, "\n")
+	if strings.Contains(env, "p@ss") || !strings.Contains(env, "DB_PASSWORD=********") || !strings.Contains(env, "REDIS_URL=redis://:********@127.0.0.1:6390") {
+		t.Fatalf("preview env:\n%s", env)
+	}
+	// The process itself gets the real values.
+	full, _ := s.Environ(app)
+	if !containsKV(full, "REDIS_URL=redis://:p%40ss%3Aw%2Frd@127.0.0.1:6390") || !containsKV(full, "DB_PASSWORD=p@ss:w/rd") {
+		t.Fatalf("environment lacks the password: %q", full)
+	}
+	// Without a password nothing is added.
+	svc.AdminPassword = ""
+	if r, _ := s.resolveWith(svc, st.Snapshot(), true); strings.Contains(strings.Join(r.args, " "), "requirepass") {
+		t.Fatal("no password, no --requirepass")
+	}
+}
+
+func TestMaskEnv(t *testing.T) {
+	in := []string{"DB_PASSWORD=x", "DB_PASSWORD=", "DATABASE_URL=mysql://root:x%40y@127.0.0.1:3306/", "DATABASE_URL=mysql://root@127.0.0.1:3306/", "REDIS_URL=redis://127.0.0.1:1", "OTHER=x"}
+	want := []string{"DB_PASSWORD=********", "DB_PASSWORD=", "DATABASE_URL=mysql://root:********@127.0.0.1:3306/", "DATABASE_URL=mysql://root@127.0.0.1:3306/", "REDIS_URL=redis://127.0.0.1:1", "OTHER=x"}
+	if got := maskEnv(in); strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Fatalf("got %q", got)
+	}
+	if got := maskArgs([]string{"--port", "1", "--requirepass", "x"}); got[3] != "********" || got[1] != "1" {
+		t.Fatalf("args %q", got)
+	}
+}
+
+func containsKV(env []string, kv string) bool {
+	for _, e := range env {
+		if e == kv {
+			return true
+		}
+	}
+	return false
 }
 
 func joinLogs(ls []model.LogLine) string {

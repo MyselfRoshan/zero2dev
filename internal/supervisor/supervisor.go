@@ -250,7 +250,7 @@ func (s *Supervisor) start(id string, auto *crashState) error {
 	cmd.Stdout, cmd.Stderr = outW, errW
 	cmd.WaitDelay = 2 * time.Second // do not hang on pipes held by orphaned grandchildren
 	configure(cmd)
-	s.logLine(id, "system", fmt.Sprintf("starting: %s %v", r.bin, r.args))
+	s.logLine(id, "system", fmt.Sprintf("starting: %s %v", r.bin, maskArgs(r.args)))
 	if err := cmd.Start(); err != nil {
 		s.logLine(id, "system", "failed to start: "+err.Error())
 		revert()

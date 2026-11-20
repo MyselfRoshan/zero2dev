@@ -6,6 +6,13 @@
 
 <!-- db-backend + db-ui: databases (create, users, import, export, reset, password) -->
 
+- **Database tools in the daemon.** `GET /api/services/{id}/database` lists a running MariaDB, MySQL or PostgreSQL server's databases (with sizes) and users. New routes create a database, or a user with every privilege on one database. Zero2Dev runs the server's own client programs (`mariadb`/`mysql`, `psql`, `redis-cli`) from the runtime's folder, with no console window. Every run is logged to the service's log.
+- **Import and export dumps as jobs.** An import reads a `.sql` file, or a gzip-compressed one recognised by its first bytes, and can create the database first. Its progress follows the bytes read. An export uses `mariadb-dump --single-transaction --routines --triggers` or `pg_dump --no-owner`, gzips when the name ends in `.gz`, and writes through `<file>.tmp`, so a failed export never leaves half a file. An existing file is kept unless `overwrite` is set.
+- **Reset a database.** While the service is stopped, its data folder is deleted, so the next start sets the database up again, empty. A reset is refused while an import, an export, a snapshot or a migration works on the service.
+- **Optional administrator password.** `PUT .../database/password` sets it for every `root` account, for `postgres`, or as Redis' `requirepass`. It then reaches the clean stop (`MYSQL_PWD`, `REDISCLI_AUTH`), `DB_PASSWORD`, the URL-escaped `DATABASE_URL` / `REDIS_URL`, and HeidiSQL and DBeaver. Redis is started with `--requirepass`. The command preview and the start log show the password as `********`. Passwords travel only in environment variables or stdin, never on a client's command line.
+- **Native Open and Save as dialogs** (`POST /api/dialog/file`), with file type filters, a suggested name and a start folder, for picking dumps.
+- **`dbtools.CopyFromServer`** pipes `mysqldump`/`pg_dump` from another server straight into a Zero2Dev database service. If it fails, it drops what it created. Bring in uses it.
+
 <!-- /databases -->
 
 <!-- snapshot-backend + snapshot-ui: snapshots, restore, clone, offers before risky actions -->
