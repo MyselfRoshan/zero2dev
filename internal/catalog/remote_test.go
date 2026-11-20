@@ -153,6 +153,7 @@ func publishers(t *testing.T, failJava *bool) *httptest.Server {
 			osName, link, sha1hex, feat, feat)
 	})
 	mux.HandleFunc("/node/index.json", func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, nodeJSON) })
+	mux.HandleFunc("/composer/versions", func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, composerJSON) })
 	mux.HandleFunc("/go/dl.json", func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, goJSON) })
 	mux.HandleFunc("/caddy/releases.json", func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, caddyJSON) })
 	mux.HandleFunc("/php/archive/", func(w http.ResponseWriter, r *http.Request) {
@@ -175,7 +176,7 @@ func newRemote(home string, s *httptest.Server) *Remote {
 		NodeURL: s.URL + "/node/index.json", NodeBase: s.URL + "/node/dist/", GoURL: s.URL + "/go/dl.json", GoBase: s.URL + "/go/files/",
 		CaddyURL: s.URL + "/caddy/releases.json", PHPArchiveURL: s.URL + "/php/archive/",
 		MariaDBURL: s.URL + "/mariadb/", PostgresPage: s.URL + "/pg/page.html", VSCodeURL: s.URL + "/vscode/latest",
-		GitHubAPI: s.URL + "/gh/"}
+		GitHubAPI: s.URL + "/gh/", ComposerURL: s.URL + "/composer/versions"}
 }
 
 func TestRefreshCachesAndMerges(t *testing.T) {
@@ -191,7 +192,7 @@ func TestRefreshCachesAndMerges(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if st.CheckedAt == nil || len(st.Sources) != 6+3+len(ghSpecs) {
+	if st.CheckedAt == nil || len(st.Sources) != 6+3+1+len(ghSpecs) {
 		t.Fatalf("status %+v", st)
 	}
 	for _, src := range st.Sources {
@@ -226,8 +227,9 @@ func TestRefreshCachesAndMerges(t *testing.T) {
 		}
 		seen[e.ID] = true
 	}
+	// composer: the 4 built-in entries (2 releases x 2 CPUs) plus the 4 of the fake list.
 	// php: 2 current + 2 archived lines; java: 3 versions x 2 OS; node: the 2 built-in 26.13.1 entries plus 26.14.0, 25, 24 and 22 x 2 OS; go/caddy: the 2 built-in entries plus 2 new lines x 2 OS.
-	if counts["php"] != 4 || counts["java"] != 6 || counts["nginx"] != 3 || counts["node"] != 10 || counts["go"] != 4 || counts["caddy"] != 4 {
+	if counts["php"] != 4 || counts["java"] != 6 || counts["nginx"] != 3 || counts["node"] != 10 || counts["go"] != 4 || counts["caddy"] != 4 || counts["composer"] != 8 {
 		t.Fatalf("counts %v", counts)
 	}
 	// A second refresh adds nothing new.

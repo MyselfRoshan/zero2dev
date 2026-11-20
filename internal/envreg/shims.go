@@ -108,10 +108,31 @@ func FilesAt(home string, d store.Data, exists func(path string) bool, readDir f
 			continue
 		}
 		dir := filepath.Dir(rt.Binary)
+		php, hasPHP := defaultOf(d, "php")
+		if kind == "composer" && !hasPHP {
+			continue // Composer is run by PHP: without one there is nothing to shim or put on PATH
+		}
 		if !containsFold(dirs, dir) {
 			dirs = append(dirs, dir)
 		}
 		env := shimEnv(rt)
+		if kind == "composer" {
+			// Composer runs with the default PHP whatever the user's PATH says: the shim calls
+			// php.exe with composer.phar itself (composer.bat would take the first php on PATH).
+			phar := model.ComposerPhar(rt)
+			if !exists(phar) || seen["composer"] {
+				continue
+			}
+			if home != "" {
+				env = map[string]string{"COMPOSER_HOME": model.ComposerHome(home), "COMPOSER_CACHE_DIR": model.ComposerCache(home)}
+			}
+			for name, v := range env {
+				activateEnv[name] = v
+			}
+			seen["composer"] = true
+			out = append(out, File{Name: "composer.cmd", Content: ShimCmdArgs(php.Binary, []string{phar}, env)})
+			continue
+		}
 		if home != "" && kind == "go" {
 			if env == nil {
 				env = map[string]string{}
@@ -256,7 +277,11 @@ func cmdSet(name, value string) string {
 // ShimCmd is the content of a shim: it runs target with the arguments it got.
 // env (JAVA_HOME / GOROOT) is set for that run only (setlocal), so the shim does
 // not leak anything into the calling terminal.
-func ShimCmd(target string, env map[string]string) string {
+func ShimCmd(target string, env map[string]string) string { return ShimCmdArgs(target, nil, env) }
+
+// ShimCmdArgs is ShimCmd for a program that always gets the same first arguments (php.exe and
+// the composer.phar it runs).
+func ShimCmdArgs(target string, args []string, env map[string]string) string {
 	lines := []string{"@echo off", "rem " + marker + ". Do not edit: it is rewritten when the runtimes change."}
 	if len(env) > 0 {
 		lines = append(lines, "setlocal")
@@ -264,7 +289,11 @@ func ShimCmd(target string, env map[string]string) string {
 			lines = append(lines, cmdSet(k, env[k]))
 		}
 	}
-	lines = append(lines, cmdQuote(target)+" %*")
+	cmd := cmdQuote(target)
+	for _, a := range args {
+		cmd += " " + cmdQuote(a)
+	}
+	lines = append(lines, cmd+" %*")
 	return crlf(lines)
 }
 

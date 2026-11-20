@@ -12,7 +12,7 @@ import (
 )
 
 func TestPortableVarsOffAddsNothing(t *testing.T) {
-	for _, kind := range []string{"node", "php", "java"} {
+	for _, kind := range []string{"node", "java"} { // (php always has Composer's home: TestPortableVarsComposerAlways)
 		a, s := portableVars(`D:\z`, kind, model.Portable{}, nil, []string{"Path=C:\\bin"})
 		if len(a) != 0 || len(s) != 0 {
 			t.Errorf("%s with everything off: %q %q", kind, a, s)
@@ -44,7 +44,7 @@ func TestPortableVarsNpmGlobal(t *testing.T) {
 		t.Fatalf("preview PATH = %q", v)
 	}
 	// Other kinds are not touched by the npm switch.
-	if a, _ := portableVars(home, "php", model.Portable{NpmGlobal: true}, nil, environ); len(a) != 0 {
+	if a, _ := portableVars(home, "php", model.Portable{NpmGlobal: true}, nil, environ); slices.ContainsFunc(a, func(kv string) bool { return strings.HasPrefix(kv, "npm_config_") }) {
 		t.Fatalf("php got %q", a)
 	}
 }

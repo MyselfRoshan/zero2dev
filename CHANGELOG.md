@@ -10,7 +10,12 @@
 
 ### Composer, pnpm and Yarn
 
-<!-- composer + package managers -->
+- **Composer** is a tool on the Runtimes page: install a version (2.11 and the 2.2 long-term-support line, checked with the publisher's SHA-256, for Windows on x64 and on arm64). It is one `composer.phar` with a `composer.bat` launcher, and the list of versions comes from getcomposer.org.
+- Composer runs with the PHP of the service. The `composer` command in your own terminal always uses your default PHP, whatever PHP is on your PATH.
+- Composer's home and cache are now always in the data folder (`COMPOSER_HOME`, `COMPOSER_CACHE_DIR`) for PHP services, Open terminal and the `composer` command, not only after an import.
+- A Node service has a **Package manager** setting: npm, pnpm or Yarn. pnpm and Yarn come from Corepack, which Zero2Dev installs into the data folder the first time (Node 26 does not include it). Corepack's versions, pnpm's store and Yarn's cache are in the data folder too.
+- A service can have steps that run before it starts (the Corepack setup is the first one); their output is in the service's log and a failing step stops the start.
+- API: a catalog source for Composer, and the `composer` and pnpm/Yarn environment; see "Composer and package manager details" in `docs/API.md`.
 
 ### Tasks and project detection
 
