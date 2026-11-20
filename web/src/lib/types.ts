@@ -447,6 +447,13 @@ export interface JobDoneEvent {
   state: JobState;
   error: string;
   runtimeId: string;
+  // 0.0.5: the daemon names the job's type and what it worked on.
+  type?: string;
+  serviceId?: string;
+  projectId?: string;
+  snapshotId?: string;
+  migrationId?: string;
+  path?: string;
 }
 
 // ---------------------------------------------------------------------------

@@ -456,7 +456,7 @@
           </fieldset>
           <div class="field">
             <label for="db-target" class="label">Copy into</label>
-            <select id="db-target" bind:value={dbTarget} aria-invalid={!!dbErr.target} aria-describedby="db-target-m" data-testid="migrate-db-target">
+            <select id="db-target" bind:value={dbTarget} onchange={() => (dbErr = { ...dbErr, target: undefined })} aria-invalid={!!dbErr.target} aria-describedby="db-target-m" data-testid="migrate-db-target">
               <option value="">Pick a Zero2Dev service</option>
               {#each targets as t (t.id)}<option value={t.id}>{t.name} ({t.kind}, port {t.port})</option>{/each}
             </select>
