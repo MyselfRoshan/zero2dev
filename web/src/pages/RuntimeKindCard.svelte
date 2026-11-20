@@ -39,6 +39,8 @@
   import KindIcon from "../ui/KindIcon.svelte";
   import InstallFailure from "../ui/InstallFailure.svelte";
   import Modal from "../ui/Modal.svelte";
+  import MakeDefaultDialog from "../ui/MakeDefaultDialog.svelte";
+  import { defaultFollowers } from "../lib/snapshots";
 
   let {
     kind,
@@ -102,6 +104,13 @@
   const launchable = $derived(isLaunchable(kind));
   async function openTool(r: Runtime) {
     await attempt(() => api.launchRuntime(r.id), `${runtimeTitle(r)} is opening.`);
+  }
+
+  // ---- make default (0.0.5): asks first, with a snapshot offer, when services follow the default ----
+  let makingDefault = $state<Runtime | null>(null);
+  function askMakeDefault(r: Runtime) {
+    if (defaultFollowers(r.kind, lists.services, lists.projects).services.length) makingDefault = r;
+    else void makeDefaultRuntime(r.id);
   }
 
   // ---- remove ----
@@ -195,7 +204,7 @@
                     <button class="btn sm" type="button" onclick={() => openTool(r)} aria-label="Open {runtimeTitle(r)}"><Icon name="external" size={14} /> Open</button>
                   {/if}
                   {#if canMakeDefault(r, lists.runtimes)}
-                    <button class="btn sm" type="button" onclick={() => makeDefaultRuntime(r.id)} aria-label="Make {runtimeTitle(r)} the default">Make default</button>
+                    <button class="btn sm" type="button" onclick={() => askMakeDefault(r)} aria-label="Make {runtimeTitle(r)} the default">Make default</button>
                   {/if}
                   <button class="btn sm ghost danger icon-text" type="button" onclick={() => (removing = r)} aria-label="Remove {runtimeTitle(r)}" title={r.source === "installed" ? "Delete this version's folder" : "Forget this program (it stays on disk)"}><Icon name="trash" size={14} /> {r.source === "installed" ? "Remove" : "Forget"}</button>
                 </div>
@@ -267,6 +276,8 @@
 {#if confirmUnverified && selected}
   <ConfirmDialog title="Install {label} {selected.version} without a checksum?" message={UNVERIFIED_MESSAGE} confirmLabel="Install anyway" danger={false} {busy} onconfirm={() => run(true)} oncancel={() => (confirmUnverified = false)} />
 {/if}
+
+{#if makingDefault}<MakeDefaultDialog runtime={makingDefault} onclose={() => (makingDefault = null)} />{/if}
 
 {#if removing}
   <ConfirmDialog

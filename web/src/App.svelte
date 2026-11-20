@@ -5,6 +5,7 @@
   import Icon from "./ui/Icon.svelte";
   import ThemeToggle from "./ui/ThemeToggle.svelte";
   import Toasts from "./ui/Toasts.svelte";
+  import SnapshotOffer from "./ui/SnapshotOffer.svelte";
   import FirstRun from "./pages/FirstRun.svelte";
   import Dashboard from "./pages/Dashboard.svelte";
   import Services from "./pages/Services.svelte";
@@ -176,6 +177,7 @@
   </div>
 {/if}
 <Toasts />
+<SnapshotOffer />
 {#if !app.stopped && app.phase === "ready"}<TourGuide />{/if}
 {#if quitting}
   <ConfirmDialog

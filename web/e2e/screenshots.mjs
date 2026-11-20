@@ -148,6 +148,11 @@ try {
       hash: `#/projects/${projectId}/edit`,
       title: "Edit a project: services, start order, sites",
     },
+    projectId && {
+      name: "project-snapshots",
+      hash: `#/projects/${projectId}/snapshots`,
+      title: "Project snapshots: take, restore, clone",
+    },
     { name: "runtimes", hash: "#/runtimes", title: "Runtimes: installed versions and the catalog" },
     { name: "sites", hash: "#/sites", title: "Sites: local domains" },
     { name: "site-new", hash: "#/sites?new", title: "New site form" },
