@@ -1596,3 +1596,8 @@ New kinds, one-off tasks of a service, project detection, the shipped frameworks
 7. Opens the folder in the first installed editor when `openEditor`.
 
 On success `job.done` has `projectId` and `path`. A failure stops the job, removes what it created (services, site, project, database and user), keeps the generated folder, and says so in the error (`The folder D:\www\my-shop was kept.`). Events: `services.changed`, `sites.changed`, `projects.changed`.
+
+### Pre-steps and finding programs (internal contract)
+
+- `kinds.Plan.Pre` is a list of `PreStep { Label, Program, Args, Skip, Dir, Timeout }`: programs that run before the service's own program (a Python service's virtual environment, the Corepack folder of a pnpm project). The supervisor runs them in order after the folders and files of the plan exist, with the service's environment, skipping a step whose `Skip` file exists; each step and its output go to the service's log, and a failing step stops the start (`409`). `Supervisor.PrepareService(svc)` runs the same steps without starting the service: a one-off task calls it first.
+- `supervisor.FindProgram(name, env)` finds a program the way the service would: a plain name is looked up in the `PATH` of `env` (as `Supervisor.Environ` builds it, so a virtual environment's `Scripts` folder wins) with the extensions of `PATHEXT`. A name with a path separator is refused; an absolute path must exist.

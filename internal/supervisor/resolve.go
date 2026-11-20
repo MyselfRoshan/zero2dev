@@ -34,6 +34,7 @@ type resolved struct {
 	db       *dbPlan // database services: data folder, first-start setup, clean stop
 	dirs     []string
 	files    []kinds.File
+	pre      []kinds.PreStep // run before the main program (see Supervisor.runPre)
 	warnings []string
 }
 
@@ -188,6 +189,7 @@ func (s *Supervisor) resolveWith(svc model.Service, d store.Data, lenient bool) 
 	r.env = append(env, r.added...)
 	r.dirs = append(r.dirs, plan.Dirs...)
 	r.files = plan.Files
+	r.pre = plan.Pre
 
 	switch {
 	case svc.Cwd != "":
