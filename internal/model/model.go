@@ -340,14 +340,14 @@ type LogLine struct {
 
 // ServiceKinds and RuntimeKinds are the accepted enums.
 var (
-	ServiceKinds = []string{"custom", "node", "php", "go", "java", "caddy", "nginx", "mariadb", "mysql", "postgres", "redis"}
+	ServiceKinds = []string{"custom", "node", "php", "go", "java", "caddy", "nginx", "mariadb", "mysql", "postgres", "redis", "mailpit"}
 	RuntimeKinds = []string{"node", "php", "go", "java", "caddy", "nginx",
-		"mariadb", "mysql", "postgres", "redis",
+		"mariadb", "mysql", "postgres", "redis", "mailpit",
 		"vscode", "vscodium", "notepadpp",
 		"heidisql", "dbeaver", "other"}
 	// RemoteKinds can have their version lists fetched from the publishers.
 	RemoteKinds = []string{"node", "go", "caddy", "php", "java", "nginx",
-		"mariadb", "mysql", "postgres", "redis", "vscode", "vscodium", "notepadpp", "heidisql", "dbeaver"}
+		"mariadb", "mysql", "postgres", "redis", "mailpit", "vscode", "vscodium", "notepadpp", "heidisql", "dbeaver"}
 )
 
 // Kind categories, as grouped on the Runtimes page.
@@ -357,6 +357,7 @@ const (
 	CatDatabase = "database"
 	CatEditor   = "editor"
 	CatDBTool   = "dbtool"
+	CatMail     = "mail"
 )
 
 // KindCategory maps every runtime kind (except "other") to its category.
@@ -364,7 +365,8 @@ var KindCategory = map[string]string{
 	"node": CatLanguage, "php": CatLanguage, "go": CatLanguage, "java": CatLanguage,
 	"caddy": CatServer, "nginx": CatServer,
 	"mariadb": CatDatabase, "mysql": CatDatabase, "postgres": CatDatabase, "redis": CatDatabase,
-	"vscode": CatEditor, "vscodium": CatEditor, "notepadpp": CatEditor,
+	"mailpit": CatMail,
+	"vscode":  CatEditor, "vscodium": CatEditor, "notepadpp": CatEditor,
 	"heidisql": CatDBTool, "dbeaver": CatDBTool,
 }
 
@@ -379,7 +381,7 @@ func Launchable(kind string) bool {
 // holds the programs themselves.
 var dataDirNames = map[string]string{
 	"vscode": "code", "vscodium": "codium", "notepadpp": "notepadpp", "heidisql": "heidisql", "dbeaver": "dbeaver",
-	"mariadb": "mariadb", "mysql": "mysql", "postgres": "postgres", "redis": "redis",
+	"mariadb": "mariadb", "mysql": "mysql", "postgres": "postgres", "redis": "redis", "mailpit": "mailpit",
 	"php": "php", "node": "node", "go": "go",
 }
 

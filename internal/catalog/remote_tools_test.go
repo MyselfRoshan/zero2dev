@@ -81,6 +81,15 @@ var ghFixtures = map[string]string{
 	"dbeaver/dbeaver": ghJSON(
 		ghRel("26.2.4", false, "dbeaver-ce-26.2.4-windows-x86_64.zip", "e667f516d64f29b87e3571203fc3eb02f0a419b9ff66865043bf9954ebc230c6"),
 		ghRel("26.2.3", false, "dbeaver-ce-26.2.3-windows-x86_64.zip", "")), // no digest: unverified
+	// Mailpit: the ZIP name carries no version, the tag does.
+	"axllent/mailpit": ghJSON(
+		ghRel("v1.35.0-beta.1", false, "mailpit-windows-amd64.zip", strings.Repeat("8", 64)), // not a release tag: skipped
+		ghRel("v1.34.0", true, "mailpit-windows-amd64.zip", strings.Repeat("9", 64)),         // pre-release: skipped
+		ghRel("v1.33.1", false, "mailpit-linux-amd64.tar.gz", strings.Repeat("a", 64)),       // no Windows ZIP: skipped
+		ghRel("v1.33.0", false, "mailpit-windows-amd64.zip", "47122dd828ff80dcaef62b2952c478b178afadadf066c990489608e537121bfd"),
+		ghRel("v1.32.0", false, "mailpit-windows-amd64.zip", strings.Repeat("b", 64)),
+		ghRel("v1.31.6", false, "mailpit-windows-amd64.zip", strings.Repeat("c", 64)),
+		ghRel("v1.31.5", false, "mailpit-windows-amd64.zip", strings.Repeat("d", 64))),
 }
 
 // toolPublishers adds the 0.0.3 sources to the fake publisher server.
@@ -136,6 +145,7 @@ func TestParseGitHubTools(t *testing.T) {
 		{"notepadpp", "notepad-plus-plus/notepad-plus-plus", []string{"notepadpp-8.9.8.1-windows-amd64"}, "notepad++.exe", 0},
 		{"heidisql", "HeidiSQL/HeidiSQL", []string{"heidisql-12.22-windows-amd64"}, "heidisql.exe", 0},
 		{"dbeaver", "dbeaver/dbeaver", []string{"dbeaver-26.2.4-windows-amd64", "dbeaver-26.2.3-windows-amd64"}, "dbeaver.exe", 1},
+		{"mailpit", "axllent/mailpit", []string{"mailpit-1.33.0-windows-amd64", "mailpit-1.32.0-windows-amd64", "mailpit-1.31.6-windows-amd64"}, "mailpit.exe", 0},
 	} {
 		es, err := parseGitHub([]byte(ghFixtures[c.repo]), specFor(c.kind))
 		if err != nil {
@@ -154,6 +164,12 @@ func TestParseGitHubTools(t *testing.T) {
 		if strings.Join(ids, " ") != strings.Join(c.ids, " ") {
 			t.Fatalf("%s: ids %v, want %v", c.kind, ids, c.ids)
 		}
+	}
+	mp, _ := parseGitHub([]byte(ghFixtures["axllent/mailpit"]), specFor("mailpit"))
+	if mp[0].Version != "1.33.0" || mp[0].Name != "Mailpit 1.33.0" || mp[0].Checksum.Value != "47122dd828ff80dcaef62b2952c478b178afadadf066c990489608e537121bfd" ||
+		mp[0].URL != "https://github.com/o/r/releases/download/v1.33.0/mailpit-windows-amd64.zip" ||
+		mp[0].Homepage != "https://github.com/axllent/mailpit/releases/tag/v1.33.0" {
+		t.Fatalf("mailpit: the version must come from the tag: %+v", mp[0])
 	}
 	db, _ := parseGitHub([]byte(ghFixtures["dbeaver/dbeaver"]), specFor("dbeaver"))
 	if db[0].Checksum.Type != "sha256" || db[0].Checksum.Value != "e667f516d64f29b87e3571203fc3eb02f0a419b9ff66865043bf9954ebc230c6" || db[0].Unverified {
@@ -271,7 +287,7 @@ func TestToolSourcesRefreshOffline(t *testing.T) {
 	for _, e := range es {
 		counts[e.Kind]++
 	}
-	want := map[string]int{"mariadb": 5, "mysql": 2, "postgres": 3, "vscode": 1, "redis": 3, "vscodium": 1, "notepadpp": 1, "heidisql": 1, "dbeaver": 2}
+	want := map[string]int{"mariadb": 5, "mysql": 2, "postgres": 3, "vscode": 1, "redis": 3, "vscodium": 1, "notepadpp": 1, "heidisql": 1, "dbeaver": 2, "mailpit": 3}
 	for k, n := range want {
 		if counts[k] != n {
 			t.Errorf("%s: %d remote entries, want %d (%v)", k, counts[k], n, counts)

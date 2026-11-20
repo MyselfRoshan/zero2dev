@@ -2,7 +2,9 @@
 
 export type DatabaseKind = "mariadb" | "mysql" | "postgres" | "redis";
 export const DATABASE_KINDS: DatabaseKind[] = ["mariadb", "mysql", "postgres", "redis"];
-export type ServiceKind = "custom" | "node" | "php" | "go" | "java" | "caddy" | "nginx" | DatabaseKind;
+export type MailKind = "mailpit";
+export const MAIL_KINDS: MailKind[] = ["mailpit"];
+export type ServiceKind = "custom" | "node" | "php" | "go" | "java" | "caddy" | "nginx" | DatabaseKind | MailKind;
 export const SERVICE_KINDS: ServiceKind[] = [
   "custom",
   "node",
@@ -12,6 +14,7 @@ export const SERVICE_KINDS: ServiceKind[] = [
   "caddy",
   "nginx",
   ...DATABASE_KINDS,
+  ...MAIL_KINDS,
 ];
 export type ServiceState = "stopped" | "starting" | "running" | "stopping" | "failed";
 
@@ -140,6 +143,7 @@ export type RuntimeKind =
   | "caddy"
   | "nginx"
   | DatabaseKind
+  | MailKind
   | EditorKind
   | DBToolKind
   | "other";
@@ -151,6 +155,7 @@ export const RUNTIME_KINDS: RuntimeKind[] = [
   "caddy",
   "nginx",
   ...DATABASE_KINDS,
+  ...MAIL_KINDS,
   "vscode",
   "vscodium",
   "notepadpp",

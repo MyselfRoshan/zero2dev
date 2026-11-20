@@ -13,7 +13,9 @@
 <!-- /snapshots -->
 
 <!-- mailpit -->
-
+- **Mailpit** catches the e-mails your apps send. Install it from the new **Mail** group on the Runtimes page (Mailpit 1.33.0 built in, newer versions from its GitHub releases), then add a Mailpit service: the web inbox on port 8025, SMTP on 1025, the messages in the service's data folder.
+- A Mailpit service page shows **Sending mail**: the SMTP host and port, no login, the inbox link and the `MAIL_MAILER` / `MAIL_HOST` / `MAIL_PORT` lines to copy into `.env`.
+- The start is refused when the SMTP port is taken or equals the web port. The health check asks Mailpit's `/livez`.
 <!-- /mailpit -->
 
 <!-- migrate-backend + migrate-ui: Bring in -->

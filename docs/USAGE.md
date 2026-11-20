@@ -245,6 +245,19 @@ Good to know:
 
 <!-- mailpit: "### Catch e-mails with Mailpit" goes here. -->
 
+### Catch e-mails with Mailpit
+
+Mailpit is a pretend mail server. Your app sends its e-mails to it, and you read them in the browser; no real inbox gets them.
+
+1. On **Runtimes**, install **Mailpit** from the **Mail** group.
+2. Add a service of type **Mailpit**. The **Port** (8025) is the web inbox. The **SMTP port** setting (1025) is where your app sends mail.
+3. Start it. The service page shows **Sending mail**: the SMTP host `127.0.0.1`, the SMTP port, "No authentication" and a link to the inbox.
+4. Click **Copy** next to the lines for your `.env` (`MAIL_MAILER=smtp`, `MAIL_HOST=127.0.0.1`, `MAIL_PORT=1025`), paste them into your project and send a test mail.
+
+- Only this PC can connect, and nothing is passed on. Apps that send a user name and password are let in too.
+- The caught e-mails are kept in `data\mailpit\<service id>\mailpit.db`. **Keep at most** (500) sets how many; the oldest go first.
+- Two Mailpit services need different ports. If the SMTP port is taken, the start fails with "SMTP port 1025 is already in use".
+
 ---
 
 <!-- snapshot-ui: "## Snapshots: undo for a whole project" goes here (take, restore, clone, the offer before risky actions). -->

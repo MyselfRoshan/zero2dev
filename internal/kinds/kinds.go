@@ -93,7 +93,8 @@ type Profile struct {
 	Folder        Field      `json:"folder"`
 	Port          Field      `json:"port"`
 	Health        bool       `json:"health"`
-	DataDir       string     `json:"dataDir"` // service | shared | none
+	HealthPath    string     `json:"healthPath,omitempty"` // checked when the service sets no health path of its own
+	DataDir       string     `json:"dataDir"`              // service | shared | none
 	Program       bool       `json:"program,omitempty"`
 	ExtraArgs     string     `json:"extraArgs"`
 	ExtraArgsHint string     `json:"extraArgsHint"`
@@ -138,6 +139,18 @@ func Lookup(kind string) (*Profile, bool) {
 func FolderRequired(kind string) bool {
 	p, ok := Lookup(kind)
 	return !ok || p.Folder.Use == "required"
+}
+
+// HealthPath is the page the health check asks for: the service's own path,
+// else the kind's (Mailpit: /livez), else "" for a plain port check.
+func HealthPath(kind, own string) string {
+	if own != "" {
+		return own
+	}
+	if p, ok := Lookup(kind); ok && p.Health {
+		return p.HealthPath
+	}
+	return ""
 }
 
 func (p *Profile) option(key string) *Option {

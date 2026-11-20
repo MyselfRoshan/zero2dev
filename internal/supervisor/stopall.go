@@ -6,7 +6,7 @@ import (
 
 // Stop order for "Stop all": what depends on something goes first.
 const (
-	tierApps       = iota // your own services, Node, PHP, Go, Java
+	tierApps       = iota // your own services, Node, PHP, Go, Java, Mailpit
 	tierDatabases         // they must outlive the apps that use them
 	tierSiteServer        // Caddy / nginx, the front door, goes last
 )

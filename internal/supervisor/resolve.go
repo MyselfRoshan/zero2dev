@@ -19,7 +19,7 @@ import (
 
 // Default program names looked up on PATH per kind.
 var progName = map[string]string{"node": "node", "php": "php", "go": "go", "java": "java", "caddy": "caddy", "nginx": "nginx",
-	"mariadb": "mariadbd", "mysql": "mysqld", "postgres": "postgres", "redis": "redis-server"}
+	"mariadb": "mariadbd", "mysql": "mysqld", "postgres": "postgres", "redis": "redis-server", "mailpit": "mailpit"}
 
 // resolved is everything needed to spawn a service.
 type resolved struct {
