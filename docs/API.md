@@ -1660,3 +1660,27 @@ A failed job is `state: "failed"` with the message in `error`; its `step` is the
 | only `index.html` | `""` | | `markers: ["index.html"]`, nothing else filled in |
 
 Node settings: `run`=`npm` and `npmScript`=`dev` (else `start`) when `package.json` has such a script; otherwise `run`=`script` and `script`=`main` or the first of `server.js`, `index.js`, `app.js`, `main.js`; `packageManager`=`pnpm` or `yarn` from `pnpm-lock.yaml` or `yarn.lock` once the kind has that option. `name` falls back to the folder's name; `envFile` is `.env` when that file exists. Framework ids other than `go-nethttp` and `html` must match `frameworks.json` as it grows.
+
+#### Python details
+
+- **Catalog.** Python comes from python-build-standalone, `https://github.com/astral-sh/python-build-standalone`. The built-in entries are pinned to the release `20261026`: `python-3.13.18-windows-amd64`, `python-3.13.18-windows-arm64`, `python-3.12.16-windows-amd64` and `python-3.12.16-windows-arm64` (version line `3.13` / `3.12`). Each is the plain `install_only` archive `cpython-<version>+<build>-<x86_64|aarch64>-pc-windows-msvc-install_only.tar.gz` (not free-threaded, not `_stripped`), `checksum.type` `sha256` with the value from the release's `SHA256SUMS`, `stripComponents` 1 (the root folder is `python`), `binaryRelPath` `python.exe`. `pip` is `Scripts\pip.exe` below the runtime folder.
+- **Remote discovery.** `POST /api/catalog/refresh` has a source `python` (`github.com/astral-sh/python-build-standalone`). It reads the newest 3 releases (`.../releases?per_page=3`; one release holds every Python and about 2 MB of asset list), and for each of the newest four minor lines (`3.14`, `3.13`, `3.12`, `3.11`) keeps the newest patch with its Windows `amd64` and `arm64` builds. Pre-releases (`3.16.0a1`), free-threaded and `_stripped` builds and other platforms are ignored. The checksum is the SHA-256 digest GitHub shows for the asset; an asset without one becomes an unverified entry. Ids are `python-<version>-windows-<arch>`; the same id in the built-in manifest wins.
+- **Run modes** (setting `run`, `GET /api/kinds`). The arguments after the program are:
+
+  | `run` | Arguments | Settings used |
+  | --- | --- | --- |
+  | `script` (default) | `<script>` | `script` (`main.py`) |
+  | `module` | `-m <module>` | `module` |
+  | `uvicorn` | `-m uvicorn --host <host> --port {port} <app>` | `app` (`main:app`), `host` |
+  | `flask` | `-m flask run --host <host> --port {port}` | `flaskApp` (set as `FLASK_APP`, optional), `host` |
+  | `django` | `<manage> runserver <host>:{port}` | `manage` (`manage.py`), `host` |
+
+  The user's own arguments come last. `host` (default `127.0.0.1`) is also set as `HOST` in every mode. Every Python service gets `PYTHONUNBUFFERED=1` and the usual `PORT`.
+- **Virtual environment.** A service of kind `python` that does not use `customArgs` (and has no `command`) runs `<home>\python\venvs\<serviceId>\Scripts\python.exe` (`kinds.VenvDir`, `VenvPython`, `VenvScripts`), with `VIRTUAL_ENV=<home>\python\venvs\<serviceId>` and that `Scripts` folder first on `PATH` (before the runtime's folder). So `pip` and `python` in a task, `Environ` and the terminal are the environment's. `GET /api/services/{id}/command` and the preview show that program even before the environment exists (no "not found" warning).
+  - *Creation.* `Plan.Pre` has one step, "Creating the virtual environment": the runtime's `python.exe -m venv <dir>` with `Skip` = the environment's `python.exe`, so it runs once. A start (or `PrepareService`, so a task too) runs it.
+  - *Runtime changed.* If `<dir>\pyvenv.cfg` has a `home` that is not the folder of the service's current runtime (compared as paths, ignoring case), the step becomes `-m venv --clear <dir>` and is not skipped, and the plan has a warning (logged as a `note:` at the start, shown in the preview): the environment is made again and its packages are gone.
+  - *Removal.* `Supervisor.Remove` (service delete) removes `<home>\python\venvs\<serviceId>` after the process stopped. A failure to delete (a locked file) is ignored.
+  - *Snapshots.* A snapshot, a restore and a clone never copy a virtual environment (`internal/snapshot` copies only database data folders and `php.ini`): it holds absolute paths. After a restore or a clone the first start makes an empty one.
+  - A service that uses `customArgs`, or that has its own `command`, has no pre-step and runs as it was written.
+- **Tasks** of the kind (`GET /api/kinds`, `tasks`): `pip-install` (`pip install -r requirements.txt`, `when` `requirements.txt`), `pip-list` (`pip list`), `django-migrate` (`python manage.py migrate`, with a `confirm`) and `django-collectstatic` (`python manage.py collectstatic --noinput`), both `when` `manage.py`. Their programs `pip` and `python` must be found on the service's `PATH` first (the environment's `Scripts` folder), not next to the runtime: the runtime's own `python.exe` has no Django.
+- **Shims.** `python` and `pip` get shims for the default Python runtime; `pip` is looked for next to `python.exe` and in `Scripts\` below it. When `pip` is in `Scripts\`, the activate scripts put that folder on `PATH` after the runtime's folder.

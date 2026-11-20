@@ -436,8 +436,8 @@ func TestShippedPresets(t *testing.T) {
 			for i, a := range task.Args {
 				args[i] = expand(a, svc)
 			}
-			if err := checkArgs(args); err != nil || task.When == "" {
-				t.Errorf("%s: %v (when %q)", task.ID, err, task.When)
+			if err := checkArgs(args); err != nil { // (a task may have no "when": pip list works in any folder)
+				t.Errorf("%s: %v", task.ID, err)
 			}
 		}
 	}

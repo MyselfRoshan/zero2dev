@@ -157,6 +157,12 @@ export function preview(svc, { home, runtimes }) {
     }
     if (svc.kind === "php") files.push(`${dataDir}\\php.ini`);
   }
+  // A Python service runs in a virtual environment of its own, made before the first start.
+  if (svc.kind === "python" && !svc.customArgs && !svc.command) {
+    const venv = `${home}\\python\\venvs\\${svc.id}`;
+    program = `${venv}\\Scripts\\python.exe`;
+    env.push(`VIRTUAL_ENV=${venv}`);
+  }
   for (const e of p?.env ?? []) env.push(`${e.name}=${expand(e.value)}`);
   for (const [k, v] of Object.entries(svc.env ?? {})) env.push(`${k}=${v}`);
   if (svc.port > 0) env.push(`PORT=${svc.port}`);

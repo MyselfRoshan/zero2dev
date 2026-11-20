@@ -79,7 +79,7 @@ func TestStatusRefreshAndMergedCatalogAPI(t *testing.T) {
 	if resp := e.do("POST", "/api/catalog/refresh", nil, &out); resp.StatusCode != 200 {
 		t.Fatalf("refresh status %d", resp.StatusCode)
 	}
-	if out.CheckedAt == nil || len(out.Sources) != 16 || strings.Join(out.Added, ",") != "nginx-1.28.0-windows-amd64,php-8.4.1-windows-amd64" {
+	if out.CheckedAt == nil || len(out.Sources) != 17 || strings.Join(out.Added, ",") != "nginx-1.28.0-windows-amd64,php-8.4.1-windows-amd64" {
 		t.Fatalf("%+v", out)
 	}
 	bySrc := map[string]catalog.SourceStatus{}
@@ -92,7 +92,7 @@ func TestStatusRefreshAndMergedCatalogAPI(t *testing.T) {
 
 	var again catalog.Status
 	e.do("GET", "/api/catalog/status", nil, &again)
-	if again.CheckedAt == nil || len(again.Sources) != 16 {
+	if again.CheckedAt == nil || len(again.Sources) != 17 {
 		t.Fatalf("status must persist: %+v", again)
 	}
 	var es []model.CatalogEntry

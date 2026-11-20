@@ -158,6 +158,9 @@ func Build(kind string, settings map[string]string, extra []string, c Ctx) *Plan
 	if kind == "go" && eff["isolate"] == "true" {
 		pl.Dirs = append(pl.Dirs, filepath.Join(c.Home, "go"))
 	}
+	if kind == "python" && c.Home != "" && c.ServiceID != "" {
+		pythonPlan(pl, c) // the virtual environment of the service
+	}
 	if kind == "mailpit" && c.Data != "" {
 		pl.Dirs = append(pl.Dirs, c.Data) // Mailpit creates its database file, not the folder
 	}

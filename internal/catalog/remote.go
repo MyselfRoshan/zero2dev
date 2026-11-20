@@ -151,6 +151,7 @@ func (r *Remote) Refresh(ctx context.Context) (Status, []string, error) {
 		{"postgres", hostLabel(or(r.PostgresPage, DefaultPostgresPage)), r.fetchPostgres},
 		{"vscode", hostLabel(or(r.VSCodeURL, DefaultVSCodeURL)), r.fetchVSCode},
 		{"composer", hostLabel(or(r.ComposerURL, DefaultComposerURL)), r.fetchComposer},
+		{"python", "github.com/" + pythonRepo, r.fetchPython},
 	}
 	for _, s := range ghSpecs {
 		fetchers = append(fetchers, struct {

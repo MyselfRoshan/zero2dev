@@ -6,7 +6,11 @@
 
 ### Python
 
-<!-- python: runtime, virtual environment per service, run modes, pip -->
+- **Python runtime.** Python comes from python-build-standalone (`install_only` `.tar.gz`, checked with the SHA-256 of the release). Python 3.13 and 3.12 are built in for Windows (amd64 and arm64); `Check for new versions` adds the newest patch of each of the last four lines from the project's GitHub releases. Python has its own card in the Languages group.
+- **Python services.** A new service type with a **Run** setting: a script, a module, Uvicorn (FastAPI), Flask or Django `runserver`, with fields for the script, module, application and host. The port reaches Uvicorn, Flask and Django as their own option and every mode as `PORT`. `PYTHONUNBUFFERED=1` is set so `print()` shows up in the log at once.
+- **A virtual environment for each service.** Before the first start Zero2Dev makes `data\python\venvs\<service id>` (`python -m venv`) and runs the service with its `python.exe`, `VIRTUAL_ENV` set and its `Scripts` folder first on `PATH`. When the service's runtime changed, the environment is made again and the log says so. Deleting the service deletes its environment; snapshots never copy it.
+- **Tasks of a Python service.** Install requirements (`pip install -r requirements.txt`), List packages, and for Django projects migrate and collectstatic.
+- **`python` and `pip` in the command line shims.** `pip` is found in the runtime's `Scripts` folder, which the activate scripts put on `PATH` too.
 
 ### Composer, pnpm and Yarn
 

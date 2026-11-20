@@ -275,7 +275,6 @@ Mailpit is a pretend mail server. Your app sends its e-mails to it, and you read
 
 ---
 
-<!-- 0.0.6 python: "## Python services" goes here (virtual environment, run modes, pip). -->
 ## Composer, pnpm and Yarn
 
 ### Composer
@@ -306,6 +305,29 @@ Where things are kept (all in the data folder, so they move with it):
 
 If a project says which package manager it wants (the `packageManager` field of `package.json`), Corepack uses that version. With the setting on **npm** none of this is set up.
 
+
+## Python services
+
+Zero2Dev downloads Python for you and runs your script or web app in a virtual environment of its own, so the packages of one project never mix with another's.
+
+1. On **Runtimes**, install **Python** from the **Languages** group (3.13 and 3.12 are listed; **Check for new versions** adds the newest patch of each recent line).
+2. Add a service of type **Python**, choose the **Project folder** and what to **Run**:
+   - **A script** runs `python main.py` (the **Script** field).
+   - **A module** runs `python -m name` (the **Module** field).
+   - **Uvicorn (FastAPI)** runs `python -m uvicorn --host <host> --port <port> main:app`. The **Application** is the module and the app object, like `main:app`.
+   - **Flask** runs `python -m flask run --host <host> --port <port>`. **Flask application** is optional (Flask looks for `app.py` or `wsgi.py`) and is set as `FLASK_APP`.
+   - **Django (runserver)** runs `python manage.py runserver <host>:<port>`.
+3. The **command preview** shows the exact line. The program is the `python.exe` of the service's virtual environment. Put more options in **Arguments for your app** (for example `--reload` for Uvicorn).
+4. Start it. The first start makes the virtual environment, which takes a few seconds, and the log says so. Every start after that skips this.
+
+- **Virtual environment.** It lives in `data\python\venvs\<service id>`, not in your project, so there is nothing to put in `.gitignore`. The service runs with `VIRTUAL_ENV` set and the environment's `Scripts` folder first on `PATH`, so `pip`, `python` and the tools your packages install (`uvicorn`, `flask`, `django-admin`) all come from it. **Open terminal** on the service gives the same.
+- **Install your packages** with the **Install requirements** task (`pip install -r requirements.txt`, offered when the project has a `requirements.txt`). **List packages** shows what is installed. Django projects also get **migrate** and **collectstatic**. Tasks are described under Run a task.
+- **Another Python version.** Switch the service's runtime in its settings. At the next start Zero2Dev notices that the environment was made from another Python, logs a warning and makes it again, so run **Install requirements** once more.
+- **Deleting the service** deletes its virtual environment. **Snapshots** never copy it: after a restore or a clone, the first start makes an empty one and **Install requirements** fills it.
+- **`print()` shows up at once.** Zero2Dev sets `PYTHONUNBUFFERED=1`, so output reaches the log without waiting for a buffer to fill.
+- **Host.** The web app modes listen on `127.0.0.1`, which only this PC can reach. Set **Host** to `0.0.0.0` to let your phone or another PC connect. Your own script or module gets the host as `HOST` and the port as `PORT`.
+- **In your own terminal.** `python` and `pip` are in the command line shims (see Command line) and use the default Python runtime; a project's own packages are in the service's environment, not there.
+<!-- 0.0.6 composer: "## Composer, pnpm and Yarn" goes here. -->
 <!-- 0.0.6 tasks: "## Run a task" and "detect the project type" go here. -->
 <!-- 0.0.6 new-project: "## Create a project from a framework" goes here. -->
 
