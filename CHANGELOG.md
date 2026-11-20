@@ -12,6 +12,9 @@
 - **Optional administrator password.** `PUT .../database/password` sets it for every `root` account, for `postgres`, or as Redis' `requirepass`. It then reaches the clean stop (`MYSQL_PWD`, `REDISCLI_AUTH`), `DB_PASSWORD`, the URL-escaped `DATABASE_URL` / `REDIS_URL`, and HeidiSQL and DBeaver. Redis is started with `--requirepass`. The command preview and the start log show the password as `********`. Passwords travel only in environment variables or stdin, never on a client's command line.
 - **Native Open and Save as dialogs** (`POST /api/dialog/file`), with file type filters, a suggested name and a start folder, for picking dumps.
 - **`dbtools.CopyFromServer`** pipes `mysqldump`/`pg_dump` from another server straight into a Zero2Dev database service. If it fails, it drops what it created. Bring in uses it.
+- **Databases on the service page.** A MariaDB, MySQL or PostgreSQL service page has a **Databases** section: the databases with their sizes and the users, **Create database**, **Create user** (with a generated password and all privileges on one database), **Import a dump** (`.sql` or `.sql.gz`, into an existing or a new database, with a progress bar) and **Export** (a name ending in `.gz` compresses it; an existing file is replaced only after a confirm). **Browse...** opens the Windows Open and Save as dialogs. Tools that need the running server are off while it is stopped, and the page says why.
+- **Administrator password.** **Set password**, **Change password** and **Remove password** while the server runs, on Redis too. **Connection** shows the password hidden, with **Show** and **Copy**, and the URL includes it (URL-escaped). The hint under it says what the password changes.
+- **Reset a database.** A danger button, only while the service is stopped, behind a confirmation that names the databases and the data folder it deletes. A snapshot is offered first, as before an import.
 
 <!-- /databases -->
 

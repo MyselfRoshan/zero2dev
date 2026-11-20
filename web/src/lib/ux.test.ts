@@ -124,6 +124,30 @@ describe("databases", () => {
     expect(connectionInfo({ kind: "redis", port: 6379 })).toMatchObject({ user: "", url: "redis://127.0.0.1:6379" });
     expect(connectionInfo({ kind: "node", port: 3000 })).toBeNull();
     expect(connectionInfo({ kind: "mysql", port: 0 })).toBeNull();
+    expect(connectionInfo({ kind: "mariadb", port: 3307 })).toMatchObject({
+      password: "",
+      maskedUrl: "mysql://root@127.0.0.1:3307",
+    });
+    expect(connectionInfo({ kind: "mariadb", port: 3307 })?.hint).toMatch(/^No password/);
+  });
+  it("puts the administrator password in the URL, escaped, and masks it for the screen", () => {
+    const c = connectionInfo({ kind: "mariadb", port: 3307, adminPassword: "p@ss/w:rd" });
+    expect(c).toMatchObject({
+      user: "root",
+      password: "p@ss/w:rd",
+      url: "mysql://root:p%40ss%2Fw%3Ard@127.0.0.1:3307",
+      maskedUrl: "mysql://root:********@127.0.0.1:3307",
+    });
+    expect(c?.hint).toMatch(/^Password set: apps get it in DB_PASSWORD/);
+    expect(connectionInfo({ kind: "postgres", port: 5432, adminPassword: "pw" })).toMatchObject({
+      url: "postgresql://postgres:pw@127.0.0.1:5432/postgres",
+    });
+    expect(connectionInfo({ kind: "postgres", port: 5432, adminPassword: "pw" })?.hint).toContain("without it");
+    expect(connectionInfo({ kind: "redis", port: 6379, adminPassword: "pw" })).toMatchObject({
+      url: "redis://:pw@127.0.0.1:6379",
+      maskedUrl: "redis://:********@127.0.0.1:6379",
+    });
+    expect(connectionInfo({ kind: "redis", port: 6379, adminPassword: "" })?.url).toBe("redis://127.0.0.1:6379");
   });
   it("tells that database files are kept on delete", () => {
     expect(deleteServiceMessage({ kind: "postgres", id: "svc_1" }, false, "D:/z/data/databases/svc_1")).toContain(
