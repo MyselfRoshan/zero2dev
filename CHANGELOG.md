@@ -2,8 +2,6 @@
 
 ## 0.0.6
 
-<!-- Each part writes its bullets under its own heading. -->
-
 ### Python
 
 - **Python runtime.** Python comes from python-build-standalone (`install_only` `.tar.gz`, checked with the SHA-256 of the release). Python 3.13 and 3.12 are built in for Windows (amd64 and arm64); `Check for new versions` adds the newest patch of each of the last four lines from the project's GitHub releases. Python has its own card in the Languages group.
@@ -33,12 +31,11 @@
 
 ### Create a project from a framework
 
-- **A list of 19 frameworks** shipped as data (`internal/frameworks/frameworks.json`, or `<data>rameworks.json`): PHP (Laravel, Symfony, WordPress, plain PHP), JavaScript (Express, NestJS, Next.js, Vite with React, Vue or Svelte, Astro), Python (Django, FastAPI, Flask), Go (net/http, Gin, Fiber), Java (Spring Boot) and HTML and CSS. Every generator runs without questions (`--no-interaction`, `--yes`, `--no-git`, `CI=1`).
+- **A list of 19 frameworks** shipped as data (`internal/frameworks/frameworks.json`, or `<data>\frameworks.json`): PHP (Laravel, Symfony, WordPress, plain PHP), JavaScript (Express, NestJS, Next.js, Vite with React, Vue or Svelte, Astro), Python (Django, FastAPI, Flask), Go (net/http, Gin, Fiber), Java (Spring Boot) and HTML and CSS. Every generator runs without questions (`--no-interaction`, `--yes`, `--no-git`, `CI=1`).
 - **`POST /api/new-project/plan` and `POST /api/new-project`.** The plan says what would be installed, created and run, and lists problems (folder not empty, domain or port taken, no runtime version fits) and warnings. The job installs the missing runtime, Composer and database server, creates the database with a user of its own (random password, only in the `.env`), runs the framework's generator with the runtime's own tools (no shell, no console window), writes the `.env`, creates the services, site and project in one change, and opens the folder in the installed editor.
 - **Safe failure.** A failed step stops the job and removes only what it created (services, site, project, database and user); the generated folder and the installed runtimes are kept, and the error says so. A project name may use letters, digits, spaces and `. _ - ( )`; it becomes the folder and host name (`My Shop` is `my-shop`).
 - **Schema additions for the list:** a step may set `env`; a `download` step may be `unverified` with a `reason` (shown as a warning; start.spring.io publishes no checksum); a program written `./name` is a file of the project (`./mvnw.cmd`); the placeholders `{venv}` and `{home}`.
 - **Shared code.** The checks of the service and project routes are in `internal/validate`, the free-port search in `internal/netutil`, the `.env` editor in `internal/envfile`; `dbtools` can drop a user and `sites` exports its domain check.
-
 - **Create a project page (`#/create`).** Choose a language (PHP, JavaScript / TypeScript, Python, Go, Java, Static) and a framework (each card says what it needs: runtime, Composer, database), a name, a folder and, where the framework has one, a database. The plan on the right is always visible and follows every change: what is installed first and why, the steps in order, what is created, and the problems (which stop Create, with a link or a button to fix them) and warnings.
 - **Progress, result and failure.** Create shows the steps of the plan as a list (waiting, running with its percent, done, failed) with the generator's output. A finished project shows links to its service, site and project, with **Start the project** and **Create another**. A failed one shows the error (it names the kept folder), says what was removed, and **Back to the form** keeps your choices.
 - **Entry points and links.** **New project from a framework** on Projects (a plain button next to **New project**) and on the Dashboard's Projects box. `#/create?framework=laravel&name=Shop` prefills the form (also `parent`, `db`, `domain`, `port`). The last folder is remembered in the browser. A **Create a project** tutorial and a Help entry explain it.
