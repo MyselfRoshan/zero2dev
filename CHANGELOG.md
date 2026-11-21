@@ -31,7 +31,11 @@
 
 ### Create a project from a framework
 
-<!-- new-project: the frameworks list, the generator, services, database, site, .env, editor -->
+- **A list of 19 frameworks** shipped as data (`internal/frameworks/frameworks.json`, or `<data>rameworks.json`): PHP (Laravel, Symfony, WordPress, plain PHP), JavaScript (Express, NestJS, Next.js, Vite with React, Vue or Svelte, Astro), Python (Django, FastAPI, Flask), Go (net/http, Gin, Fiber), Java (Spring Boot) and HTML and CSS. Every generator runs without questions (`--no-interaction`, `--yes`, `--no-git`, `CI=1`).
+- **`POST /api/new-project/plan` and `POST /api/new-project`.** The plan says what would be installed, created and run, and lists problems (folder not empty, domain or port taken, no runtime version fits) and warnings. The job installs the missing runtime, Composer and database server, creates the database with a user of its own (random password, only in the `.env`), runs the framework's generator with the runtime's own tools (no shell, no console window), writes the `.env`, creates the services, site and project in one change, and opens the folder in the installed editor.
+- **Safe failure.** A failed step stops the job and removes only what it created (services, site, project, database and user); the generated folder and the installed runtimes are kept, and the error says so. A project name may use letters, digits, spaces and `. _ - ( )`; it becomes the folder and host name (`My Shop` is `my-shop`).
+- **Schema additions for the list:** a step may set `env`; a `download` step may be `unverified` with a `reason` (shown as a warning; start.spring.io publishes no checksum); a program written `./name` is a file of the project (`./mvnw.cmd`); the placeholders `{venv}` and `{home}`.
+- **Shared code.** The checks of the service and project routes are in `internal/validate`, the free-port search in `internal/netutil`, the `.env` editor in `internal/envfile`; `dbtools` can drop a user and `sites` exports its domain check.
 
 ## 0.0.5
 

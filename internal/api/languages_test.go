@@ -13,6 +13,7 @@ import (
 	"zero2dev/internal/detect"
 	"zero2dev/internal/jobs"
 	"zero2dev/internal/model"
+	"zero2dev/internal/newproject"
 	"zero2dev/internal/store"
 	"zero2dev/internal/tasks"
 )
@@ -179,4 +180,74 @@ func TestTaskComposerMissingIs409(t *testing.T) {
 	if resp := e.do("POST", "/api/services/svc_task/tasks", map[string]any{"preset": "composer-install"}, &er); resp.StatusCode != 409 || !strings.Contains(er.Error.Message, "Runtimes") {
 		t.Fatalf("%d %+v", resp.StatusCode, er)
 	}
+}
+
+// newProjectEnv wires a New project manager (the real stores and supervisor, no installer and no
+// database tools) to the server.
+func newProjectEnv(t *testing.T) (*tenv, string) {
+	e := newEnv(t)
+	e.srv.Jobs = jobs.New(e.hub)
+	parent := t.TempDir()
+	m := newproject.New(e.home, e.srv.Store, e.sup, nil, nil, e.srv.Sites, nil, e.srv.Jobs, e.hub.Publish)
+	m.PortFree = func(int) bool { return true }
+	e.srv.NewProject = m
+	return e, parent
+}
+
+func TestNewProjectRoutes(t *testing.T) {
+	e, parent := newProjectEnv(t)
+	req := map[string]any{"framework": "html", "name": "My Shop", "parent": parent}
+
+	// plan: nothing is changed, the lists are [] and never null
+	var plan newproject.Plan
+	if resp := e.do("POST", "/api/new-project/plan", req, &plan); resp.StatusCode != 200 || plan.Slug != "my-shop" || plan.Domain != "my-shop.localhost" ||
+		plan.Dir != filepath.Join(parent, "my-shop") || len(plan.Problems) != 0 || len(plan.Installs) != 0 || plan.Database != nil || len(plan.Steps) != 2 {
+		t.Fatalf("plan: %d %+v", resp.StatusCode, plan)
+	}
+	if _, err := os.Stat(plan.Dir); err == nil {
+		t.Fatal("a plan must not create the folder")
+	}
+	var raw map[string]any
+	e.do("POST", "/api/new-project/plan", req, &raw)
+	for _, k := range []string{"installs", "steps", "creates", "problems", "warnings"} {
+		if _, ok := raw[k].([]any); !ok {
+			t.Errorf("%s must be a list, got %v", k, raw[k])
+		}
+	}
+	// problems are part of a 200 plan; the request errors are 400
+	var bad newproject.Plan
+	if resp := e.do("POST", "/api/new-project/plan", map[string]any{"framework": "html", "name": "x", "parent": parent, "databaseKind": "mariadb"}, &bad); resp.StatusCode != 200 || len(bad.Problems) != 1 {
+		t.Fatalf("problem plan: %d %+v", resp.StatusCode, bad)
+	}
+	e.errCode("POST", "/api/new-project/plan", map[string]any{"framework": "nope", "name": "x", "parent": parent}, 400)
+	e.errCode("POST", "/api/new-project/plan", map[string]any{"framework": 5}, 400)
+
+	// start: a plan with problems is a 409 with the first problem as the message
+	var er struct{ Error struct{ Message string } }
+	if resp := e.do("POST", "/api/new-project", map[string]any{"framework": "html", "name": "x", "parent": filepath.Join(parent, "missing")}, &er); resp.StatusCode != 409 || !strings.Contains(er.Error.Message, "does not exist") {
+		t.Fatalf("problem start: %d %+v", resp.StatusCode, er)
+	}
+	e.errCode("POST", "/api/new-project", map[string]any{"framework": "nope"}, 400)
+
+	var job model.Job
+	if resp := e.do("POST", "/api/new-project", req, &job); resp.StatusCode != 202 || job.Type != "new-project" || job.State != "running" {
+		t.Fatalf("start: %d %+v", resp.StatusCode, job)
+	}
+	done := waitJobAPI(e, job.ID)
+	if done.State != "done" || done.Path != plan.Dir || done.ProjectID == "" {
+		t.Fatalf("job %+v", done)
+	}
+	if b, _ := os.ReadFile(filepath.Join(plan.Dir, "index.html")); !strings.Contains(string(b), "<h1>My Shop</h1>") {
+		t.Fatalf("index.html %q", b)
+	}
+	var projects []model.Project
+	e.do("GET", "/api/projects", nil, &projects)
+	var sites []model.SiteView
+	e.do("GET", "/api/sites", nil, &sites)
+	if len(projects) != 1 || projects[0].ID != done.ProjectID || projects[0].Name != "My Shop" || len(projects[0].SiteIDs) != 1 ||
+		len(sites) != 1 || sites[0].Domain != "my-shop.localhost" || sites[0].Type != "static" || sites[0].Root != plan.Dir {
+		t.Fatalf("projects %+v sites %+v", projects, sites)
+	}
+	// the folder now has files: the same request is a 409
+	e.errCode("POST", "/api/new-project", req, 409)
 }

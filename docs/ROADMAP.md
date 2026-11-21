@@ -134,7 +134,7 @@ Frameworks in the first list, each with the generator Zero2Dev runs:
 | JavaScript / TypeScript | Express, NestJS, Next.js, Vite (React, Vue, Svelte), Astro | `npm create ...`, `npx create-next-app` |
 | Python | Django, FastAPI, Flask | `django-admin startproject`, a starter folder for FastAPI and Flask, in a virtual environment |
 | Go | net/http, Gin, Fiber | `go mod init` and a starter `main.go` |
-| Java | Spring Boot | a project from start.spring.io (Maven or Gradle) |
+| Java | Spring Boot | a Maven project from start.spring.io, built with its wrapper |
 | Static | HTML and CSS | a starter folder served by the site server |
 
 ## 0.0.7: WSL aware

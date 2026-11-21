@@ -5,12 +5,15 @@
 // installed editor. If a step fails it removes only what it created and keeps the generated
 // folder (never deleting files it did not write).
 //
-// Contract (docs/API.md, "Amendment: languages, tasks and new projects (0.0.6)"). Wave 0 stub:
-// the signatures are final, the bodies are filled in by the new-project work.
+// Contract: docs/API.md, "Amendment: languages, tasks and new projects (0.0.6)" and its "New
+// project details" subsection.
 package newproject
 
 import (
+	"context"
 	"errors"
+	"net/http"
+	"time"
 
 	"zero2dev/internal/dbtools"
 	"zero2dev/internal/installer"
@@ -23,7 +26,7 @@ import (
 	"zero2dev/internal/tasks"
 )
 
-// ErrNotImplemented is returned by the Wave 0 stubs (the API answers 501).
+// ErrNotImplemented is what the API answers 501 for: a server without a Manager.
 var ErrNotImplemented = errors.New("not implemented yet")
 
 // Request is the body of POST /api/new-project/plan and POST /api/new-project.
@@ -80,15 +83,47 @@ type Plan struct {
 	Warnings []string `json:"warnings"`
 }
 
+// InstallerAPI is what the job needs from internal/installer (*installer.Installer; tests use a
+// fake that "installs" at once).
+type InstallerAPI interface {
+	Start(catalogID string, opts ...installer.Options) (model.Job, error)
+	Get(id string) (model.Job, bool)
+}
+
+// DatabaseAPI is what the job needs from internal/dbtools (*dbtools.Manager).
+type DatabaseAPI interface {
+	CreateDatabase(ctx context.Context, serviceID, name string) error
+	CreateUser(ctx context.Context, serviceID, user, password, database string) error
+	DropDatabases(ctx context.Context, serviceID string, dbs []string) error
+	DropUser(ctx context.Context, serviceID, user string) error
+}
+
+// SupervisorAPI is what the job needs from internal/supervisor (*supervisor.Supervisor).
+type SupervisorAPI interface {
+	Environ(svc model.Service) ([]string, error)
+	PrepareService(svc model.Service) error
+	ComposerCommand(svc model.Service) (bin string, args []string, err error)
+	StartWithDeps(id string) error
+	State(id string) string
+	Remove(id string) error
+	Log(id, stream, text string)
+}
+
+// SitesAPI is what the job needs from internal/sites (*sites.Manager).
+type SitesAPI interface {
+	EnsureServers() (bool, error)
+	Regenerate() error
+}
+
 // Manager does the work. Fields may be replaced in tests before first use.
 type Manager struct {
 	Home      string
 	St        *store.Store
-	Sup       *supervisor.Supervisor
-	Installer *installer.Installer
+	Sup       SupervisorAPI
+	Installer InstallerAPI
 	Runtimes  *runtimes.Manager
-	Sites     *sites.Manager
-	DB        *dbtools.Manager
+	Sites     SitesAPI
+	DB        DatabaseAPI
 	Jobs      *jobs.Registry
 	// Run runs the generator programs (nil: the real runner of internal/tasks).
 	Run tasks.Runner
@@ -96,17 +131,67 @@ type Manager struct {
 	Launch func(bin string, args []string, dir string, env []string) error
 	// Emit publishes events (services.changed, sites.changed, projects.changed); may be nil.
 	Emit func(typ string, data any)
+
+	// Catalog lists the downloadable runtimes (nil: catalog.Load of Home).
+	Catalog func() ([]model.CatalogEntry, error)
+	// PortFree reports whether a TCP port can be listened on (nil: netutil.PortFree).
+	PortFree func(port int) bool
+	// HTTP downloads the files of download steps (nil: the installer's client, which follows the
+	// download proxy setting). AllowHTTP lets a download step use http (tests with httptest).
+	HTTP      *http.Client
+	AllowHTTP bool
+	// Rand supplies random bytes for passwords and {random} (nil: crypto/rand).
+	Rand func(n int) []byte
+
+	// Timing knobs; zero means the default.
+	PollEvery    time.Duration // how often an install job or a starting database is looked at (300 ms)
+	StartTimeout time.Duration // how long a database server may take to run (2 min)
+	InstallWait  time.Duration // how long an install may take (30 min)
 }
 
 // New returns a Manager.
 func New(home string, st *store.Store, sup *supervisor.Supervisor, inst *installer.Installer, rt *runtimes.Manager,
 	sm *sites.Manager, db *dbtools.Manager, j *jobs.Registry, emit func(string, any)) *Manager {
-	return &Manager{Home: home, St: st, Sup: sup, Installer: inst, Runtimes: rt, Sites: sm, DB: db, Jobs: j, Emit: emit}
+	m := &Manager{Home: home, St: st, Runtimes: rt, Jobs: j, Emit: emit}
+	// A nil pointer must not become a non-nil interface.
+	if sup != nil {
+		m.Sup = sup
+	}
+	if inst != nil {
+		m.Installer = inst
+	}
+	if sm != nil {
+		m.Sites = sm
+	}
+	if db != nil {
+		m.DB = db
+	}
+	return m
 }
 
-// Plan works out what Start would do. It changes nothing.
-func (m *Manager) Plan(req Request) (Plan, error) { return Plan{}, ErrNotImplemented }
+func (m *Manager) emit(typ string) {
+	if m.Emit != nil {
+		m.Emit(typ, struct{}{})
+	}
+}
 
-// Start runs the job (type "new-project"; job.done carries projectId and path). It answers
-// the same problems as Plan with a 409, so a stale plan cannot start.
-func (m *Manager) Start(req Request) (model.Job, error) { return model.Job{}, ErrNotImplemented }
+func (m *Manager) poll() time.Duration {
+	if m.PollEvery > 0 {
+		return m.PollEvery
+	}
+	return 300 * time.Millisecond
+}
+
+func (m *Manager) startTimeout() time.Duration {
+	if m.StartTimeout > 0 {
+		return m.StartTimeout
+	}
+	return 2 * time.Minute
+}
+
+func (m *Manager) installWait() time.Duration {
+	if m.InstallWait > 0 {
+		return m.InstallWait
+	}
+	return 30 * time.Minute
+}
