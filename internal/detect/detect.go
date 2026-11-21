@@ -424,18 +424,41 @@ func probeJava(d *folder) *Result {
 // ---- Python: manage.py, requirements.txt, pyproject.toml -----------------------------------
 
 // pythonFrameworks: the package that names a framework (looked for in requirements.txt and
-// pyproject.toml), its usual port and the settings of the Python profile to fill in. The settings
-// are dropped when the profile has no such option, so adjust this table when the run modes of the
-// Python kind change.
+// pyproject.toml), its usual port and the settings of the Python profile to fill in (the run mode
+// and its option: see the Run select in internal/kinds/profiles.json). The settings are dropped
+// when the profile has no such option, so adjust this table when the run modes of the Python kind
+// change.
 var pythonFrameworks = []struct {
 	id       string
 	pkg      string
 	port     int
-	settings map[string]string
+	settings func(d *folder) map[string]string
 }{
-	{"django", "django", 8000, map[string]string{"script": "manage.py"}},
-	{"fastapi", "fastapi", 8000, nil},
-	{"flask", "flask", 5000, nil},
+	{"django", "django", 8000, func(*folder) map[string]string {
+		return map[string]string{"run": "django", "manage": "manage.py"}
+	}},
+	{"fastapi", "fastapi", 8000, func(d *folder) map[string]string {
+		m := map[string]string{"run": "uvicorn"}
+		switch {
+		case d.has("main.py"):
+			m["app"] = "main:app"
+		case d.has("app.py"):
+			m["app"] = "app:app"
+		case d.has("app/main.py"):
+			m["app"] = "app.main:app"
+		}
+		return m
+	}},
+	{"flask", "flask", 5000, func(d *folder) map[string]string {
+		m := map[string]string{"run": "flask"}
+		switch {
+		case d.has("app.py"):
+			m["flaskApp"] = "app"
+		case d.has("wsgi.py"):
+			m["flaskApp"] = "wsgi"
+		}
+		return m
+	}},
 }
 
 var tomlName = regexp.MustCompile(`(?m)^name\s*=\s*["']([^"']+)["']`)
@@ -458,13 +481,14 @@ func probePython(d *folder) *Result {
 		if named {
 			r.Confidence = "high"
 		}
-		keys := make([]string, 0, len(fw.settings))
-		for k := range fw.settings {
+		want := fw.settings(d)
+		keys := make([]string, 0, len(want))
+		for k := range want {
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)
 		for _, k := range keys {
-			st.set(k, fw.settings[k])
+			st.set(k, want[k])
 		}
 		break
 	}
