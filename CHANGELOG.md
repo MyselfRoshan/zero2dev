@@ -35,6 +35,11 @@
 
 <!-- new-project: the frameworks list, the generator, services, database, site, .env, editor -->
 
+- **Create a project page (`#/create`).** Choose a language (PHP, JavaScript / TypeScript, Python, Go, Java, Static) and a framework (each card says what it needs: runtime, Composer, database), a name, a folder and, where the framework has one, a database. The plan on the right is always visible and follows every change: what is installed first and why, the steps in order, what is created, and the problems (which stop Create, with a link or a button to fix them) and warnings.
+- **Progress, result and failure.** Create shows the steps of the plan as a list (waiting, running with its percent, done, failed) with the generator's output. A finished project shows links to its service, site and project, with **Start the project** and **Create another**. A failed one shows the error (it names the kept folder), says what was removed, and **Back to the form** keeps your choices.
+- **Entry points and links.** **New project from a framework** on Projects (a plain button next to **New project**) and on the Dashboard's Projects box. `#/create?framework=laravel&name=Shop` prefills the form (also `parent`, `db`, `domain`, `port`). The last folder is remembered in the browser. A **Create a project** tutorial and a Help entry explain it.
+- **Mock.** `GET /api/frameworks`, `POST /api/new-project/plan` and `POST /api/new-project` in the dashboard's fake daemon, with the names `taken` (folder in the way) and `fail-me` (the generator fails), and e2e steps for the whole flow.
+
 ## 0.0.5
 
 ### Databases

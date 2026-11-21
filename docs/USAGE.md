@@ -327,7 +327,6 @@ Zero2Dev downloads Python for you and runs your script or web app in a virtual e
 - **`print()` shows up at once.** Zero2Dev sets `PYTHONUNBUFFERED=1`, so output reaches the log without waiting for a buffer to fill.
 - **Host.** The web app modes listen on `127.0.0.1`, which only this PC can reach. Set **Host** to `0.0.0.0` to let your phone or another PC connect. Your own script or module gets the host as `HOST` and the port as `PORT`.
 - **In your own terminal.** `python` and `pip` are in the command line shims (see Command line) and use the default Python runtime; a project's own packages are in the service's environment, not there.
-<!-- 0.0.6 composer: "## Composer, pnpm and Yarn" goes here. -->
 
 ## Run a task
 
@@ -367,7 +366,22 @@ It then chooses the type and fills in the fields that are still empty: the name,
 - **Only when adding.** Editing an existing service does not look at the folder.
 - **It is a suggestion.** Check the fields before **Save**. A folder that says nothing (an empty one, or a plain `index.html`) changes nothing, and a folder that cannot be read says nothing either.
 
-<!-- 0.0.6 new-project: "## Create a project from a framework" goes here. -->
+
+## Create a project from a framework
+
+Start a new Laravel, WordPress, Next.js, Vite, Django, FastAPI, Go, Spring Boot or plain HTML project without installing anything first. Open **Projects** and press **New project from a framework** (or use the link on the Dashboard).
+
+1. **Language and framework.** Pick the language, then the framework. Each card says what it needs, for example *PHP 8.2 or newer, Composer, optional database*.
+2. **Name and folder.** The name is required; under it you see the short name (letters, digits, `-` and `_`, in lower case) that is used for the folder, the database and the domain. **Folder** is the parent folder: the project goes in `<folder>\<short name>`. Zero2Dev remembers the last folder.
+3. **Settings.** *Database*: the kinds the framework offers (and *None* when it is optional), with the framework's usual one chosen. *Domain*: `<short name>.localhost` unless you change it. *Port*: empty means the framework's usual port or the next free one. *Open in my editor* opens the finished folder in the first editor Zero2Dev has.
+4. **Read the plan.** *What will happen* on the right is checked again a moment after every change. It lists what is installed first (a runtime, Composer or a database server, each with the reason), the steps in order, and what is created: the services, the site, the project and the `.env` file. A **problem** (the folder already exists and is not empty, the parent folder is missing, the domain or port is taken, no runtime version fits) stops **Create project** and says what to change. A **warning** does not.
+5. **Create project.** The page switches to a progress list. Zero2Dev installs what is missing, starts the database and makes a database and a user for this project only (the password goes only in the project's `.env`), runs the framework's own generator, writes the `.env` and creates the services, the site and the project. Nothing outside the project folder and the Zero2Dev data folder is touched. You can leave the page; a message tells you when it is ready.
+
+When it is done, the result lists what was made with links to the service, the site and the project. **Start the project** runs its services and switches the site on; **Create another** returns to the form.
+
+If a step fails, the page shows the error, removes what Zero2Dev had created (services, site, project, database and user) and keeps the generated folder, whose path is in the message, so you can look at it or delete it. Runtimes that were installed stay installed. **Back to the form** keeps your choices; change the name or delete the folder and try again.
+
+`#/create?framework=laravel&name=Shop` opens the form with a framework and a name filled in (`parent`, `db`, `domain` and `port` work too).
 
 ## Snapshots: undo for a whole project
 
