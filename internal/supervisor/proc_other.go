@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"sync"
 	"syscall"
+	"time"
 )
 
 // configure puts the child in its own process group so the whole tree can be
@@ -45,3 +46,6 @@ func (t *tree) close() {
 	t.closed = true
 	t.mu.Unlock()
 }
+
+// usage: there is no job object off Windows, so no numbers (both stay 0).
+func (t *tree) usage() (cpuTime time.Duration, memBytes uint64, ok bool) { return 0, 0, false }

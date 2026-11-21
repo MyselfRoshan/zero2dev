@@ -5,7 +5,7 @@
   import { isActive, serviceUrl, startAll, stopAll } from "../lib/actions";
   import { lastLine, overview, recentActivity, statusSentence } from "../lib/dashboard";
   import { projectStatus, servicesLine, sitesLine } from "../lib/projects";
-  import { fmtTime, since } from "../lib/format";
+  import { fmtTime, since, usageText } from "../lib/format";
   import { navigate } from "../lib/router.svelte";
   import { isSiteServerService, siteServer } from "../lib/sites";
   import { app, attempt, lists, loadSites, logs, seedLogs } from "../lib/store.svelte";
@@ -207,6 +207,7 @@
                 {#if serviceKindLabel(s.kind) !== s.name}<span>{serviceKindLabel(s.kind)}</span>{/if}
                 {#if s.port > 0}<span class="mono">:{s.port}</span>{/if}
                 {#if uptime(s)}<span>{uptime(s)}</span>{/if}
+                {#if s.state === "running"}<span class="usage" data-testid="card-usage" title="CPU: share of the whole machine. Memory: working set of the whole process tree">{usageText(s).cpu} · {usageText(s).mem}</span>{/if}
               </div>
               {#if s.state === "failed" && s.lastError}
                 <p class="err small">{s.lastError}</p>
@@ -490,6 +491,9 @@
   }
   .svc-head .nm:hover {
     text-decoration: underline;
+  }
+  .meta .usage {
+    font-variant-numeric: tabular-nums;
   }
   .meta {
     display: flex;

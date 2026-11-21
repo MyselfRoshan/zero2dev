@@ -242,6 +242,7 @@ func run() error {
 	if openOnStart {
 		openBrowser(url)
 	}
+	sup.StartUsage() // CPU and memory per service, every 2 seconds; ends with StopAll
 	go sup.AutostartAll()
 
 	select {

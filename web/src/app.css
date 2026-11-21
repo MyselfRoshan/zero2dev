@@ -704,6 +704,17 @@ table.t {
   text-align: right;
   white-space: nowrap;
 }
+.t td.usage {
+  color: var(--muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+@media (max-width: 700px) {
+  .t .usage-col {
+    display: none;
+  }
+}
 .t-wrap {
   overflow-x: auto;
 }

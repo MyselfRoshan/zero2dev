@@ -386,7 +386,13 @@ If a step fails, the page shows the error, removes what Zero2Dev had created (se
 <!-- 0.0.6 rust: "## Rust services" goes here. -->
 <!-- 0.0.6 apiclients: "### Try an API with Bruno or Hoppscotch" goes here. -->
 <!-- 0.0.6 viteplus: "### Vite+ projects" goes here. -->
-<!-- 0.0.6 usage: "### CPU and memory" goes here. -->
+### CPU and memory
+
+The Services page has a **CPU** and a **Memory** column, each Dashboard card shows both next to its uptime, and the service page lists them under Process and Started. They are refreshed every 2 seconds while the service runs, and show "-" while it is stopped.
+
+- **CPU** is the share of the **whole machine**, not of one core: a program that keeps one of eight cores fully busy shows `12.5 %`. It is the CPU time of the **whole process tree** (the service and everything it started, such as the workers of a dev server), also of children that have already exited. The first number appears after the second sample, about 4 seconds after the start.
+- **Memory** is the **working set** of the whole process tree: the memory the processes hold in RAM right now. It is the number Task Manager calls "Memory" per process, summed. Memory that processes share is counted once per process, so a tree of many workers can show more than it really uses.
+- The numbers are for orientation: they carry no warnings and no colours. Zero2Dev's own use is not included.
 <!-- 0.0.6 projectfile: "## Share a project: zero2dev.json" goes here. -->
 
 ## Snapshots: undo for a whole project

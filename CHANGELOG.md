@@ -55,7 +55,8 @@
 
 ### CPU and memory per service
 
-<!-- usage: the sampler, service.usage, the columns -->
+- Every service shows its **CPU** and **Memory** use: columns on the Services page, a line on each Dashboard card and two entries on the service page. CPU is the share of the whole machine (all processors), Memory is the working set; both cover the service's whole process tree, so a Node dev server with its workers is counted as one. Stopped services show "-".
+- The daemon samples every running service every 2 seconds from its job object (CPU time from the job's accounting, memory from the processes in the job) and publishes one `service.usage` event with the numbers of all running services. `GET /api/services` and `GET /api/services/{id}` carry `cpu` and `memBytes`. Nothing is sampled while no service runs, and off Windows the numbers stay 0.
 
 ### Project file
 

@@ -3,6 +3,7 @@
   import { deleteService, isActive, serviceUrl, startAll, stopAll } from "../lib/actions";
   import { consumeNewFlag, navigate } from "../lib/router.svelte";
   import { serviceRuntimeLabel } from "../lib/catalog";
+  import { usageText } from "../lib/format";
   import { deleteServiceMessage, serviceKindLabel } from "../lib/ux";
   import { dbDataPath } from "../lib/installer";
   import { profileFor } from "../lib/kinds";
@@ -63,11 +64,12 @@
   <div class="card t-wrap">
     <table class="t">
       <thead>
-        <tr><th>Name</th><th>Status</th><th>Type</th><th>Port</th><th>Folder</th><th><span class="sr-only">Actions</span></th></tr>
+        <tr><th>Name</th><th>Status</th><th class="usage-col">CPU</th><th class="usage-col">Memory</th><th>Type</th><th>Port</th><th>Folder</th><th><span class="sr-only">Actions</span></th></tr>
       </thead>
       <tbody>
         {#each lists.services as s (s.id)}
           {@const url = serviceUrl(s)}
+          {@const use = usageText(s)}
           <tr data-service={s.name}>
             <td>
               <a class="cell-title" href="#/services/{s.id}">{s.name}</a>
@@ -75,6 +77,8 @@
               {#if s.state === "failed" && s.lastError}<div class="err">{s.lastError}</div>{/if}
             </td>
             <td><StateBadge state={s.state} /></td>
+            <td class="usage usage-col" data-testid="svc-cpu" title="CPU: share of the whole machine, over the service's whole process tree">{use.cpu}</td>
+            <td class="usage usage-col" data-testid="svc-mem" title="Memory: working set of the service's whole process tree">{use.mem}</td>
             <td><span class="kind-cell"><KindIcon kind={s.kind} size={16} /> {serviceKindLabel(s.kind)}</span>{#if s.runtimeId && serviceRuntimeLabel(s.runtimeId, lists.runtimes)} <span class="badge plain" data-testid="svc-runtime">{serviceRuntimeLabel(s.runtimeId, lists.runtimes)}</span>{/if}</td>
             <td class="mono">{#if url}<a href={url} target="_blank" rel="noreferrer">{s.port}</a>{:else if s.port > 0}{s.port}{:else}<span class="muted">none</span>{/if}</td>
             <td class="path">{#if profileFor(lists.kinds, s.kind)?.folder.use === "hidden"}<span class="muted">data folder</span>{:else}{s.cwd}{/if}</td>
