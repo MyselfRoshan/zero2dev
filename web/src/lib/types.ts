@@ -756,7 +756,7 @@ export interface DetectResult {
   markers: string[];
 }
 
-export type FrameworkLanguage = "php" | "javascript" | "python" | "go" | "java" | "static";
+export type FrameworkLanguage = "php" | "javascript" | "python" | "go" | "java" | "rust" | "static";
 
 /** One framework of the shipped list (GET /api/frameworks). */
 export interface Framework {

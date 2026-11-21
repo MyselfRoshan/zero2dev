@@ -477,5 +477,21 @@
     "stripComponents": 1,
     "homepage": "https://github.com/astral-sh/python-build-standalone/releases/tag/20261026",
     "line": "3.12"
+  },
+  {
+    "os": "windows",
+    "arch": "amd64",
+    "id": "rust-1.100.0-windows-amd64",
+    "kind": "rust",
+    "version": "1.100.0",
+    "name": "Rust 1.100.0 (stable, GNU)",
+    "url": "https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-gnu/rustup-init.exe",
+    "checksum": {
+      "type": "shasums",
+      "url": "https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-gnu/rustup-init.exe.sha256"
+    },
+    "binaryRelPath": "cargo/bin/cargo.exe",
+    "stripComponents": 0,
+    "homepage": "https://rust-lang.github.io/rustup/installation/windows.html"
   }
 ]

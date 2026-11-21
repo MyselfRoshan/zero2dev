@@ -146,6 +146,37 @@ func RuntimeHome(rt Runtime) (name, dir string) {
 	return name, filepath.Dir(filepath.Dir(rt.Binary))
 }
 
+// RustHomes finds the two folders of a Zero2Dev-installed Rust runtime from its cargo.exe:
+// <install>\cargo\bin\cargo.exe gives CARGO_HOME=<install>\cargo and RUSTUP_HOME=<install>\rustup
+// (the installer runs rustup-init with both, see internal/installer). ok is false for any other
+// layout (a cargo the user registered from ~\.cargo\bin): that one keeps the user's own variables.
+func RustHomes(binary string) (cargoHome, rustupHome string, ok bool) {
+	if binary == "" {
+		return "", "", false
+	}
+	bin := filepath.Dir(binary)
+	cargoHome = filepath.Dir(bin)
+	if !strings.EqualFold(filepath.Base(bin), "bin") || cargoHome == bin || filepath.Base(cargoHome) != "cargo" {
+		return "", "", false
+	}
+	return cargoHome, filepath.Join(filepath.Dir(cargoHome), "rustup"), true
+}
+
+// RuntimeVars are the variables of a runtime a service or a shim runs with, in order: GOROOT and
+// JAVA_HOME (RuntimeHome), and for Rust RUSTUP_HOME and CARGO_HOME.
+func RuntimeVars(rt Runtime) []string {
+	if rt.Kind == "rust" {
+		if c, r, ok := RustHomes(rt.Binary); ok {
+			return []string{"RUSTUP_HOME=" + r, "CARGO_HOME=" + c}
+		}
+		return nil
+	}
+	if name, dir := RuntimeHome(rt); name != "" {
+		return []string{name + "=" + dir}
+	}
+	return nil
+}
+
 // ServiceInput is the body of create/update.
 type ServiceInput struct {
 	Name       string            `json:"name"`

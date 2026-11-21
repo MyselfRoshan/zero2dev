@@ -37,7 +37,7 @@ import (
 var builtin []byte
 
 // Languages, as New project groups the frameworks.
-var Languages = []string{"php", "javascript", "python", "go", "java", "static"}
+var Languages = []string{"php", "javascript", "python", "go", "java", "rust", "static"}
 
 // Step types.
 const (

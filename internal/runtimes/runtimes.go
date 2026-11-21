@@ -72,6 +72,7 @@ var tools = []struct {
 	{"node", "node", []string{"--version"}},
 	{"php", "php", []string{"--version"}},
 	{"go", "go", []string{"version"}},
+	{"cargo", "rust", []string{"--version"}},
 	{"java", "java", []string{"-version"}},
 	{"caddy", "caddy", []string{"version"}},
 	{"nginx", "nginx", []string{"-v"}},

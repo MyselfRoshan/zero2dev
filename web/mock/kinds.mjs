@@ -154,7 +154,7 @@ export function preview(svc, { home, runtimes }) {
     if (svc.kind === "node" && ["pnpm", "yarn"].includes(eff.packageManager) && program.endsWith("npm.cmd"))
       program = `${home}\\node\\corepack\\bin\\${eff.packageManager}.cmd`;
     if ((svc.args ?? []).length) {
-      if (program.endsWith("npm.cmd")) args.push("--");
+      if (program.endsWith("npm.cmd") || svc.kind === "rust") args.push("--"); // npm passes it to the script, cargo to your program
       args.push(...svc.args.map(plain));
     }
     if (svc.kind === "php") files.push(`${dataDir}\\php.ini`);
@@ -164,6 +164,12 @@ export function preview(svc, { home, runtimes }) {
     const venv = `${home}\\python\\venvs\\${svc.id}`;
     program = `${venv}\\Scripts\\python.exe`;
     env.push(`VIRTUAL_ENV=${venv}`);
+  }
+  // A Rust service builds into a target folder of its own; RUSTUP_HOME and CARGO_HOME are the runtime's.
+  if (svc.kind === "rust") {
+    const m = /^(.*)\\cargo\\bin\\cargo\.exe$/i.exec(program);
+    if (m) env.push(`RUSTUP_HOME=${m[1]}\\rustup`, `CARGO_HOME=${m[1]}\\cargo`);
+    env.push(`CARGO_TARGET_DIR=${home}\\rust\\target\\${svc.id}`);
   }
   for (const e of p?.env ?? []) env.push(`${e.name}=${expand(e.value)}`);
   for (const [k, v] of Object.entries(svc.env ?? {})) env.push(`${k}=${v}`);

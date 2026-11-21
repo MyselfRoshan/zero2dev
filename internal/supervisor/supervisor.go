@@ -260,6 +260,9 @@ func (s *Supervisor) start(id string, auto *crashState) error {
 	cmd.Env = r.env
 	outW := &lineWriter{emit: func(t string) { s.logLine(id, "stdout", t) }}
 	errW := &lineWriter{emit: func(t string) { s.logLine(id, "stderr", t) }}
+	if svc.Kind == "rust" {
+		errW.emit = s.rustHintEmit(id) // a build that lacks a C compiler gets one line of advice
+	}
 	cmd.Stdout, cmd.Stderr = outW, errW
 	cmd.WaitDelay = 2 * time.Second // do not hang on pipes held by orphaned grandchildren
 	configure(cmd)

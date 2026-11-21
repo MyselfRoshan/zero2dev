@@ -112,7 +112,7 @@ func TestShippedList(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []string{"laravel", "symfony", "wordpress", "php", "express", "nestjs", "nextjs", "vite-react", "vite-vue", "vite-svelte",
-		"astro", "django", "fastapi", "flask", "go-nethttp", "gin", "fiber", "springboot", "html"}
+		"astro", "django", "fastapi", "flask", "go-nethttp", "gin", "fiber", "springboot", "axum", "html"}
 	for _, id := range want {
 		if _, ok := Get(list, id); !ok {
 			t.Errorf("framework %s is missing", id)
@@ -138,6 +138,16 @@ func TestShippedList(t *testing.T) {
 	sp, _ := Get(list, "springboot")
 	if !sp.Steps[0].Unverified || sp.Steps[0].Reason == "" {
 		t.Errorf("spring boot downloads without a checksum and says why: %+v", sp.Steps[0])
+	}
+	ax, _ := Get(list, "axum")
+	if ax.Language != "rust" || ax.Runtime.Kind != "rust" || len(ax.Services) != 1 || ax.Services[0].Kind != "rust" || ax.Services[0].Port != 3000 ||
+		ax.Site == nil || ax.Site.Type != "proxy" || ax.Steps[0].Type != StepFiles || !strings.Contains(ax.Steps[0].Files["src/main.rs"], `env::var("PORT")`) {
+		t.Errorf("axum: %+v", ax)
+	}
+	for _, st := range ax.Steps[1:] {
+		if st.Type != StepRun || st.Program != "cargo" || st.In != "project" {
+			t.Errorf("axum runs cargo in the project folder: %+v", st)
+		}
 	}
 	lv, _ := Get(list, "laravel")
 	keys := map[string]bool{}

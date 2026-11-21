@@ -83,10 +83,16 @@ func defaultOf(d store.Data, kind string) (model.Runtime, bool) {
 // shimEnv are the variables a shim sets for its command: JAVA_HOME for the
 // java tools, GOROOT for go.
 func shimEnv(rt model.Runtime) map[string]string {
-	if name, dir := model.RuntimeHome(rt); name != "" {
-		return map[string]string{name: dir}
+	vars := model.RuntimeVars(rt)
+	if len(vars) == 0 {
+		return nil
 	}
-	return nil
+	env := map[string]string{}
+	for _, kv := range vars {
+		k, v, _ := strings.Cut(kv, "=")
+		env[k] = v
+	}
+	return env
 }
 
 // Files returns every file of the shims folder for the data: one .cmd per

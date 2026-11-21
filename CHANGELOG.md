@@ -43,7 +43,11 @@
 
 ### Rust
 
-<!-- rust: runtime installed with rustup (GNU), service type, Axum starter -->
+- **Rust runtime, installed with rustup.** The Runtimes page has a Rust card. The catalog entry is the **GNU** `rustup-init.exe` (`x86_64-pc-windows-gnu`) from static.rust-lang.org, checked against the `.sha256` file rust-lang publishes next to it (so no pinned checksum goes stale when rustup is updated). No administrator install and no Visual Studio Build Tools are needed. The catalog entry is refreshed with Zero2Dev releases (its label is the stable Rust of that day, 1.100.0); the toolchain rustup installs is the current `stable` at install time.
+- **The installer's `.exe` type.** A catalog download whose file name ends in `.exe` is a program to run, not an archive: it is verified, copied into the install folder, moved to its final place and then **run there** (rustup records absolute paths) with `RUSTUP_HOME` and `CARGO_HOME` inside the folder, no window, a 20 minute limit and its process tree ended on a timeout. Its output lines become the job's step and percent (85-95), a failure carries the last lines, and the runtime is registered only when `cargo\bin\cargo.exe` exists afterwards; a failed install removes the folder. What is run per kind is one table (`exeKinds`), so another kind can use it. Tests use a fake program.
+- **Rust service type.** `cargo run` or `cargo run --release`, with Package (`-p`), Binary (`--bin`), Features and your arguments after `--`. Cargo builds into `data\rust\target\<service>` (`CARGO_TARGET_DIR`), `RUSTUP_HOME` and `CARGO_HOME` are the runtime's folders, `cargo\bin` is on `PATH` and `PORT` is passed on. Tasks: Build, Test, Fetch crates, Clippy (and **Add Clippy**, because the installed toolchain is the minimal profile). When a build says a C compiler or linker is missing, the log gets one line saying a crate that needs a C compiler needs MinGW.
+- **Shims and detection.** `cargo`, `rustc` and `rustup` get shims and the activate scripts set `RUSTUP_HOME`, `CARGO_HOME` and `PATH`. A `Cargo.toml` is detected as a Rust project (the `[package]` name; Axum as the framework with port 3000, else port 8080; `default-run` becomes the Binary setting).
+- **Axum starter** in New project (language Rust): installs Rust when missing, writes `src/main.rs` (reads `PORT`), runs `cargo init`, `cargo add axum@0.8` and `cargo add tokio@1`, then creates the service and the proxy site.
 
 ### API clients
 

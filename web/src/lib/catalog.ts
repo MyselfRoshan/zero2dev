@@ -279,7 +279,7 @@ export const KIND_SUMMARY: Record<string, string> = {
   go: "The Go compiler and tools",
   java: "Eclipse Temurin JDK",
   python: "Python, with pip and virtual environments",
-  rust: "Rust and Cargo, installed with rustup",
+  rust: "Rust and Cargo, installed with rustup. The GNU toolchain needs no administrator install; a crate that needs a C compiler needs MinGW",
   viteplus: "The Vite+ command line, which can pick a project's Node version",
   bruno: "API client whose collections are plain files in your project",
   hoppscotch: "Light API client",
