@@ -1741,7 +1741,7 @@ PHP projects offer MariaDB and MySQL only: the default extension list has `pdo_m
 
 ## Amendment: 0.0.6, part 2 (Vite+, Rust, API clients, project files, CPU and memory)
 
-Everything here is the contract of the second half of 0.0.6. Routes answer `501 not_supported` until their work is in (the project file routes are in: they answer `501` only on a daemon built without the manager).
+Everything here is the contract of the second half of 0.0.6, and it is implemented, except where a section says otherwise (Vite+ `nodeFrom=viteplus`).
 
 ### Kinds
 
