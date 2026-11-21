@@ -89,10 +89,11 @@ var tools = []struct {
 
 // noProbe reports whether running the binary to read its version must be
 // avoided: desktop programs would open a window. That covers the editors too,
-// whose version is read from their files instead (editors.go).
+// whose version is read from their files instead (editors.go). Vite+'s launcher is never run
+// to read a version either: started without VP_HOME it would set itself up in %LOCALAPPDATA%.
 func noProbe(kind, binary string) bool {
 	switch kind {
-	case "notepadpp", "heidisql", "dbeaver", "vscode", "vscodium", "bruno", "hoppscotch":
+	case "notepadpp", "heidisql", "dbeaver", "vscode", "vscodium", "bruno", "hoppscotch", "viteplus":
 		return true
 	}
 	return false

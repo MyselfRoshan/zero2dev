@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"zero2dev/internal/kinds"
 	"zero2dev/internal/model"
 )
 
@@ -42,6 +43,10 @@ type exeRun struct {
 	Args []string
 	// Env returns KEY=VALUE variables for the run, given the final install folder.
 	Env func(final string) []string
+	// HomeEnv, when set, adds variables that depend on the data folder.
+	HomeEnv func(home string) []string
+	// Made, when set, is a file (given the data folder) that must exist after a post-install run.
+	Made func(home string) string
 	// Timeout is how long the run may take.
 	Timeout time.Duration
 	// Remove is deleted from the folder after a successful run (the downloaded program itself).
@@ -63,6 +68,20 @@ var exeKinds = map[string]exeRun{
 		},
 		Timeout: 20 * time.Minute,
 		Remove:  true,
+	},
+}
+
+// postKinds lists the kinds whose ZIP is only a launcher: after the ZIP is unpacked and moved to
+// its final place the launcher runs once more, and it sets itself up. Vite+'s vp.exe, started with
+// VP_HOME, installs the vite-plus package, its own Node and pnpm below VP_HOME, and changes
+// nothing outside it (checked on a real Windows 11: the user PATH, the registry and the default
+// %LOCALAPPDATA%\vite-plus stay as they were). The first run prints its steps.
+var postKinds = map[string]exeRun{
+	"viteplus": {
+		Args:    []string{"--version"},
+		HomeEnv: func(home string) []string { return []string{"VP_HOME=" + kinds.VitePlusHome(home)} },
+		Made:    func(home string) string { return filepath.Join(kinds.VitePlusHome(home), "bin", "vp.exe") },
+		Timeout: 20 * time.Minute,
 	},
 }
 
@@ -157,7 +176,13 @@ func (in *Installer) runInstallerProgram(ctx context.Context, j *job, run exeRun
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	env := run.Env(final)
+	var env []string
+	if run.Env != nil {
+		env = run.Env(final)
+	}
+	if run.HomeEnv != nil {
+		env = append(env, run.HomeEnv(in.home)...)
+	}
 	if px := in.st.Snapshot().Settings.DownloadProxy; px != "" {
 		env = append(env, "HTTPS_PROXY="+px, "HTTP_PROXY="+px)
 	}

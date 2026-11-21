@@ -137,7 +137,7 @@ func (s *Supervisor) resolveWith(svc model.Service, d store.Data, lenient bool) 
 		plan = kinds.Build(svc.Kind, svc.Settings, svc.Args, ctx)
 	}
 	r.warnings = append(r.warnings, plan.Warnings...)
-	if svc.Kind == "node" && rtUsed != nil {
+	if svc.Kind == "node" && rtUsed != nil && svc.Settings["nodeFrom"] != "viteplus" { // Vite+ picks the pinned Node itself
 		if w := nodePinWarning(svc.Cwd, rtUsed, d.Runtimes); w != "" {
 			r.warnings = append(r.warnings, w)
 		}

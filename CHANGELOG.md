@@ -60,7 +60,8 @@
 
 - A Node service has a new run mode, **Vite+** (`vp`): it runs the project's own `node_modules\.bin\vp.cmd` with `dev`, `build`, `test` or `run <script>`. `vp dev` gets the service's port (`--port`, `--strictPort`), and the port field follows the mode (5173). Without `vite-plus` installed in the project the start says "vp is not installed in this project: run npm install (or a task) first".
 - Choosing a folder with a Vite+ project (a `vite-plus` dependency, a `vite.config` that imports it, or a script that runs `vp`) sets the type Node, the run mode Vite+ and the command `dev`.
-- New setting **Node from**: the service page and the form say in words which Node a service uses. Today it is always Zero2Dev's Node; "Vite+'s Node" is shown but cannot be chosen yet, with the reason (Vite+'s global program cannot be installed into the Zero2Dev folder in a way that can be checked, see `docs/API.md`).
+- New setting **Node from**: the service page and the form say in words which Node a service uses. **Zero2Dev's Node** is the default. **Vite+'s Node** runs the service through the Vite+ program installed on the Runtimes page, which picks the Node the project pins and downloads it into the data folder.
+- **Vite+ on the Runtimes page.** Install gives you the Vite+ command line in `data\vite-plus`: Zero2Dev downloads Vite+'s launcher (checked with its published SHA-256) and runs it once with its data folder inside yours, so it fetches its own Node and pnpm there (about 270 MB, a few minutes). Your PATH and the registry are not changed. Removing it keeps `data\vite-plus` until you delete the folder.
 - A Node service whose folder pins a Node version (`.node-version`, `devEngines.runtime`, `engines.node` or `.nvmrc`; exact versions, `22.x`, `>=22`, `^22.18.0 || ^24.11.0`) that its Node runtime does not satisfy gets one warning line in the command preview and in the start log, naming an installed Node that does.
 
 ### CPU and memory per service

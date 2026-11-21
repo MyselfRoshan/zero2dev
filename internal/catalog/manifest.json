@@ -237,6 +237,22 @@
   {
     "os": "windows",
     "arch": "amd64",
+    "id": "viteplus-1.7.0-windows-amd64",
+    "kind": "viteplus",
+    "version": "1.7.0",
+    "name": "Vite+ 1.7.0",
+    "url": "https://github.com/voidzero-dev/vite-plus/releases/download/v1.7.0/vp-x86_64-pc-windows-msvc.zip",
+    "checksum": {
+      "type": "sha256",
+      "value": "9c142f380b91069dc20b493d1b2cc1fcedb31b06a909ce2cbc353182ad616f98"
+    },
+    "binaryRelPath": "vp.exe",
+    "stripComponents": 0,
+    "homepage": "https://github.com/voidzero-dev/vite-plus/releases/tag/v1.7.0"
+  },
+  {
+    "os": "windows",
+    "arch": "amd64",
     "id": "vscode-1.145.0-windows-amd64",
     "kind": "vscode",
     "version": "1.145.0",

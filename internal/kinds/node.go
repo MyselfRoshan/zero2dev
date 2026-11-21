@@ -76,6 +76,32 @@ func nodeVitePlus(pl *Plan, eff map[string]string, c Ctx) {
 	if eff["run"] != "vp" || c.Cwd == "" {
 		return
 	}
+	if eff["nodeFrom"] == "viteplus" && c.Home != "" {
+		// Vite+'s own program, with its data folder (VP_HOME) inside the Zero2Dev data folder: it
+		// picks the Node the project pins (.node-version, devEngines.runtime, engines.node,
+		// .nvmrc), installing it there when needed, and runs the project's vp on it.
+		pl.Program = VitePlusProgram(c.Home, c.Windows)
+		pl.NotFound = NoVitePlusRuntimeMessage
+		pl.Env = append(pl.Env, "VP_HOME="+VitePlusHome(c.Home))
+		return
+	}
 	pl.Program = VitePlusShim(c.Cwd, c.Windows)
 	pl.NotFound = NoVitePlusMessage
 }
+
+// VitePlusHome is Vite+'s data folder (VP_HOME): <data>\vite-plus. The launcher the installer
+// runs sets everything up inside it.
+func VitePlusHome(home string) string { return filepath.Join(home, "vite-plus") }
+
+// VitePlusProgram is the global command `vp` the launcher made: <data>\vite-plus\bin\vp.exe.
+func VitePlusProgram(home string, windows bool) string {
+	name := "vp"
+	if windows {
+		name += ".exe"
+	}
+	return filepath.Join(VitePlusHome(home), "bin", name)
+}
+
+// NoVitePlusRuntimeMessage is what a start says when "Node from: Vite+" is chosen and Vite+ is not
+// installed.
+const NoVitePlusRuntimeMessage = "Vite+ is not installed: install it on the Runtimes page (the Vite+ card)"

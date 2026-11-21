@@ -259,15 +259,14 @@
           },
           {
             "value": "viteplus",
-            "label": "Vite+'s Node (the version the project pins)",
-            "disabled": "Not available yet: the Vite+ command line cannot be installed into the Zero2Dev folder in a way that can be checked (its installer changes your user PATH and fetches Node and packages that Zero2Dev cannot verify)."
+            "label": "Vite+'s Node (the version the project pins)"
           }
         ],
         "show": {
           "run": "vp"
         },
         "emit": {},
-        "help": "Which Node runs this service: Zero2Dev's Node, the Node runtime selected for the service (Zero2Dev downloaded and checked it, and keeps it in its data folder), or Vite+'s Node, which Vite+ would pick from the version the project pins. Today the service always runs on Zero2Dev's Node; if the folder pins another version, the command preview warns."
+        "help": "Which Node runs this service: Zero2Dev's Node, the Node runtime selected for the service (Zero2Dev downloaded and checked it, and keeps it in its data folder), or Vite+'s Node, which Vite+ would pick from the version the project pins. With Vite+'s Node the service runs through the Vite+ program installed on the Runtimes page (its data is in the data folder, in vite-plus): the first start downloads the pinned Node there. If you keep Zero2Dev's Node and the folder pins another version, the command preview warns."
       },
       {
         "key": "packageManager",

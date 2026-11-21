@@ -302,3 +302,73 @@ func TestRunExeRealProcess(t *testing.T) {
 		t.Fatalf("a hanging program must be ended by the context: %v after %v", err, time.Since(start))
 	}
 }
+
+// Vite+: the ZIP holds only the launcher; after it is unpacked the launcher runs once with VP_HOME
+// below the data folder (postKinds) and must have made <VP_HOME>\bin\vp.exe.
+func TestInstallViteplusRunsTheLauncherWithVPHome(t *testing.T) {
+	z := makeZip(t, map[string]string{"vp.exe": "LAUNCHER", "vp-shim.exe": "SHIM"})
+	fake := &fakeRun{fn: func(_ context.Context, _ string, onLine func(string)) error { return nil }}
+	e := newEnv(t, map[string][]byte{"/vp/vp.zip": z})
+	e.in.Run = fake.run
+	vpHome := filepath.Join(e.home, "vite-plus")
+	fake.fn = func(_ context.Context, _ string, onLine func(string)) error {
+		onLine("info: installing vite-plus@1.7.0...")
+		onLine("info: Preparing Node.js and pnpm...")
+		p := filepath.Join(vpHome, "bin", "vp.exe")
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			return err
+		}
+		return os.WriteFile(p, []byte("shim"), 0o755)
+	}
+	job := installViteplus(t, e, z)
+	if job.State != "done" || job.RuntimeID == "" {
+		t.Fatalf("job %+v", job)
+	}
+	final := filepath.Join(e.in.Bin, "viteplus-1.7.0-windows-amd64")
+	if fake.calls != 1 || fake.program != filepath.Join(final, "vp.exe") || strings.Join(fake.args, " ") != "--version" {
+		t.Fatalf("run: calls=%d program=%s args=%v", fake.calls, fake.program, fake.args)
+	}
+	found := false
+	for _, kv := range fake.env {
+		if kv == "VP_HOME="+vpHome {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("VP_HOME=%s missing from %v", vpHome, fake.env)
+	}
+	if rs := e.rts.List(); len(rs) != 1 || rs[0].Kind != "viteplus" || rs[0].Binary != filepath.Join(final, "vp.exe") || rs[0].Version != "1.7.0" {
+		t.Fatalf("runtime %+v", rs)
+	}
+}
+
+func TestInstallViteplusFailsWhenTheLauncherMakesNothing(t *testing.T) {
+	z := makeZip(t, map[string]string{"vp.exe": "LAUNCHER"})
+	fake := &fakeRun{fn: func(context.Context, string, func(string)) error { return nil }}
+	e := newEnv(t, map[string][]byte{"/vp/vp.zip": z})
+	e.in.Run = fake.run
+	job := installViteplus(t, e, z)
+	if job.State != "failed" || !strings.Contains(job.Error, "was not made") {
+		t.Fatalf("job %+v", job)
+	}
+	if _, err := os.Stat(filepath.Join(e.in.Bin, "viteplus-1.7.0-windows-amd64")); !os.IsNotExist(err) {
+		t.Fatal("a failed install removes its folder")
+	}
+	if len(e.rts.List()) != 0 {
+		t.Fatal("nothing is registered")
+	}
+}
+
+// installViteplus installs the Vite+ entry (the shared test helper forces the kind "node").
+func installViteplus(t *testing.T, e *env, z []byte) model.Job {
+	t.Helper()
+	entry := model.CatalogEntry{ID: "viteplus-1.7.0-windows-amd64", Kind: "viteplus", Version: "1.7.0", Name: "Vite+ 1.7.0",
+		URL: e.srv.URL + "/vp/vp.zip", BinaryRelPath: "vp.exe", Checksum: model.Checksum{Type: "sha256", Value: sum(z)},
+		OS: runtime.GOOS, Arch: runtime.GOARCH}
+	e.in.Catalog = func() ([]model.CatalogEntry, error) { return []model.CatalogEntry{entry}, nil }
+	j, err := e.in.Start(entry.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return e.wait(t, j.ID)
+}

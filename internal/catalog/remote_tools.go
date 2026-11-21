@@ -60,6 +60,12 @@ var ghSpecs = []ghSpec{
 	{kind: "mailpit", label: "Mailpit", repo: "axllent/mailpit",
 		asset: regexp.MustCompile(`^mailpit-windows-amd64\.zip$`), tag: regexp.MustCompile(`^v(\d+\.\d+\.\d+)$`),
 		bin: "mailpit.exe", strip: 0, keep: 3},
+	// Vite+: the ZIP holds only the launcher (vp.exe, vp-shim.exe); the installer then runs it once
+	// with VP_HOME in the data folder and it fetches the rest there (docs/API.md, "Vite+ details").
+	// One version only: every version shares one VP_HOME.
+	{kind: "viteplus", label: "Vite+", repo: "voidzero-dev/vite-plus",
+		asset: regexp.MustCompile(`^vp-x86_64-pc-windows-msvc\.zip$`), tag: regexp.MustCompile(`^v(\d+\.\d+\.\d+)$`),
+		bin: "vp.exe", strip: 0, keep: 1},
 }
 
 func (r *Remote) ghURL(s ghSpec) string {

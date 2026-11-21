@@ -3,7 +3,6 @@ package kinds
 import (
 	"path/filepath"
 	"slices"
-	"strings"
 	"testing"
 )
 
@@ -93,12 +92,25 @@ func TestNodeViteplusRunsTheProjectsVpCommand(t *testing.T) {
 	}
 }
 
-func TestNodeFromViteplusIsNotAvailableYet(t *testing.T) {
-	if err := Validate("node", map[string]string{"run": "vp", "nodeFrom": "zero2dev"}); err != nil {
-		t.Fatal(err)
+func TestNodeFromViteplusRunsTheGlobalVp(t *testing.T) {
+	for _, v := range []string{"zero2dev", "viteplus"} {
+		if err := Validate("node", map[string]string{"run": "vp", "nodeFrom": v}); err != nil {
+			t.Fatalf("%s: %v", v, err)
+		}
 	}
-	err := Validate("node", map[string]string{"run": "vp", "nodeFrom": "viteplus"})
-	if err == nil || !strings.Contains(err.Error(), "Not available yet") {
-		t.Fatalf("viteplus must be refused with its reason: %v", err)
+	c := Ctx{Home: "D:/z/data", Cwd: "D:/work/app", Port: "5173", Windows: true}
+	pl := Build("node", map[string]string{"run": "vp", "vpCommand": "dev", "nodeFrom": "viteplus"}, nil, c)
+	if want := filepath.Join("D:/z/data", "vite-plus", "bin", "vp.exe"); pl.Program != want {
+		t.Errorf("program %q, want %q", pl.Program, want)
+	}
+	if pl.NotFound != NoVitePlusRuntimeMessage {
+		t.Errorf("not found message %q", pl.NotFound)
+	}
+	if !slices.Contains(pl.Env, "VP_HOME="+filepath.Join("D:/z/data", "vite-plus")) {
+		t.Errorf("VP_HOME missing from %v", pl.Env)
+	}
+	pl = Build("node", map[string]string{"run": "vp", "vpCommand": "dev"}, nil, c)
+	if want := VitePlusShim("D:/work/app", true); pl.Program != want || pl.NotFound != NoVitePlusMessage {
+		t.Errorf("default must stay the project's own vp: %q %q", pl.Program, pl.NotFound)
 	}
 }

@@ -158,9 +158,17 @@ export function preview(svc, { home, runtimes }) {
     // Vite+: the project's own vp command. The mock reads no files: a folder name steers the two
     // answers (no-vp: not installed yet; pinned: the folder pins Node 22.18.0).
     if (svc.kind === "node" && eff.run === "vp" && !svc.command) {
-      program = `${svc.cwd}\\node_modules\\.bin\\vp.cmd`;
-      if (/no-vp/i.test(svc.cwd))
-        warnings.push("vp is not installed in this project: run npm install (or a task) first");
+      if (eff.nodeFrom === "viteplus") {
+        // Vite+'s own program, with its data folder as VP_HOME (the daemon: <data>\vite-plus).
+        program = `${home}\\vite-plus\\bin\\vp.exe`;
+        env.push(`VP_HOME=${home}\\vite-plus`);
+        if (!runtimes.some((r) => r.kind === "viteplus"))
+          warnings.push("Vite+ is not installed: install it on the Runtimes page (the Vite+ card)");
+      } else {
+        program = `${svc.cwd}\\node_modules\\.bin\\vp.cmd`;
+        if (/no-vp/i.test(svc.cwd))
+          warnings.push("vp is not installed in this project: run npm install (or a task) first");
+      }
     }
     if ((svc.args ?? []).length) {
       if (program.endsWith("npm.cmd") || svc.kind === "rust") args.push("--"); // npm passes it to the script, cargo to your program

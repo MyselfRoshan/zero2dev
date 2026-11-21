@@ -25,6 +25,7 @@ import (
 	"zero2dev/internal/apperr"
 	"zero2dev/internal/catalog"
 	"zero2dev/internal/fsutil"
+	"zero2dev/internal/kinds"
 	"zero2dev/internal/model"
 	"zero2dev/internal/runtimes"
 	"zero2dev/internal/store"
@@ -456,6 +457,18 @@ func (in *Installer) process(ctx context.Context, j *job, e model.CatalogEntry, 
 	}
 	if err := in.moveDir(j.ID, stage, final); err != nil {
 		return "", stepErr("Registering", err)
+	}
+	if post, ok := postKinds[e.Kind]; ok {
+		// A launcher: it sets itself up once, below the data folder (postKinds).
+		if err := os.MkdirAll(kinds.VitePlusHome(in.home), 0o755); err != nil {
+			os.RemoveAll(final)
+			return "", stepErr("Installing", err)
+		}
+		if err := in.runInstallerProgram(ctx, j, post, final, filepath.Join(final, rel), post.Made(in.home)); err != nil {
+			os.RemoveAll(final)
+			return "", stepErr("Installing", err)
+		}
+		in.progress(j, 95, "Registering")
 	}
 	rt := model.Runtime{
 		ID: model.NewID("rt_"), Kind: e.Kind, Version: e.Version, Name: e.Name, CatalogID: e.ID,

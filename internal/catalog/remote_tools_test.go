@@ -95,6 +95,11 @@ var ghFixtures = map[string]string{
 		ghRel("v26.8.2-0", false, "Hoppscotch_Cloud_win_x64_portable.zip", strings.Repeat("5", 64))),
 	// Mailpit: the ZIP name carries no version, the tag does.
 	"astral-sh/python-build-standalone": pythonFixture,
+	"voidzero-dev/vite-plus": ghJSON(
+		ghRel("v1.8.0-beta.1", false, "vp-x86_64-pc-windows-msvc.zip", strings.Repeat("8", 64)), // not a release tag: skipped
+		ghRel("v1.7.1", false, "vp-x86_64-unknown-linux-gnu.tar.gz", strings.Repeat("a", 64)),   // no Windows ZIP: skipped
+		ghRel("v1.7.0", false, "vp-x86_64-pc-windows-msvc.zip", "9c142f380b91069dc20b493d1b2cc1fcedb31b06a909ce2cbc353182ad616f98"),
+		ghRel("v1.6.0", false, "vp-x86_64-pc-windows-msvc.zip", strings.Repeat("b", 64))), // only the newest is kept: one VP_HOME
 	"axllent/mailpit": ghJSON(
 		ghRel("v1.35.0-beta.1", false, "mailpit-windows-amd64.zip", strings.Repeat("8", 64)), // not a release tag: skipped
 		ghRel("v1.34.0", true, "mailpit-windows-amd64.zip", strings.Repeat("9", 64)),         // pre-release: skipped
@@ -160,6 +165,7 @@ func TestParseGitHubTools(t *testing.T) {
 		{"dbeaver", "dbeaver/dbeaver", []string{"dbeaver-26.2.4-windows-amd64", "dbeaver-26.2.3-windows-amd64"}, "dbeaver.exe", 1},
 		{"bruno", "usebruno/bruno", []string{"bruno-4.3.0-windows-amd64", "bruno-4.2.0-windows-amd64"}, "Bruno.exe", 0},
 		{"hoppscotch", "hoppscotch/releases", []string{"hoppscotch-26.10.1-windows-amd64", "hoppscotch-26.9.0-windows-amd64"}, "hoppscotch-desktop.exe", 0},
+		{"viteplus", "voidzero-dev/vite-plus", []string{"viteplus-1.7.0-windows-amd64"}, "vp.exe", 0},
 		{"mailpit", "axllent/mailpit", []string{"mailpit-1.33.0-windows-amd64", "mailpit-1.32.0-windows-amd64", "mailpit-1.31.6-windows-amd64"}, "mailpit.exe", 0},
 	} {
 		es, err := parseGitHub([]byte(ghFixtures[c.repo]), specFor(c.kind))
@@ -308,7 +314,7 @@ func TestToolSourcesRefreshOffline(t *testing.T) {
 	for _, e := range es {
 		counts[e.Kind]++
 	}
-	want := map[string]int{"mariadb": 5, "mysql": 2, "postgres": 3, "vscode": 1, "redis": 3, "vscodium": 1, "notepadpp": 1, "heidisql": 1, "dbeaver": 2, "bruno": 2, "hoppscotch": 2, "mailpit": 3, "python": 9}
+	want := map[string]int{"mariadb": 5, "mysql": 2, "postgres": 3, "vscode": 1, "redis": 3, "vscodium": 1, "notepadpp": 1, "heidisql": 1, "dbeaver": 2, "bruno": 2, "hoppscotch": 2, "mailpit": 3, "viteplus": 1, "python": 9}
 	for k, n := range want {
 		if counts[k] != n {
 			t.Errorf("%s: %d remote entries, want %d (%v)", k, counts[k], n, counts)

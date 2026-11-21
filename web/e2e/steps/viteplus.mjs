@@ -62,15 +62,24 @@ export default async function steps({ page, BASE, step, apiCall, assert, pickTyp
     },
   );
 
-  await step("vite+: Node from says which Node runs the service; Vite+'s Node cannot be chosen yet", async () => {
-    await openNode("C:\\work\\app");
-    await page.getByLabel("Run", { exact: true }).selectOption("vp");
-    const from = page.getByLabel("Node from");
-    assert.equal(await from.inputValue(), "zero2dev");
-    assert.equal(await from.locator('option[value="viteplus"]').isDisabled(), true, "the other choice is greyed out");
-    assert.match(await from.locator('option[value="viteplus"]').getAttribute("title"), /Not available yet/);
-    await page.getByText(/Today the service always runs on Zero2Dev's Node/).waitFor();
-  });
+  await step(
+    "vite+: Node from says which Node runs the service; Vite+'s Node runs through the Vite+ program",
+    async () => {
+      await openNode("C:\\work\\app");
+      await page.getByLabel("Run", { exact: true }).selectOption("vp");
+      const from = page.getByLabel("Node from");
+      assert.equal(await from.inputValue(), "zero2dev");
+      assert.equal(await from.locator('option[value="viteplus"]').isDisabled(), false, "Vite+'s Node can be chosen");
+      await page.getByText(/With Vite\+'s Node the service runs through the Vite\+ program/).waitFor();
+      await from.selectOption("viteplus");
+      await preview()
+        .getByText(/vite-plus\\bin\\vp\.exe\s+dev\s+--port 5173/)
+        .waitFor();
+      await notes()
+        .getByText(/Vite\+ is not installed: install it on the Runtimes page/)
+        .waitFor();
+    },
+  );
 
   await step("vite+: vp not installed in the project is said in the preview", async () => {
     await openNode("C:\\work\\no-vp-app");
@@ -107,7 +116,7 @@ export default async function steps({ page, BASE, step, apiCall, assert, pickTyp
   });
 
   await step(
-    "vite+: the choice is stored and the service page says it in words; the API refuses Vite+'s Node",
+    "vite+: the choice is stored and the service page says it in words; the API accepts Vite+'s Node",
     async () => {
       const svc = await apiCall("POST", "/api/services", {
         name: "Vp stored",
@@ -120,17 +129,18 @@ export default async function steps({ page, BASE, step, apiCall, assert, pickTyp
         dependsOn: [],
       });
       assert.equal(svc.settings.nodeFrom, "zero2dev");
-      const refused = await apiCall("POST", "/api/services", {
-        name: "Vp refused",
+      const viaVp = await apiCall("POST", "/api/services", {
+        name: "Vp via Vite+",
         kind: "node",
-        cwd: "C:\\work\\vite-plus-refused",
+        cwd: "C:\\work\\vite-plus-via",
         port: 5174,
         settings: { run: "vp", nodeFrom: "viteplus" },
         env: {},
         args: [],
         dependsOn: [],
       });
-      assert.match(refused.error?.message ?? "", /Not available yet/);
+      assert.equal(viaVp.settings.nodeFrom, "viteplus");
+      await apiCall("DELETE", `/api/services/${viaVp.id}`);
       await page.goto(BASE + `/#/services/${encodeURIComponent(svc.id)}`);
       await page
         .getByTestId("node-from")
