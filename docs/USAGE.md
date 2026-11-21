@@ -383,6 +383,70 @@ If a step fails, the page shows the error, removes what Zero2Dev had created (se
 
 `#/create?framework=laravel&name=Shop` opens the form with a framework and a name filled in (`parent`, `db`, `domain` and `port` work too).
 
+## Rust services
+
+Run a Rust program or web server (Axum, Actix, Rocket ...) with Cargo, without installing Rust yourself.
+
+1. **Install Rust.** On the **Runtimes** page open the Rust card and press **Install**. Zero2Dev downloads rustup (`rustup-init.exe`, checked against the checksum rust-lang publishes) and runs it for you, with the **GNU** toolchain (`x86_64-pc-windows-gnu`). That needs no administrator install and no Visual Studio Build Tools, and nothing outside the Zero2Dev folder is changed (your `PATH` and the registry stay as they are). The first install downloads a few hundred MB and can take several minutes; the card shows what rustup is doing. The version shown on the card is the stable release of the day Zero2Dev was built; rustup installs the current `stable`.
+2. **Create the service.** **New service**, type **Rust**, your project folder (it holds `Cargo.toml`). Choosing the folder fills in the name and, for Axum, port 3000.
+3. **Choose how it runs.** *Run*: `cargo run` (debug build) or `cargo run --release` (optimised, slower to build). *Package* is for a workspace (`-p name`), *Binary* for a package with more than one (`--bin name`), *Features* is a comma list (`--features a,b`). *Arguments for your app* are added after `--`.
+4. **The first start compiles** the project and all its crates, which can take minutes (watch the log). The build output goes to `data\rust\target\<service>`, not into your project, and every service has its own folder. Your program gets the port as the `PORT` variable, so read it, as the Axum starter does.
+
+Zero2Dev sets `RUSTUP_HOME` and `CARGO_HOME` (inside the Rust folder) and puts `cargo\bin` on `PATH`. **Tasks** on the service page run `cargo build`, `cargo test`, `cargo fetch` and `cargo clippy`. The installed toolchain is the *minimal* profile, so run **Add Clippy** once before Clippy. `cargo`, `rustc` and `rustup` also work in your own terminal after **Environment** has them switched on.
+
+**A crate that needs a C compiler** (many `*-sys` crates) cannot be built with the GNU toolchain alone: install MinGW-w64 (or MSYS2) and put its `bin` folder on `PATH`. When a build fails because the linker or compiler is missing, the service log says so in one line.
+
+**New project from a framework** has an **Axum** starter (language Rust): it installs Rust when it is missing, writes `src/main.rs`, runs `cargo init` and `cargo add axum` and `tokio`, and creates the service and a site that proxies to it.
+
+### Try an API with Bruno or Hoppscotch
+
+When a service offers an API, an API client sends requests to it and shows the answers. **Runtimes**, group **API clients**, has two:
+
+- **Bruno** keeps each collection as plain files (`.bru` or `.yml`) in a folder you choose, for example inside your project. They go into Git with the code, so the team shares them. Pick Bruno when the requests belong to the project.
+- **Hoppscotch** is lighter and its collections stay in the app, or in a Hoppscotch account if you sign in. They are not in your project. Pick it for quick tries. It needs WebView2, which Windows 11 has built in (on Windows 10 install the WebView2 Runtime from Microsoft first).
+
+Choose a version, **Install**, then **Open**. Neither program can be told to open a project folder, so there is no *Open in* button on a service page: open the program and point it at the service's address (for example `http://127.0.0.1:8000`).
+
+Where the data is: Bruno's preferences and workspaces are in `data\bruno`; your collections are wherever you saved them. Hoppscotch's data and its collections are in `data\hoppscotch`. Only Hoppscotch's window size stays in `%APPDATA%\io.hoppscotch.desktop`. A copy of the `data` folder therefore carries both programs' settings. A Bruno or Hoppscotch you added by path keeps its own usual places.
+
+### Vite+ projects
+
+[Vite+](https://viteplus.dev) is a toolchain whose command is `vp` (`vp dev`, `vp build`, `vp test`, `vp run`). To run one as a service, choose the type **Node.js** and the run mode **Vite+ (vp ...)**; picking a folder that has `vite-plus` in its `package.json` does both for you. The command is `<project>\node_modules\.bin\vp.cmd dev --port <port>`, and the port is 5173 unless you change it.
+
+- **`vp` must be installed in the project.** Run **Install packages** on the service page (or `npm install`) first. Without it, Start answers "vp is not installed in this project: run npm install (or a task) first".
+- **Which Node runs it.** The setting **Node from** says it plainly: **Zero2Dev's Node** (the default) is the runtime chosen for the service, which Zero2Dev downloaded and checked. **Vite+'s Node** runs the service through the Vite+ program, which picks the version the project pins (`.node-version` and the others below) and downloads it when needed, so the first start can take a while. For that, install **Vite+** on the **Runtimes** page first (Tools group): **Install** downloads Vite+'s launcher and sets it up in `data\vite-plus` (its own Node and pnpm, about 270 MB), and changes nothing outside the Zero2Dev folder. Without it, Start says "Vite+ is not installed". The service page repeats the choice under "Node from".
+- **Pinned Node versions.** If the folder pins a Node (`.node-version`, `devEngines.runtime` in `package.json`, `engines.node` or `.nvmrc`) that the service's Node does not satisfy, the command preview shows one warning, and so does the start log. It names an installed Node that does satisfy it (select it as the service's runtime on the form), or tells you to install one on the Runtimes page. The warning does not stop the start.
+
+### CPU and memory
+
+The Services page has a **CPU** and a **Memory** column, each Dashboard card shows both next to its uptime, and the service page lists them under Process and Started. They are refreshed every 2 seconds while the service runs, and show "-" while it is stopped.
+
+- **CPU** is the share of the **whole machine**, not of one core: a program that keeps one of eight cores fully busy shows `12.5 %`. It is the CPU time of the **whole process tree** (the service and everything it started, such as the workers of a dev server), also of children that have already exited. The first number appears after the second sample, about 4 seconds after the start.
+- **Memory** is the **working set** of the whole process tree: the memory the processes hold in RAM right now. It is the number Task Manager calls "Memory" per process, summed. Memory that processes share is counted once per process, so a tree of many workers can show more than it really uses.
+- The numbers are for orientation: they carry no warnings and no colours. Zero2Dev's own use is not included.
+## Share a project: zero2dev.json
+
+A project can be written to one small file, `zero2dev.json`, that you keep in the project's repository. Whoever clones the repository can set the project up on their own PC with one button.
+
+**What the file holds:** the project's name, its services (name, type, port, settings, start order, the database they use), its sites (domain, type, folder), and the runtimes it needs as a type and a version range, such as "PHP 8.2 or newer". Folders are written relative to the folder of the file, so the file works wherever the repository is cloned.
+
+**What it never holds:**
+
+- No passwords, and no variable whose name looks like a secret (a name with PASSWORD, SECRET, TOKEN, KEY, CREDENTIAL, AUTH, PRIVATE, SIGNATURE, COOKIE or SESSION in it). The export lists each one it left out.
+- No absolute paths, so nothing from your PC's folders. A service whose folder is outside the file's folder is left out, and the export says so.
+- No contents of `.env`, no database data, no runtime programs and no Zero2Dev ids.
+
+**Export.** On the **Projects** page press **Export** on the project's row. The Save as dialog suggests `zero2dev.json` in the project's folder: keep it there, next to the code. The result lists what was left out. If the file already exists, Zero2Dev says so and only replaces it when you press **Overwrite**.
+
+**Import a cloned repository.** On the **Projects** page press **Import project**, choose the `zero2dev.json` or the folder of the clone, and press **Check**. Nothing is changed yet: you see the services and sites that would be created, the runtimes that would be installed, what differs from the file, and any warnings. A **problem** (a file from a newer format, an unknown type, a service that names one that is not there) stops the import and is listed in words; **Import** stays off until there is none. Then press **Import**. A progress view follows, and the result links to the project, its services and its sites, with a **Start the project** button.
+
+**What Zero2Dev installs and changes.** It installs the missing runtimes the same way **Create a project** does, then creates the services, the sites and the project together: if something fails, nothing is left half done (installed runtimes stay). It writes no file in the project's folder.
+
+**Ports and domains may change.** The file's port is used when it is free; otherwise the next free one is taken, and a domain that is already used gets a number. The plan lists every such change under "Different from the file". A runtime is matched by type and version range, so a service may use a newer version than on the PC that exported it.
+
+**Secrets must be set again.** Because the file never holds a secret, open the imported project's services afterwards and set the passwords and keys (for example in `.env` or the service's variables) yourself.
+
+
 ## Snapshots: undo for a whole project
 
 A *snapshot* is a named copy of a project as it is now: the settings of its services, the runtime version each one uses, its sites, its `php.ini` files and the data of its databases. The code in the project folders is not copied. Snapshots are kept in `data\snapshots`, so they move with the data folder.

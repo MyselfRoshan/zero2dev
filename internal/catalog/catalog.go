@@ -123,9 +123,10 @@ func validate(e *model.CatalogEntry) error {
 		return errors.New("url must be https")
 	}
 	n := strings.ToLower(path.Base(strings.Split(e.URL, "?")[0]))
-	// A .phar is one file, not an archive (Composer): the installer puts it in as it is.
-	if !strings.HasSuffix(n, ".zip") && !strings.HasSuffix(n, ".tar.gz") && !strings.HasSuffix(n, ".tgz") && !strings.HasSuffix(n, ".phar") {
-		return errors.New("archive must be .zip, .tar.gz or a single .phar file")
+	// A .phar is one file, not an archive (Composer): the installer puts it in as it is. A .exe is a
+	// program the installer runs (rustup-init.exe).
+	if !strings.HasSuffix(n, ".zip") && !strings.HasSuffix(n, ".tar.gz") && !strings.HasSuffix(n, ".tgz") && !strings.HasSuffix(n, ".phar") && !strings.HasSuffix(n, ".exe") {
+		return errors.New("archive must be .zip, .tar.gz or a single .phar or .exe file")
 	}
 	switch e.Checksum.Type {
 	case "sha256":

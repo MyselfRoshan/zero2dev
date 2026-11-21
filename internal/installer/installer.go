@@ -25,6 +25,7 @@ import (
 	"zero2dev/internal/apperr"
 	"zero2dev/internal/catalog"
 	"zero2dev/internal/fsutil"
+	"zero2dev/internal/kinds"
 	"zero2dev/internal/model"
 	"zero2dev/internal/runtimes"
 	"zero2dev/internal/store"
@@ -58,6 +59,9 @@ type Installer struct {
 	HashTimeout    time.Duration
 	// XdebugPage lists the Xdebug downloads (catalog.XdebugPage; tests override it).
 	XdebugPage string
+	// Run runs the program of an .exe download (exeKinds); tests use a fake that creates the
+	// files a real run would.
+	Run ExeRunner
 
 	mu   sync.Mutex
 	jobs map[string]*job
@@ -86,6 +90,7 @@ func New(home string, st *store.Store, rt *runtimes.Manager, em Emitter) *Instal
 		Rename:  os.Rename, Sleep: time.Sleep, RenameAttempts: 20,
 		StallTimeout: 60 * time.Second, RetryDelays: []time.Duration{time.Second, 3 * time.Second},
 		HashTimeout: 10 * time.Second, XdebugPage: catalog.XdebugPage,
+		Run:  runExe,
 		jobs: map[string]*job{},
 	}
 }
@@ -287,7 +292,7 @@ func (in *Installer) run(j *job, e model.CatalogEntry, acq acquire) {
 	archive, want, got, err := acq(ctx)
 	rid := ""
 	if err == nil {
-		rid, err = in.process(j, e, archive, want, got)
+		rid, err = in.process(ctx, j, e, archive, want, got)
 	}
 	// Remove the download before the job is reported finished, so whoever
 	// sees "done" or "failed" also sees an empty tmp folder.
@@ -394,7 +399,7 @@ func (in *Installer) copyArchive(ctx context.Context, j *job, src, want string) 
 }
 
 // process is the shared tail: verify, extract, move into place, register.
-func (in *Installer) process(j *job, e model.CatalogEntry, archive, want, got string) (string, error) {
+func (in *Installer) process(ctx context.Context, j *job, e model.CatalogEntry, archive, want, got string) (string, error) {
 	in.progress(j, 82, "Verifying")
 	_, algo := hasherFor(want)
 	in.log.printf(j.ID, "%s expected=%s got=%s", algo, want, got)
@@ -412,7 +417,11 @@ func (in *Installer) process(j *job, e model.CatalogEntry, archive, want, got st
 		return "", stepErr("Extracting", err)
 	}
 	defer os.RemoveAll(stage) // no-op after a successful rename
-	switch low := strings.ToLower(archive); {
+	low := strings.ToLower(archive)
+	if strings.HasSuffix(low, ".exe") {
+		return in.processProgram(ctx, j, e, archive, stage)
+	}
+	switch {
 	case strings.HasSuffix(low, ".zip"):
 		err = extractZip(archive, stage, e.StripComponents)
 	case strings.HasSuffix(low, ".phar"):
@@ -448,6 +457,18 @@ func (in *Installer) process(j *job, e model.CatalogEntry, archive, want, got st
 	}
 	if err := in.moveDir(j.ID, stage, final); err != nil {
 		return "", stepErr("Registering", err)
+	}
+	if post, ok := postKinds[e.Kind]; ok {
+		// A launcher: it sets itself up once, below the data folder (postKinds).
+		if err := os.MkdirAll(kinds.VitePlusHome(in.home), 0o755); err != nil {
+			os.RemoveAll(final)
+			return "", stepErr("Installing", err)
+		}
+		if err := in.runInstallerProgram(ctx, j, post, final, filepath.Join(final, rel), post.Made(in.home)); err != nil {
+			os.RemoveAll(final)
+			return "", stepErr("Installing", err)
+		}
+		in.progress(j, 95, "Registering")
 	}
 	rt := model.Runtime{
 		ID: model.NewID("rt_"), Kind: e.Kind, Version: e.Version, Name: e.Name, CatalogID: e.ID,

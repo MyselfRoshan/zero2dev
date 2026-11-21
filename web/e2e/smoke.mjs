@@ -101,13 +101,14 @@ await step("runtimes: a card per kind, first check, version list per kind", asyn
   const kinds = await page.locator("article[data-kind]").evaluateAll((els) => els.map((e) => e.dataset.kind));
   // prettier-ignore
   assert.deepEqual(kinds, [
-    "node", "php", "go", "java", "python", // languages
-    "composer", // tools
+    "node", "php", "go", "java", "python", "rust", // languages
+    "composer", "viteplus", // tools
     "caddy", "nginx", // web servers
     "mariadb", "mysql", "postgres", "redis", // databases
     "mailpit", // mail
     "vscode", "vscodium", "notepadpp", // code editors
     "heidisql", "dbeaver", // database tools
+    "bruno", "hoppscotch", // API clients
   ]);
   for (const k of kinds) await card(k).getByTestId(`count-${k}`).getByText("Not installed").waitFor();
   await expand("php");
@@ -1504,6 +1505,11 @@ await step(
     "tasks",
     "detect",
     "newproject",
+    "rust",
+    "apiclients",
+    "viteplus",
+    "usage",
+    "projectfile",
   ]) {
     const { default: steps } = await import(`./steps/${f}.mjs`);
     await steps(t);

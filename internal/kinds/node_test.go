@@ -56,3 +56,61 @@ func TestNodePnpmAndYarnMakeCorepackOnce(t *testing.T) {
 		t.Fatalf("%+v", pl.Pre)
 	}
 }
+
+func TestNodeViteplusRunsTheProjectsVpCommand(t *testing.T) {
+	c := ctx()
+	c.Cwd = filepath.FromSlash("D:/work/app")
+	vp := filepath.Join(c.Cwd, "node_modules", ".bin", "vp.cmd")
+	cases := []struct {
+		set  map[string]string
+		args []string
+	}{
+		{map[string]string{"run": "vp"}, []string{"dev", "--port", "3306", "--strictPort"}},
+		{map[string]string{"run": "vp", "vpCommand": "build"}, []string{"build"}},
+		{map[string]string{"run": "vp", "vpCommand": "test"}, []string{"test"}},
+		{map[string]string{"run": "vp", "vpCommand": "run", "vpScript": "lint:all"}, []string{"run", "lint:all"}},
+	}
+	for _, tc := range cases {
+		if err := Validate("node", tc.set); err != nil {
+			t.Fatalf("%v: %v", tc.set, err)
+		}
+		pl := Build("node", tc.set, nil, c)
+		if pl.Program != vp || !slices.Equal(pl.Args, tc.args) || pl.NotFound != NoVitePlusMessage {
+			t.Errorf("%v: %+v", tc.set, pl)
+		}
+	}
+	// the script field belongs to vp run only
+	if pl := Build("node", map[string]string{"run": "vp", "vpScript": "x"}, nil, c); slices.Contains(pl.Args, "x") {
+		t.Errorf("vpScript without vp run: %v", pl.Args)
+	}
+	// the other modes are unchanged
+	if pl := Build("node", map[string]string{"run": "npm", "npmScript": "dev"}, nil, c); pl.Program != "npm" || pl.NotFound != "" {
+		t.Errorf("%+v", pl)
+	}
+	if err := Validate("node", map[string]string{"run": "vp", "vpCommand": "run", "vpScript": ""}); err == nil {
+		t.Error("vp run needs a script")
+	}
+}
+
+func TestNodeFromViteplusRunsTheGlobalVp(t *testing.T) {
+	for _, v := range []string{"zero2dev", "viteplus"} {
+		if err := Validate("node", map[string]string{"run": "vp", "nodeFrom": v}); err != nil {
+			t.Fatalf("%s: %v", v, err)
+		}
+	}
+	c := Ctx{Home: "D:/z/data", Cwd: "D:/work/app", Port: "5173", Windows: true}
+	pl := Build("node", map[string]string{"run": "vp", "vpCommand": "dev", "nodeFrom": "viteplus"}, nil, c)
+	if want := filepath.Join("D:/z/data", "vite-plus", "bin", "vp.exe"); pl.Program != want {
+		t.Errorf("program %q, want %q", pl.Program, want)
+	}
+	if pl.NotFound != NoVitePlusRuntimeMessage {
+		t.Errorf("not found message %q", pl.NotFound)
+	}
+	if !slices.Contains(pl.Env, "VP_HOME="+filepath.Join("D:/z/data", "vite-plus")) {
+		t.Errorf("VP_HOME missing from %v", pl.Env)
+	}
+	pl = Build("node", map[string]string{"run": "vp", "vpCommand": "dev"}, nil, c)
+	if want := VitePlusShim("D:/work/app", true); pl.Program != want || pl.NotFound != NoVitePlusMessage {
+		t.Errorf("default must stay the project's own vp: %q %q", pl.Program, pl.NotFound)
+	}
+}

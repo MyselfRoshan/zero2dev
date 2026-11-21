@@ -32,6 +32,7 @@ import (
 	"zero2dev/internal/migrate"
 	"zero2dev/internal/model"
 	"zero2dev/internal/newproject"
+	"zero2dev/internal/projectfile"
 	"zero2dev/internal/runtimes"
 	"zero2dev/internal/sites"
 	"zero2dev/internal/snapshot"
@@ -185,6 +186,7 @@ func run() error {
 	newProj := newproject.New(cfg.Home, st, sup, inst, rt, site, dbm, jobReg, hub.Publish)
 	newProj.Launch = launch.Start
 	newProj.Catalog = loadCatalog
+	projFile := projectfile.New(cfg.Home, st, sup, inst, rt, site, jobReg, hub.Publish)
 	srv := api.New(api.Deps{
 		Cfg: cfg, Store: st, Hub: hub, Sup: sup, Runtimes: rt, Installer: inst, Sites: site,
 		Catalog: loadCatalog, Remote: remote,
@@ -197,7 +199,7 @@ func run() error {
 		EnvReport:  func(d store.Data) envreg.Report { return envreg.Inspect(cfg.Home, d) },
 		Quit:       quit,
 		Jobs:       jobReg, DB: dbm, Snapshots: snaps, Migrate: migr,
-		Tasks: taskMgr, NewProject: newProj,
+		Tasks: taskMgr, NewProject: newProj, ProjectFile: projFile,
 	})
 
 	httpSrv := &http.Server{Handler: srv, ReadHeaderTimeout: 10 * time.Second}
@@ -240,6 +242,7 @@ func run() error {
 	if openOnStart {
 		openBrowser(url)
 	}
+	sup.StartUsage() // CPU and memory per service, every 2 seconds; ends with StopAll
 	go sup.AutostartAll()
 
 	select {

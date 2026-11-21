@@ -175,20 +175,27 @@ func (j *job) do() (err error) {
 
 // installOne installs a catalog entry through the installer and waits for it.
 func (m *Manager) installOne(in Install, progress func(percent int)) error {
-	jb, err := m.Installer.Start(in.CatalogID)
+	return InstallAndWait(m.Installer, m.St, in.CatalogID, m.poll(), m.installWait(), progress)
+}
+
+// InstallAndWait installs a catalog entry through the installer and waits for it (an entry that is
+// already installed is fine; one that is being installed is waited for). New project and the
+// project file import share it.
+func InstallAndWait(inst InstallerAPI, st *store.Store, catalogID string, poll, wait time.Duration, progress func(percent int)) error {
+	jb, err := inst.Start(catalogID)
 	var ae *apperr.Error
 	if err != nil {
 		switch {
 		case errors.As(err, &ae) && ae.Status == 409 && strings.Contains(ae.Message, "already installed"):
 			return nil
 		case errors.As(err, &ae) && ae.Status == 409 && strings.Contains(ae.Message, "already being installed"):
-			return m.waitInstalled(in.CatalogID)
+			return waitInstalled(st, catalogID, poll, wait)
 		}
 		return err
 	}
-	deadline := time.Now().Add(m.installWait())
+	deadline := time.Now().Add(wait)
 	for {
-		cur, ok := m.Installer.Get(jb.ID)
+		cur, ok := inst.Get(jb.ID)
 		switch {
 		case !ok:
 			return errors.New("the install job disappeared")
@@ -201,17 +208,17 @@ func (m *Manager) installOne(in Install, progress func(percent int)) error {
 		if time.Now().After(deadline) {
 			return errors.New("it took too long")
 		}
-		time.Sleep(m.poll())
+		time.Sleep(poll)
 	}
 }
 
-func (m *Manager) waitInstalled(catalogID string) error {
-	deadline := time.Now().Add(m.installWait())
+func waitInstalled(st *store.Store, catalogID string, poll, wait time.Duration) error {
+	deadline := time.Now().Add(wait)
 	for time.Now().Before(deadline) {
-		if slices.ContainsFunc(m.St.Snapshot().Runtimes, func(r model.Runtime) bool { return r.CatalogID == catalogID }) {
+		if slices.ContainsFunc(st.Snapshot().Runtimes, func(r model.Runtime) bool { return r.CatalogID == catalogID }) {
 			return nil
 		}
-		time.Sleep(m.poll())
+		time.Sleep(poll)
 	}
 	return errors.New("it took too long")
 }

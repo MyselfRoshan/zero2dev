@@ -128,3 +128,67 @@ func TestLaunchRuntime(t *testing.T) {
 		t.Fatal(c)
 	}
 }
+
+func TestLaunchAPIClients(t *testing.T) {
+	e := newEnv(t)
+	exe := func(name string) string {
+		p := filepath.Join(t.TempDir(), name)
+		os.WriteFile(p, []byte("x"), 0o755)
+		return p
+	}
+	bruno, hopp, myBruno := exe("Bruno.exe"), exe("hoppscotch-desktop.exe"), exe("Bruno.exe")
+	project := t.TempDir()
+	e.srv.Store.Update(func(d *store.Data) error {
+		d.Runtimes = append(d.Runtimes,
+			model.Runtime{ID: "rt_bruno", Kind: "bruno", Name: "Bruno", Binary: bruno, Source: "installed"},
+			model.Runtime{ID: "rt_hopp", Kind: "hoppscotch", Name: "Hoppscotch", Binary: hopp, Source: "installed"},
+			model.Runtime{ID: "rt_mybruno", Kind: "bruno", Name: "My Bruno", Binary: myBruno, Source: "registered"})
+		d.Services = append(d.Services, model.Service{ID: "svc_pg", Name: "pg", Kind: "postgres", Port: 5432})
+		return nil
+	})
+	type call struct {
+		bin, dir  string
+		args, env []string
+	}
+	var calls []call
+	e.srv.Launch = func(bin string, args []string, dir string, env []string) error {
+		calls = append(calls, call{bin, dir, args, env})
+		return nil
+	}
+	last := func() call { return calls[len(calls)-1] }
+
+	// Bruno: its data folder is a switch; a path or a service in the body is ignored.
+	for _, body := range []map[string]string{nil, {"path": project}, {"serviceId": "svc_pg"}} {
+		if r := e.do("POST", "/api/runtimes/rt_bruno/launch", body, nil); r.StatusCode != 204 {
+			t.Fatalf("bruno %v: %d", body, r.StatusCode)
+		}
+		c := last()
+		if c.bin != bruno || c.dir != filepath.Dir(bruno) || len(c.env) != 0 ||
+			strings.Join(c.args, " ") != "--user-data-dir="+filepath.Join(e.home, "bruno") {
+			t.Fatalf("bruno call %+v", c)
+		}
+	}
+	if st, err := os.Stat(filepath.Join(e.home, "bruno")); err != nil || !st.IsDir() {
+		t.Fatal("data bruno must exist")
+	}
+
+	// Hoppscotch: started in data\hoppscotch (the portable build keeps its data
+	// in the working directory) with its WebView2 profile there too.
+	if r := e.do("POST", "/api/runtimes/rt_hopp/launch", map[string]string{"path": project}, nil); r.StatusCode != 204 {
+		t.Fatalf("hoppscotch: %d", r.StatusCode)
+	}
+	hd := filepath.Join(e.home, "hoppscotch")
+	if c := last(); c.bin != hopp || c.dir != hd || len(c.args) != 0 ||
+		strings.Join(c.env, " ") != "WEBVIEW2_USER_DATA_FOLDER="+filepath.Join(hd, "webview2") {
+		t.Fatalf("hoppscotch call %+v", c)
+	}
+	if st, err := os.Stat(hd); err != nil || !st.IsDir() {
+		t.Fatal("data hoppscotch must exist")
+	}
+
+	// Bruno registered by path is the user's own install: nothing is added.
+	e.do("POST", "/api/runtimes/rt_mybruno/launch", nil, nil)
+	if c := last(); len(c.args) != 0 || len(c.env) != 0 || c.dir != filepath.Dir(myBruno) {
+		t.Fatalf("registered Bruno must be left alone: %+v", c)
+	}
+}

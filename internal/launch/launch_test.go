@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"zero2dev/internal/model"
 )
@@ -69,4 +70,61 @@ func TestConnectArgsWithPassword(t *testing.T) {
 	if strings.Contains(strings.Join(got, " "), "password") {
 		t.Errorf("dbeaver with |: %q", got)
 	}
+}
+
+func TestToolDataArgsAPIClients(t *testing.T) {
+	home := t.TempDir()
+	args, env, err := ToolDataArgs(model.Runtime{Kind: "bruno", Source: "installed"}, home)
+	want := "--user-data-dir=" + filepath.Join(home, "bruno")
+	if err != nil || len(args) != 1 || args[0] != want || len(env) != 0 {
+		t.Fatalf("bruno: %v %v %v", args, env, err)
+	}
+	hopp := model.Runtime{Kind: "hoppscotch", Source: "installed"}
+	args, env, err = ToolDataArgs(hopp, home)
+	if err != nil || len(args) != 0 || len(env) != 1 || env[0] != "WEBVIEW2_USER_DATA_FOLDER="+filepath.Join(home, "hoppscotch", "webview2") {
+		t.Fatalf("hoppscotch: %v %v %v", args, env, err)
+	}
+	if d := ToolWorkDir(hopp, home); d != filepath.Join(home, "hoppscotch") {
+		t.Fatalf("work dir %q", d)
+	}
+	if st, err := os.Stat(filepath.Join(home, "hoppscotch")); err != nil || !st.IsDir() {
+		t.Fatal("data hoppscotch must be created")
+	}
+	for _, rt := range []model.Runtime{{Kind: "bruno", Source: "registered"}, {Kind: "hoppscotch", Source: "registered"}, {Kind: "vscode", Source: "installed"}} {
+		if d := ToolWorkDir(rt, home); d != "" {
+			t.Errorf("%s/%s must not get a work dir, got %q", rt.Kind, rt.Source, d)
+		}
+	}
+	if a, e, err := ToolDataArgs(model.Runtime{Kind: "bruno", Source: "registered"}, home); a != nil || e != nil || err != nil {
+		t.Fatalf("own install untouched: %v %v %v", a, e, err)
+	}
+}
+
+// TestHelperEnvProcess is run by TestStartDropsElectronRunAsNode as the started program.
+func TestHelperEnvProcess(t *testing.T) {
+	out := os.Getenv("Z2D_ENV_OUT")
+	if out == "" {
+		t.Skip("helper")
+	}
+	_, set := os.LookupEnv("ELECTRON_RUN_AS_NODE")
+	os.WriteFile(out, []byte(strings.Join([]string{map[bool]string{true: "set", false: "unset"}[set], os.Getenv("Z2D_EXTRA")}, " ")), 0o644)
+}
+
+func TestStartDropsElectronRunAsNode(t *testing.T) {
+	out := filepath.Join(t.TempDir(), "env.txt")
+	t.Setenv("ELECTRON_RUN_AS_NODE", "1")
+	t.Setenv("Z2D_ENV_OUT", out)
+	if err := Start(os.Args[0], []string{"-test.run=^TestHelperEnvProcess$"}, t.TempDir(), []string{"Z2D_EXTRA=yes"}); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 100; i++ {
+		if b, err := os.ReadFile(out); err == nil && len(b) > 0 {
+			if string(b) != "unset yes" {
+				t.Fatalf("child env: %q", b)
+			}
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	t.Fatal("the started program wrote nothing")
 }

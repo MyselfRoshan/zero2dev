@@ -237,6 +237,22 @@
   {
     "os": "windows",
     "arch": "amd64",
+    "id": "viteplus-1.7.0-windows-amd64",
+    "kind": "viteplus",
+    "version": "1.7.0",
+    "name": "Vite+ 1.7.0",
+    "url": "https://github.com/voidzero-dev/vite-plus/releases/download/v1.7.0/vp-x86_64-pc-windows-msvc.zip",
+    "checksum": {
+      "type": "sha256",
+      "value": "9c142f380b91069dc20b493d1b2cc1fcedb31b06a909ce2cbc353182ad616f98"
+    },
+    "binaryRelPath": "vp.exe",
+    "stripComponents": 0,
+    "homepage": "https://github.com/voidzero-dev/vite-plus/releases/tag/v1.7.0"
+  },
+  {
+    "os": "windows",
+    "arch": "amd64",
     "id": "vscode-1.145.0-windows-amd64",
     "kind": "vscode",
     "version": "1.145.0",
@@ -313,6 +329,38 @@
     "binaryRelPath": "dbeaver.exe",
     "stripComponents": 1,
     "homepage": "https://github.com/dbeaver/dbeaver/releases/tag/26.2.4"
+  },
+  {
+    "os": "windows",
+    "arch": "amd64",
+    "id": "bruno-4.3.0-windows-amd64",
+    "kind": "bruno",
+    "version": "4.3.0",
+    "name": "Bruno 4.3.0",
+    "url": "https://github.com/usebruno/bruno/releases/download/v4.3.0/bruno_4.3.0_x64_win.zip",
+    "checksum": {
+      "type": "sha256",
+      "value": "d00a649e0120168f26b630aa3253c36f2fdc9a84b1a13ff6fd96abc48f7be3f0"
+    },
+    "binaryRelPath": "Bruno.exe",
+    "stripComponents": 0,
+    "homepage": "https://github.com/usebruno/bruno/releases/tag/v4.3.0"
+  },
+  {
+    "os": "windows",
+    "arch": "amd64",
+    "id": "hoppscotch-26.10.1-windows-amd64",
+    "kind": "hoppscotch",
+    "version": "26.10.1",
+    "name": "Hoppscotch 26.10.1",
+    "url": "https://github.com/hoppscotch/releases/releases/download/v26.10.1-0/Hoppscotch_Cloud_win_x64_portable.zip",
+    "checksum": {
+      "type": "sha256",
+      "value": "00cd055f0a562ea02943069cf2b05d6189c3f26a8a61cec8d81c88000e56b61b"
+    },
+    "binaryRelPath": "hoppscotch-desktop.exe",
+    "stripComponents": 0,
+    "homepage": "https://github.com/hoppscotch/releases/releases/tag/v26.10.1-0"
   },
   {
     "os": "windows",
@@ -445,5 +493,21 @@
     "stripComponents": 1,
     "homepage": "https://github.com/astral-sh/python-build-standalone/releases/tag/20261026",
     "line": "3.12"
+  },
+  {
+    "os": "windows",
+    "arch": "amd64",
+    "id": "rust-1.100.0-windows-amd64",
+    "kind": "rust",
+    "version": "1.100.0",
+    "name": "Rust 1.100.0 (stable, GNU)",
+    "url": "https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-gnu/rustup-init.exe",
+    "checksum": {
+      "type": "shasums",
+      "url": "https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-gnu/rustup-init.exe.sha256"
+    },
+    "binaryRelPath": "cargo/bin/cargo.exe",
+    "stripComponents": 0,
+    "homepage": "https://rust-lang.github.io/rustup/installation/windows.html"
   }
 ]

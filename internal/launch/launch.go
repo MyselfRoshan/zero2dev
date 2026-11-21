@@ -21,9 +21,16 @@ import (
 func Start(bin string, args []string, dir string, env []string) error {
 	cmd := exec.Command(bin, args...) // never a shell
 	cmd.Dir = dir
-	if len(env) > 0 {
-		cmd.Env = append(os.Environ(), env...)
+	// ELECTRON_RUN_AS_NODE (set when the daemon was started from VS Code's
+	// terminal) turns every Electron program (VS Code, VSCodium, Bruno) into a
+	// plain Node that rejects its options and shows no window.
+	var kept []string
+	for _, e := range os.Environ() {
+		if !strings.HasPrefix(strings.ToUpper(e), "ELECTRON_RUN_AS_NODE=") {
+			kept = append(kept, e)
+		}
 	}
+	cmd.Env = append(kept, env...)
 	detach(cmd)
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("cannot start %s: %w", filepath.Base(bin), err)
@@ -135,6 +142,27 @@ func ToolDataArgs(rt model.Runtime, home string) (args, env []string, err error)
 			return nil, nil, err
 		}
 		return []string{"-data", ws}, nil, nil
+	case "bruno":
+		// Electron's switch: preferences, the workspace list and the Chromium
+		// profile go to <home>\bruno instead of %APPDATA%\bruno.
+		return []string{"--user-data-dir=" + dir}, nil, nil
+	case "hoppscotch":
+		// Collections and history live in the WebView2 profile, which Tauri
+		// puts in %LOCALAPPDATA%\io.hoppscotch.desktop unless told otherwise.
+		// The rest (hoppscotch-desktop-data, logs) follows the working
+		// directory, see ToolWorkDir. Only the window size stays in %APPDATA%.
+		return nil, []string{"WEBVIEW2_USER_DATA_FOLDER=" + filepath.Join(dir, "webview2")}, nil
 	}
 	return nil, nil, nil
+}
+
+// ToolWorkDir is the working directory a tool needs to keep its data in
+// <home>\<name>: Hoppscotch Desktop's portable build writes hoppscotch-desktop-data
+// and logs into its working directory. "" for every other tool (the caller's
+// choice applies). ToolDataArgs creates the folder.
+func ToolWorkDir(rt model.Runtime, home string) string {
+	if rt.Source != "installed" || rt.Kind != "hoppscotch" {
+		return ""
+	}
+	return filepath.Join(home, model.DataDirName(rt.Kind))
 }

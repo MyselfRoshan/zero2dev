@@ -34,6 +34,9 @@ type Plan struct {
 	Dirs     []string // folders to create before the start
 	Pre      []PreStep
 	Warnings []string
+	// NotFound, when set, is the message for a Program (an absolute path) that does not exist, instead
+	// of the general "command ... not found" (Vite+: "vp is not installed in this project ...").
+	NotFound string
 }
 
 // PreStep is a program that runs before the service's own program, to make something it needs
@@ -142,10 +145,11 @@ func Build(kind string, settings map[string]string, extra []string, c Ctx) *Plan
 	pl.Args = append(pl.Args, tail...)
 	if kind == "node" {
 		nodePackageManager(pl, eff, c)
+		nodeVitePlus(pl, eff, c)
 	}
 	if len(extra) > 0 {
-		if pl.Program == "npm" {
-			pl.Args = append(pl.Args, "--") // npm passes what follows to the script
+		if pl.Program == "npm" || kind == "rust" {
+			pl.Args = append(pl.Args, "--") // npm passes what follows to the script, cargo to your program
 		}
 		pl.Args = append(pl.Args, c.ExpandPlain(extra)...)
 	}
@@ -160,6 +164,9 @@ func Build(kind string, settings map[string]string, extra []string, c Ctx) *Plan
 	}
 	if kind == "python" && c.Home != "" && c.ServiceID != "" {
 		pythonPlan(pl, c) // the virtual environment of the service
+	}
+	if kind == "rust" && c.Home != "" && c.ServiceID != "" {
+		rustPlan(pl, c) // CARGO_TARGET_DIR of the service
 	}
 	if kind == "mailpit" && c.Data != "" {
 		pl.Dirs = append(pl.Dirs, c.Data) // Mailpit creates its database file, not the folder
@@ -216,6 +223,9 @@ func BuildCustom(kind string, args []string, c Ctx) *Plan {
 		for _, e := range p.Env {
 			pl.Env = append(pl.Env, e.Name+"="+c.expand(e.Value, "", eff, nil))
 		}
+	}
+	if kind == "rust" && c.Home != "" && c.ServiceID != "" {
+		rustPlan(pl, c)
 	}
 	return pl
 }

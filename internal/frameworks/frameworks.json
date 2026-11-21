@@ -1018,6 +1018,74 @@
       }
     },
     {
+      "id": "axum",
+      "label": "Axum",
+      "language": "rust",
+      "summary": "A small Axum web server (Tokio), built and run with Cargo.",
+      "homepage": "https://github.com/tokio-rs/axum",
+      "runtime": {
+        "kind": "rust",
+        "min": "1.75"
+      },
+      "steps": [
+        {
+          "type": "files",
+          "label": "Writing src/main.rs",
+          "files": {
+            "src/main.rs": "use axum::{routing::get, Router};\n\n#[tokio::main]\nasync fn main() {\n    let port = std::env::var(\"PORT\").unwrap_or_else(|_| \"3000\".to_string());\n    let app = Router::new().route(\"/\", get(|| async { \"{name} works.\" }));\n    let listener = tokio::net::TcpListener::bind(format!(\"127.0.0.1:{}\", port))\n        .await\n        .unwrap();\n    println!(\"listening on http://127.0.0.1:{}\", port);\n    axum::serve(listener, app).await.unwrap();\n}\n"
+          }
+        },
+        {
+          "type": "run",
+          "label": "Creating the Cargo package",
+          "program": "cargo",
+          "args": [
+            "init",
+            "--vcs",
+            "none",
+            "--name",
+            "{slug}"
+          ],
+          "in": "project"
+        },
+        {
+          "type": "run",
+          "label": "Adding Axum",
+          "program": "cargo",
+          "args": [
+            "add",
+            "axum@0.8"
+          ],
+          "in": "project",
+          "timeout": 900
+        },
+        {
+          "type": "run",
+          "label": "Adding Tokio",
+          "program": "cargo",
+          "args": [
+            "add",
+            "tokio@1",
+            "--features",
+            "macros,rt-multi-thread,net"
+          ],
+          "in": "project",
+          "timeout": 900
+        }
+      ],
+      "services": [
+        {
+          "name": "{name}",
+          "kind": "rust",
+          "port": 3000
+        }
+      ],
+      "site": {
+        "type": "proxy",
+        "https": true
+      }
+    },
+    {
       "id": "html",
       "label": "HTML and CSS",
       "language": "static",

@@ -17,6 +17,7 @@ const DATA_DIR = {
   go: "go",
   python: "python",
   composer: "composer",
+  rust: "rust",
 };
 const PROG = {
   node: "node.exe",
@@ -24,6 +25,7 @@ const PROG = {
   go: "go.exe",
   java: "java.exe",
   python: "python.exe",
+  rust: "cargo.exe",
   caddy: "caddy.exe",
   nginx: "nginx.exe",
   mariadb: "mariadbd.exe",
@@ -78,6 +80,8 @@ export function validateSettings(kind, settings) {
       return `${o.label}: must be between ${o.min} and ${o.max}`;
     if (o.type === "select" && !o.choices.some((c) => c.value === v))
       return `${o.label}: "${v}" is not one of the choices`;
+    const off = o.type === "select" && o.choices.find((c) => c.value === v)?.disabled;
+    if (off) return `${o.label}: "${o.choices.find((c) => c.value === v).label}" cannot be chosen: ${off}`;
     if (
       o.pattern &&
       v &&
@@ -151,8 +155,23 @@ export function preview(svc, { home, runtimes }) {
     // pnpm and Yarn come from Corepack (the daemon makes it before the first start).
     if (svc.kind === "node" && ["pnpm", "yarn"].includes(eff.packageManager) && program.endsWith("npm.cmd"))
       program = `${home}\\node\\corepack\\bin\\${eff.packageManager}.cmd`;
+    // Vite+: the project's own vp command. The mock reads no files: a folder name steers the two
+    // answers (no-vp: not installed yet; pinned: the folder pins Node 22.18.0).
+    if (svc.kind === "node" && eff.run === "vp" && !svc.command) {
+      if (eff.nodeFrom === "viteplus") {
+        // Vite+'s own program, with its data folder as VP_HOME (the daemon: <data>\vite-plus).
+        program = `${home}\\vite-plus\\bin\\vp.exe`;
+        env.push(`VP_HOME=${home}\\vite-plus`);
+        if (!runtimes.some((r) => r.kind === "viteplus"))
+          warnings.push("Vite+ is not installed: install it on the Runtimes page (the Vite+ card)");
+      } else {
+        program = `${svc.cwd}\\node_modules\\.bin\\vp.cmd`;
+        if (/no-vp/i.test(svc.cwd))
+          warnings.push("vp is not installed in this project: run npm install (or a task) first");
+      }
+    }
     if ((svc.args ?? []).length) {
-      if (program.endsWith("npm.cmd")) args.push("--");
+      if (program.endsWith("npm.cmd") || svc.kind === "rust") args.push("--"); // npm passes it to the script, cargo to your program
       args.push(...svc.args.map(plain));
     }
     if (svc.kind === "php") files.push(`${dataDir}\\php.ini`);
@@ -163,11 +182,28 @@ export function preview(svc, { home, runtimes }) {
     program = `${venv}\\Scripts\\python.exe`;
     env.push(`VIRTUAL_ENV=${venv}`);
   }
+  // A Rust service builds into a target folder of its own; RUSTUP_HOME and CARGO_HOME are the runtime's.
+  if (svc.kind === "rust") {
+    const m = /^(.*)\\cargo\\bin\\cargo\.exe$/i.exec(program);
+    if (m) env.push(`RUSTUP_HOME=${m[1]}\\rustup`, `CARGO_HOME=${m[1]}\\cargo`);
+    env.push(`CARGO_TARGET_DIR=${home}\\rust\\target\\${svc.id}`);
+  }
+  if (svc.kind === "node" && rt && !svc.command && /pinned/i.test(svc.cwd ?? "")) {
+    const alt = runtimes.find((r) => r.kind === "node" && r.id !== rt.id && r.version.startsWith("22."));
+    warnings.push(
+      rt.version.startsWith("22.")
+        ? ""
+        : `This folder pins Node 22.18.0 (.node-version) but the Node of this service is ${rt.version}: ` +
+            (alt
+              ? `Node ${alt.version} is installed, select it as this service's runtime`
+              : "install a matching Node on the Runtimes page and select it as this service's runtime"),
+    );
+  }
   for (const e of p?.env ?? []) env.push(`${e.name}=${expand(e.value)}`);
   for (const [k, v] of Object.entries(svc.env ?? {})) env.push(`${k}=${v}`);
   if (svc.port > 0) env.push(`PORT=${svc.port}`);
   const workdir = svc.cwd || (p?.dataDir === "service" ? dataDir : program.replace(/[\\/][^\\/]*$/, ""));
-  return { program, args, env, workdir, dataDir, files, warnings };
+  return { program, args, env, workdir, dataDir, files, warnings: warnings.filter(Boolean) };
 }
 
 /** The bundled extensions of a Windows PHP build, for the mock's PHP runtimes. */

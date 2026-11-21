@@ -11,6 +11,7 @@ export type ServiceKind =
   | "go"
   | "java"
   | "python"
+  | "rust"
   | "caddy"
   | "nginx"
   | DatabaseKind
@@ -22,6 +23,7 @@ export const SERVICE_KINDS: ServiceKind[] = [
   "go",
   "java",
   "python",
+  "rust",
   "caddy",
   "nginx",
   ...DATABASE_KINDS,
@@ -80,6 +82,9 @@ export interface Service {
   pid: number;
   startedAt: string | null;
   lastError: string;
+  /** The last sample of a running service, summed over its process tree (0.0.6): percent of the whole machine, and the working set in bytes. 0 when stopped. */
+  cpu: number;
+  memBytes: number;
 }
 
 export interface ServiceInput {
@@ -146,19 +151,23 @@ export interface PHPExtensions {
 
 export type EditorKind = "vscode" | "vscodium" | "notepadpp";
 export type DBToolKind = "heidisql" | "dbeaver";
+export type APIClientKind = "bruno" | "hoppscotch";
 export type RuntimeKind =
   | "node"
   | "php"
   | "go"
   | "java"
   | "python"
+  | "rust"
   | "composer"
+  | "viteplus"
   | "caddy"
   | "nginx"
   | DatabaseKind
   | MailKind
   | EditorKind
   | DBToolKind
+  | APIClientKind
   | "other";
 export const RUNTIME_KINDS: RuntimeKind[] = [
   "node",
@@ -166,7 +175,9 @@ export const RUNTIME_KINDS: RuntimeKind[] = [
   "go",
   "java",
   "python",
+  "rust",
   "composer",
+  "viteplus",
   "caddy",
   "nginx",
   ...DATABASE_KINDS,
@@ -176,6 +187,8 @@ export const RUNTIME_KINDS: RuntimeKind[] = [
   "notepadpp",
   "heidisql",
   "dbeaver",
+  "bruno",
+  "hoppscotch",
   "other",
 ];
 
@@ -743,7 +756,7 @@ export interface DetectResult {
   markers: string[];
 }
 
-export type FrameworkLanguage = "php" | "javascript" | "python" | "go" | "java" | "static";
+export type FrameworkLanguage = "php" | "javascript" | "python" | "go" | "java" | "rust" | "static";
 
 /** One framework of the shipped list (GET /api/frameworks). */
 export interface Framework {
@@ -790,6 +803,52 @@ export interface NewProjectPlan {
   database: { kind: string; name: string; user: string; serviceId: string } | null;
   steps: string[];
   creates: string[];
+  problems: string[];
+  warnings: string[];
+}
+
+// ---------------------------------------------------------------------------
+// 0.0.6, part 2: CPU and memory per service, project files. Mirrors docs/API.md
+// "Amendment: 0.0.6, part 2".
+// ---------------------------------------------------------------------------
+
+/** One entry of the service.usage event (the event carries an array of them). */
+export interface ServiceUsage {
+  id: string;
+  cpu: number;
+  memBytes: number;
+}
+
+/** POST /api/projects/{id}/export. */
+export interface ProjectExportRequest {
+  /** The file to write (a folder means <folder>\zero2dev.json). */
+  path: string;
+  overwrite?: boolean;
+}
+export interface ProjectExportResult {
+  path: string;
+  /** What was left out or could not be written, in words. */
+  warnings: string[];
+}
+
+/** The body of POST /api/projects/import/plan and POST /api/projects/import. */
+export interface ProjectImportRequest {
+  /** A zero2dev.json, or a folder that holds one. */
+  path: string;
+  /** Replaces the project's name; empty keeps the file's. */
+  name?: string;
+}
+
+/** POST /api/projects/import/plan: what the import would do. Problems stop it, warnings do not. */
+export interface ProjectImportPlan {
+  path: string;
+  dir: string;
+  name: string;
+  services: string[];
+  sites: string[];
+  installs: NewProjectInstall[];
+  /** What differs from the file because this PC needs it (a port or a domain that was taken). */
+  changes: string[];
   problems: string[];
   warnings: string[];
 }

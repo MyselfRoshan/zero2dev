@@ -15,6 +15,7 @@ import * as tasksFeature from "./features/tasks.mjs";
 import * as detectFeature from "./features/detect.mjs";
 import * as frameworksFeature from "./features/frameworks.mjs";
 import * as newProjectFeature from "./features/newproject.mjs";
+import * as projectFileFeature from "./features/projectfile.mjs";
 
 const PORT = Number(process.env.MOCK_PORT || 7000);
 const TOKEN = process.env.MOCK_TOKEN || "devtoken";
@@ -83,7 +84,9 @@ const KINDS = [
   "php",
   "java",
   "python",
+  "rust",
   "composer",
+  "viteplus",
   "nginx",
   "mariadb",
   "mysql",
@@ -112,6 +115,10 @@ function ext(kind, version, line, channel, source, o = {}) {
       `cpython-${version}+20261026-x86_64-pc-windows-msvc-install_only.tar.gz`,
     ),
     composer: `https://getcomposer.org/download/${version}/composer.phar`,
+    rust: "https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-gnu/rustup-init.exe",
+    viteplus: gh("voidzero-dev/vite-plus", "v" + version, "vp-x86_64-pc-windows-msvc.zip"),
+    bruno: gh("usebruno/bruno", "v" + version, `bruno_${version}_x64_win.zip`),
+    hoppscotch: gh("hoppscotch/releases", "v" + version + "-0", "Hoppscotch_Cloud_win_x64_portable.zip"),
     nginx: `https://nginx.org/download/nginx-${version}.zip`,
     mariadb: `https://downloads.mariadb.org/rest-api/mariadb/${version}/mariadb-${version}-winx64.zip`,
     mysql: `https://cdn.mysql.com/Downloads/MySQL-${line}/mysql-${version}-winx64.zip`,
@@ -132,6 +139,10 @@ function ext(kind, version, line, channel, source, o = {}) {
     java: "Java (Temurin)",
     python: "Python",
     composer: "Composer",
+    rust: "Rust",
+    viteplus: "Vite+",
+    bruno: "Bruno",
+    hoppscotch: "Hoppscotch",
     nginx: "nginx",
     mariadb: "MariaDB",
     mysql: "MySQL",
@@ -166,6 +177,10 @@ function ext(kind, version, line, channel, source, o = {}) {
       java: "bin/java.exe",
       python: "python.exe",
       composer: "composer.bat",
+      rust: "cargo/bin/cargo.exe",
+      viteplus: "vp.exe",
+      bruno: "Bruno.exe",
+      hoppscotch: "hoppscotch-desktop.exe",
       nginx: "nginx.exe",
       mariadb: "bin/mariadbd.exe",
       mysql: "bin/mysqld.exe",
@@ -207,6 +222,10 @@ const BUILTIN = [
   ext("python", "3.13.18", "3.13", "stable", "builtin"),
   ext("python", "3.12.16", "3.12", "stable", "builtin"),
   ext("composer", "2.11.1", "2", "stable", "builtin"),
+  ext("rust", "1.100.0", "", "stable", "builtin"),
+  ext("viteplus", "1.6.0", "", "", "builtin"),
+  ext("bruno", "4.3.0", "", "", "builtin"),
+  ext("hoppscotch", "26.10.1", "", "", "builtin"),
   ext("nginx", "1.26.2", "1.26", "stable", "builtin"),
   ext("mariadb", "11.4.13", "11.4", "lts", "builtin"),
   ext("mysql", "8.4.13", "8.4", "lts", "builtin"),
@@ -243,6 +262,10 @@ const SOURCES = {
   java: "api.adoptium.net",
   python: "github.com/astral-sh/python-build-standalone",
   composer: "getcomposer.org",
+  rust: "static.rust-lang.org",
+  viteplus: "github.com/voidzero-dev/vite-plus",
+  bruno: "github.com/usebruno/bruno",
+  hoppscotch: "github.com/hoppscotch/releases",
   nginx: "nginx.org",
   mariadb: "downloads.mariadb.org",
   postgres: "www.enterprisedb.com",
@@ -664,6 +687,7 @@ function validateService(b, selfId = "") {
     "go",
     "java",
     "python",
+    "rust",
     "caddy",
     "nginx",
     "mariadb",
@@ -928,7 +952,7 @@ function runInstall(entry, opts = {}) {
         kind: entry.kind,
         version: entry.version,
         name: entry.name,
-        binary: `D:\\zero2dev\\bin\\data\\runtimes\\${entry.id}\\${entry.binaryRelPath.replace("/", "\\")}`,
+        binary: `D:\\zero2dev\\bin\\data\\runtimes\\${entry.id}\\${entry.binaryRelPath.replaceAll("/", "\\")}`,
         source: "installed",
         installedAt: now(),
         catalogId: entry.id,
@@ -1034,6 +1058,7 @@ const FEATURES = [
   detectFeature,
   frameworksFeature,
   newProjectFeature,
+  projectFileFeature,
 ];
 const featureCtx = { state, emit, send, fail, id, now, sleep, procs, setState, addLog, startProc, stopProc, fakeJob };
 
@@ -1171,7 +1196,7 @@ async function api(req, res, url) {
       return send(
         res,
         200,
-        [...state.services].sort((a, b) => a.name.localeCompare(b.name)),
+        [...state.services].map(withUsage).sort((a, b) => a.name.localeCompare(b.name)),
       );
     if (m === "POST") {
       const err = validateService(body);
@@ -1350,7 +1375,7 @@ async function api(req, res, url) {
     if (!svc) return fail(res, 404, "not_found", `service ${m2[1]} not found`);
     const action = m2[2];
     if (!action) {
-      if (m === "GET") return send(res, 200, svc);
+      if (m === "GET") return send(res, 200, withUsage(svc));
       if (m === "PUT") {
         if (svc.state !== "stopped" && svc.state !== "failed")
           return fail(res, 409, "conflict", "cannot update a running service; stop it first");
@@ -1517,9 +1542,10 @@ async function api(req, res, url) {
   if ((m2 = p.match(/^\/api\/runtimes\/([^/]+)\/launch$/)) && m === "POST") {
     const rt = state.runtimes.find((r) => r.id === m2[1]);
     if (!rt) return fail(res, 404, "not_found", `runtime ${m2[1]} not found`);
-    if (!["vscode", "vscodium", "notepadpp", "heidisql", "dbeaver"].includes(rt.kind))
+    if (!["vscode", "vscodium", "notepadpp", "heidisql", "dbeaver", "bruno", "hoppscotch"].includes(rt.kind))
       return fail(res, 400, "bad_request", `${rt.name} is run as a service, not opened`);
-    const b = body || {};
+    // An API client takes no folder and no database: a body is ignored (like the daemon).
+    const b = ["bruno", "hoppscotch"].includes(rt.kind) ? {} : body || {};
     if (b.serviceId) {
       const svc = state.services.find((s) => s.id === b.serviceId);
       if (!svc) return fail(res, 404, "not_found", `service ${b.serviceId} not found`);
@@ -1714,6 +1740,37 @@ const server = http.createServer(async (req, res) => {
     if (!res.headersSent) fail(res, 500, "internal", String(e?.message || e));
   }
 });
+// ---- CPU and memory per service (the daemon's internal/supervisor/usage.go, in miniature) ----
+// Running services get plausible, slowly changing numbers; the rest are 0 (the dashboard shows "-").
+const usageOf = new Map();
+function sampleUsage(svc) {
+  const prev = usageOf.get(svc.id) ?? { base: 60 + Math.floor(Math.random() * 300), n: 0 };
+  prev.n++;
+  prev.cpu = Math.round((1 + 6 * Math.abs(Math.sin(prev.n / 3)) + Math.random() * 3) * 10) / 10;
+  prev.memBytes = Math.round((prev.base + prev.n * 0.4 + Math.random() * 6) * 1024 * 1024);
+  usageOf.set(svc.id, prev);
+  return prev;
+}
+function withUsage(svc) {
+  if (svc.state !== "running") return { ...svc, cpu: 0, memBytes: 0 };
+  const u = usageOf.get(svc.id) ?? sampleUsage(svc);
+  return { ...svc, cpu: u.cpu, memBytes: u.memBytes };
+}
+let usageSent = false;
+function tickUsage() {
+  const batch = [];
+  const live = new Set();
+  for (const svc of state.services) {
+    if (svc.state !== "running") continue;
+    live.add(svc.id);
+    const u = sampleUsage(svc);
+    batch.push({ id: svc.id, cpu: u.cpu, memBytes: u.memBytes });
+  }
+  for (const id of usageOf.keys()) if (!live.has(id)) usageOf.delete(id);
+  if (batch.length || usageSent) emit("service.usage", batch); // one final empty batch when the last one stops
+  usageSent = batch.length > 0;
+}
+setInterval(tickUsage, 1500).unref();
 server.listen(PORT, "127.0.0.1", () => {
   console.log(`mock daemon on http://127.0.0.1:${PORT}/#token=${TOKEN}`);
 });

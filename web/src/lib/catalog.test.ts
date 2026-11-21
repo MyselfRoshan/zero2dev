@@ -312,3 +312,16 @@ describe("ago", () => {
     expect(ago(null, now)).toBe("");
   });
 });
+
+describe("API clients", () => {
+  it("are opened like editors and each card says where its collections live", async () => {
+    const { isLaunchable, KIND_NOTE } = await import("./catalog");
+    for (const k of ["bruno", "hoppscotch"]) {
+      expect(isLaunchable(k)).toBe(true);
+      expect(KIND_NOTE[k]).toBeTruthy();
+    }
+    expect(KIND_NOTE.bruno).toBe("Collections are plain files in your project folder, so they go into Git.");
+    expect(KIND_NOTE.hoppscotch).toContain("WebView2");
+    expect(RUNTIME_GROUPS.at(-1)?.id).toBe("apiclients");
+  });
+});

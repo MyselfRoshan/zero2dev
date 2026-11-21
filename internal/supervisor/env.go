@@ -69,8 +69,8 @@ func (s *Supervisor) serviceVarsWithHome(svc model.Service, d store.Data, rt *mo
 func serviceVarsHome(home string, svc model.Service, d store.Data, rt *model.Runtime, planEnv []string, lenient bool) (added, shown, warnings, info []string, err error) {
 	add := func(kv string) { added, shown = append(added, kv), append(shown, kv) }
 	if rt != nil {
-		if name, dir := model.RuntimeHome(*rt); name != "" {
-			add(name + "=" + dir)
+		for _, kv := range model.RuntimeVars(*rt) { // JAVA_HOME, GOROOT, RUSTUP_HOME and CARGO_HOME
+			add(kv)
 		}
 	}
 	for _, e := range planEnv {
