@@ -406,7 +406,7 @@ export interface FolderPick {
   cancelled: boolean;
 }
 
-export type LogStream = "stdout" | "stderr" | "system";
+export type LogStream = "stdout" | "stderr" | "system" | "task";
 export interface LogLine {
   ts: string;
   stream: LogStream;

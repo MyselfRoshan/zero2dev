@@ -22,6 +22,7 @@
     type KindOption,
     type Settings,
   } from "../lib/kinds";
+  import { lookedLikeText, planPrefill, type FormValues } from "../lib/detect";
   import Icon from "../ui/Icon.svelte";
   import KindIcon from "../ui/KindIcon.svelte";
   import TypePicker from "../ui/TypePicker.svelte";
@@ -170,6 +171,69 @@
     return () => clearTimeout(t);
   });
 
+  // ---- Project detection (0.0.6): a folder that is chosen or typed tells what it is ----
+  // For a NEW service only. It chooses the type when none is chosen yet and fills the fields that
+  // are still empty; nothing the person typed is replaced. Undo puts the old values back. A failed
+  // request says nothing: detection is a convenience.
+  type Undo = { kind: ServiceKind | ""; typeOpen: boolean; name: string; portText: string; envFile: string; settings: Settings };
+  let detectHint = $state<{ text: string; filled: string; undo: Undo } | null>(null);
+  let lastDetected = "";
+  let detectSeq = 0;
+  $effect(() => {
+    const dir = cwd.trim();
+    if (init) return;
+    detectHint = null;
+    if (!isAbsolutePath(dir) || dir === lastDetected) return;
+    const t = setTimeout(() => void detect(dir), 300);
+    return () => clearTimeout(t);
+  });
+  async function detect(dir: string) {
+    const my = ++detectSeq;
+    try {
+      const r = await api.detectProject(dir);
+      if (my !== detectSeq || cwd.trim() !== dir) return;
+      lastDetected = dir;
+      if (!r.kind) return;
+      if (lists.kinds.length === 0) await loadKinds();
+      if (my !== detectSeq || cwd.trim() !== dir) return;
+      const detected = profileFor(lists.kinds, r.kind);
+      const label = (key: string) => (detected?.options.find((o) => o.key === key)?.label ?? key).toLowerCase();
+      const cur: FormValues = {
+        kind,
+        name,
+        portText,
+        envFile,
+        settings: { ...settings },
+        defaultPort: kind ? String(portDefault(kind) || "") : "",
+      };
+      const plan = planPrefill(r, cur, label);
+      const filled = [...(plan.kind ? ["type " + serviceKindLabel(plan.kind)] : []), ...plan.filled];
+      if (!filled.length) return;
+      const undo: Undo = { kind, typeOpen, name, portText, envFile, settings: { ...settings } };
+      if (plan.kind) setKind(plan.kind as ServiceKind);
+      if (plan.name) name = plan.name;
+      if (Object.keys(plan.settings).length) settings = { ...settings, ...plan.settings };
+      if (plan.port) portText = plan.port;
+      if (plan.envFile) envFile = plan.envFile;
+      detectHint = { text: lookedLikeText(r, serviceKindLabel(r.kind)), filled: filled.join(", "), undo };
+      revalidate();
+    } catch {
+      /* silent */
+    }
+  }
+  function undoDetect() {
+    const u = detectHint?.undo;
+    if (!u) return;
+    kind = u.kind;
+    typeOpen = u.typeOpen;
+    name = u.name;
+    portText = u.portText;
+    envFile = u.envFile;
+    settings = u.settings;
+    detectHint = null;
+    revalidate();
+  }
+
   function build(): { input: ServiceInput; envError?: string } {
     const k = (kind || "custom") as ServiceKind;
     const { env: envMap, error } = envRowsToMap(env);
@@ -309,6 +373,13 @@
       <section class="section-card" aria-labelledby="sec-type" data-tour="type-picker">
         <header><h2 id="sec-type">{kind ? "Change the type" : "What do you want to run?"}</h2>{#if kind && init}<p>The settings go back to the new type's defaults.</p>{/if}</header>
         <div class="body">
+          {#if !init && !kind}
+            <div class="field" data-testid="detect-folder">
+              <span class="label" aria-hidden="true">Already have a project? Choose its folder</span>
+              <FolderInput bind:value={cwd} label="Project folder" title="Choose the project folder" placeholder="C:\work\my-app" />
+              <span class="hint">Zero2Dev looks inside it and picks the type for you. Or choose a type below.</span>
+            </div>
+          {/if}
           <TypePicker groups={KIND_GROUPS} profiles={lists.kinds} value={kind} onpick={setKind} label={serviceKindLabel} />
           {#if kind}<div><button type="button" class="btn sm ghost" onclick={() => (typeOpen = false)}>Keep {serviceKindLabel(kind)}</button></div>{/if}
         </div>
@@ -339,6 +410,14 @@
               <span class="label" aria-hidden="true">{folderLabel}</span>
               <FolderInput bind:value={cwd} label={folderLabel} title="Choose the {folderLabel.toLowerCase()}" placeholder="C:\work\my-app" invalid={!!errors.cwd} onpicked={revalidate} />
               {#if errors.cwd}<span class="err">{errors.cwd}</span>{:else}<span class="hint">{profile?.folder.hint ?? "The folder your app lives in. The app runs from here."}</span>{/if}
+              {#if detectHint}
+                <div class="notice" role="status" data-testid="detect-hint">
+                  <Icon name="info" />
+                  <span class="grow">{detectHint.text} Filled in: {detectHint.filled}.</span>
+                  <button type="button" class="btn sm" onclick={undoDetect} data-testid="detect-undo">Undo</button>
+                  <button type="button" class="btn sm ghost icon" onclick={() => (detectHint = null)} aria-label="Dismiss" data-testid="detect-dismiss"><Icon name="x" size={14} /></button>
+                </div>
+              {/if}
             </div>
           {:else if profile?.dataDir === "service"}
             <div class="field" data-testid="data-folder">

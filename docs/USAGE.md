@@ -328,7 +328,45 @@ Zero2Dev downloads Python for you and runs your script or web app in a virtual e
 - **Host.** The web app modes listen on `127.0.0.1`, which only this PC can reach. Set **Host** to `0.0.0.0` to let your phone or another PC connect. Your own script or module gets the host as `HOST` and the port as `PORT`.
 - **In your own terminal.** `python` and `pip` are in the command line shims (see Command line) and use the default Python runtime; a project's own packages are in the service's environment, not there.
 <!-- 0.0.6 composer: "## Composer, pnpm and Yarn" goes here. -->
-<!-- 0.0.6 tasks: "## Run a task" and "detect the project type" go here. -->
+
+## Run a task
+
+Some jobs run once and end: installing packages, building, running tests, migrating a database. A service's page has a **Run a task** section for them, under the snapshots and above **Live output**. It is there for Node, PHP, Go and Python services.
+
+1. Open the service's page and find **Run a task**. It lists the ready-made tasks of the service's type, each with a short explanation and the exact command it runs (for example `npm install`, `composer install`, `go mod tidy`, `pip install -r requirements.txt`). A task is only listed when the file it needs is in the project folder: **Composer install** needs `composer.json`, **Install requirements** needs `requirements.txt`.
+2. For a Node service the section also lists the **Scripts in package.json** (`dev`, `lint`, ...). They run with the service's package manager (the **Package manager** setting, npm unless you changed it), so `lint` runs `pnpm run lint` for a pnpm service.
+3. Press **Run**. A progress row shows what is running, and the other **Run** buttons are off until it ends. The command's output appears line by line under **Live output** (the lines start with `$ program arguments` and have a mark on the left), even while the service itself runs.
+4. When it ends, the result stays under the heading until you run the next task: **finished**, or the error with the last lines the program wrote, for example `npm exited with code 1` and the `npm ERR!` lines. The full output is in **Live output**.
+
+- **Tasks that change data ask first.** **Composer update**, **Run migrations** (Laravel) and **Django: migrate** open a question before they start. **Cancel** starts nothing.
+- **Same environment as the service.** A task runs in the project folder with what the service gets: the runtime on `PATH`, the `.env` file, the database variables, and for Python the virtual environment. Nothing is stopped: a service that is running keeps running.
+- **One at a time per service.** While a task runs there is no second one for that service. If you open the page while one runs (it was started from another window), the page shows it.
+- **No Cancel.** A task ends when the program does, or after 10 minutes (some tasks have their own limit): then the whole program tree is stopped and the result says it timed out.
+- **Composer needs Composer.** Without Composer installed, **Composer install** says so and has an **Open Runtimes** button; install **Composer** from the **Tools** group there and run the task again.
+
+### Run your own command
+
+Open **Run your own command** to run any program once: type the **Program** (a name such as `npm`, `php` or `git`, without a folder) and its **Arguments**.
+
+- Arguments are split on spaces. Put a value that has spaces in quotes: `run build -- --mode "my mode"` is `run`, `build`, `--`, `--mode`, `my mode`. A backslash is just a character, so `C:\my folder\file.txt` in quotes works.
+- **There is no shell.** `|`, `&&`, `>` and `%VARIABLES%` do not work: they are passed to the program as plain text. To chain two commands, run them one after the other, or use a script.
+- The program is looked for on the service's `PATH` (its runtime first). A name that is not found fails the task with a message in the result.
+
+## Detect the project type
+
+When you add a service, **What do you want to run?** starts with **Already have a project? Choose its folder**. Browse to the folder (or paste its path) and Zero2Dev looks inside it, without changing anything:
+
+- `composer.json`, `artisan`, `wp-config.php` for PHP (Laravel, Symfony, WordPress);
+- `package.json` for Node (Next.js, NestJS, Astro, Vite, Express) and its scripts;
+- `go.mod` for Go (Gin, Fiber), `pom.xml` or `build.gradle` for Java (Spring Boot);
+- `manage.py`, `requirements.txt` or `pyproject.toml` for Python (Django, FastAPI, Flask).
+
+It then chooses the type and fills in the fields that are still empty: the name, the usual port, the run mode (for example Django's `manage.py` or Uvicorn's `main:app`), the document root and the `.env` file. A note under the folder says what it found and what it filled in, for example *Looks like a Laravel project (composer.json, artisan). Filled in: type PHP, name, document root, port 8000, .env.* **Undo** puts the form back as it was, and the **x** closes the note.
+
+- **Your own entries win.** Detection never replaces something you typed or changed. If you already chose a type, a folder of another type changes nothing.
+- **Only when adding.** Editing an existing service does not look at the folder.
+- **It is a suggestion.** Check the fields before **Save**. A folder that says nothing (an empty one, or a plain `index.html`) changes nothing, and a folder that cannot be read says nothing either.
+
 <!-- 0.0.6 new-project: "## Create a project from a framework" goes here. -->
 
 ## Snapshots: undo for a whole project
