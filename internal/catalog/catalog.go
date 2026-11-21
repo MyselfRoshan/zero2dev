@@ -123,8 +123,9 @@ func validate(e *model.CatalogEntry) error {
 		return errors.New("url must be https")
 	}
 	n := strings.ToLower(path.Base(strings.Split(e.URL, "?")[0]))
-	if !strings.HasSuffix(n, ".zip") && !strings.HasSuffix(n, ".tar.gz") && !strings.HasSuffix(n, ".tgz") {
-		return errors.New("archive must be .zip or .tar.gz")
+	// A .phar is one file, not an archive (Composer): the installer puts it in as it is.
+	if !strings.HasSuffix(n, ".zip") && !strings.HasSuffix(n, ".tar.gz") && !strings.HasSuffix(n, ".tgz") && !strings.HasSuffix(n, ".phar") {
+		return errors.New("archive must be .zip, .tar.gz or a single .phar file")
 	}
 	switch e.Checksum.Type {
 	case "sha256":

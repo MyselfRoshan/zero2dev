@@ -70,7 +70,7 @@ func TestStatusRefreshAndMergedCatalogAPI(t *testing.T) {
 		NodeURL: pub.URL + "/node.json", NodeBase: pub.URL + "/node/", GoURL: pub.URL + "/go.json", GoBase: pub.URL + "/go/",
 		CaddyURL: pub.URL + "/caddy.json", PHPArchiveURL: pub.URL + "/archive/",
 		// The 0.0.3 sources point at the same fake server, which answers 500: they fail, offline.
-		MariaDBURL: pub.URL + "/mariadb/", PostgresPage: pub.URL + "/pg.html", VSCodeURL: pub.URL + "/vscode.json", GitHubAPI: pub.URL + "/gh/"}
+		MariaDBURL: pub.URL + "/mariadb/", PostgresPage: pub.URL + "/pg.html", VSCodeURL: pub.URL + "/vscode.json", GitHubAPI: pub.URL + "/gh/", ComposerURL: pub.URL + "/composer.json"}
 
 	var out struct {
 		catalog.Status
@@ -79,7 +79,7 @@ func TestStatusRefreshAndMergedCatalogAPI(t *testing.T) {
 	if resp := e.do("POST", "/api/catalog/refresh", nil, &out); resp.StatusCode != 200 {
 		t.Fatalf("refresh status %d", resp.StatusCode)
 	}
-	if out.CheckedAt == nil || len(out.Sources) != 15 || strings.Join(out.Added, ",") != "nginx-1.28.0-windows-amd64,php-8.4.1-windows-amd64" {
+	if out.CheckedAt == nil || len(out.Sources) != 17 || strings.Join(out.Added, ",") != "nginx-1.28.0-windows-amd64,php-8.4.1-windows-amd64" {
 		t.Fatalf("%+v", out)
 	}
 	bySrc := map[string]catalog.SourceStatus{}
@@ -92,7 +92,7 @@ func TestStatusRefreshAndMergedCatalogAPI(t *testing.T) {
 
 	var again catalog.Status
 	e.do("GET", "/api/catalog/status", nil, &again)
-	if again.CheckedAt == nil || len(again.Sources) != 15 {
+	if again.CheckedAt == nil || len(again.Sources) != 17 {
 		t.Fatalf("status must persist: %+v", again)
 	}
 	var es []model.CatalogEntry

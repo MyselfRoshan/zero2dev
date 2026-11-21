@@ -11,6 +11,10 @@ import { PHP_EXTENSIONS, PROFILES, preview, profileOf, validateSettings } from "
 import * as databasesFeature from "./features/databases.mjs";
 import * as snapshotsFeature from "./features/snapshots.mjs";
 import * as migrationsFeature from "./features/migrations.mjs";
+import * as tasksFeature from "./features/tasks.mjs";
+import * as detectFeature from "./features/detect.mjs";
+import * as frameworksFeature from "./features/frameworks.mjs";
+import * as newProjectFeature from "./features/newproject.mjs";
 
 const PORT = Number(process.env.MOCK_PORT || 7000);
 const TOKEN = process.env.MOCK_TOKEN || "devtoken";
@@ -78,6 +82,8 @@ const KINDS = [
   "caddy",
   "php",
   "java",
+  "python",
+  "composer",
   "nginx",
   "mariadb",
   "mysql",
@@ -100,6 +106,12 @@ function ext(kind, version, line, channel, source, o = {}) {
     caddy: `https://github.com/caddyserver/caddy/releases/download/v${version}/caddy_${version}_windows_amd64.zip`,
     php: `https://windows.php.net/downloads/releases/php-${version}-Win32-vs16-x64.zip`,
     java: `https://github.com/adoptium/temurin${line}-binaries/releases/download/jdk-${version}%2B9/OpenJDK${line}U-jdk_x64_windows_hotspot_${version}_9.zip`,
+    python: gh(
+      "astral-sh/python-build-standalone",
+      "20261026",
+      `cpython-${version}+20261026-x86_64-pc-windows-msvc-install_only.tar.gz`,
+    ),
+    composer: `https://getcomposer.org/download/${version}/composer.phar`,
     nginx: `https://nginx.org/download/nginx-${version}.zip`,
     mariadb: `https://downloads.mariadb.org/rest-api/mariadb/${version}/mariadb-${version}-winx64.zip`,
     mysql: `https://cdn.mysql.com/Downloads/MySQL-${line}/mysql-${version}-winx64.zip`,
@@ -118,6 +130,8 @@ function ext(kind, version, line, channel, source, o = {}) {
     caddy: "Caddy",
     php: "PHP",
     java: "Java (Temurin)",
+    python: "Python",
+    composer: "Composer",
     nginx: "nginx",
     mariadb: "MariaDB",
     mysql: "MySQL",
@@ -150,6 +164,8 @@ function ext(kind, version, line, channel, source, o = {}) {
       caddy: "caddy.exe",
       php: "php.exe",
       java: "bin/java.exe",
+      python: "python.exe",
+      composer: "composer.bat",
       nginx: "nginx.exe",
       mariadb: "bin/mariadbd.exe",
       mysql: "bin/mysqld.exe",
@@ -162,7 +178,11 @@ function ext(kind, version, line, channel, source, o = {}) {
       heidisql: "heidisql.exe",
       dbeaver: "dbeaver.exe",
     }[kind],
-    stripComponents: ["node", "go", "nginx", "mariadb", "mysql", "postgres", "redis", "dbeaver"].includes(kind) ? 1 : 0,
+    stripComponents: ["node", "go", "python", "nginx", "mariadb", "mysql", "postgres", "redis", "dbeaver"].includes(
+      kind,
+    )
+      ? 1
+      : 0,
     os,
     arch,
     line,
@@ -184,6 +204,9 @@ const BUILTIN = [
   ext("php", "8.3.12", "8.3", "stable", "builtin", { os: "linux", arch: "arm64" }),
   ext("java", "21.0.4", "21", "lts", "builtin"),
   ext("java", "17.0.12", "17", "lts", "builtin"),
+  ext("python", "3.13.18", "3.13", "stable", "builtin"),
+  ext("python", "3.12.16", "3.12", "stable", "builtin"),
+  ext("composer", "2.11.1", "2", "stable", "builtin"),
   ext("nginx", "1.26.2", "1.26", "stable", "builtin"),
   ext("mariadb", "11.4.13", "11.4", "lts", "builtin"),
   ext("mysql", "8.4.13", "8.4", "lts", "builtin"),
@@ -204,6 +227,7 @@ const REMOTE = [
   ext("php", "8.3.13", "8.3", "stable", "remote"),
   ext("java", "21.0.5", "21", "lts", "remote"),
   ext("java", "17.0.13", "17", "lts", "remote"),
+  ext("python", "3.13.19", "3.13", "stable", "remote"),
   ext("nginx", "1.27.2", "1.27", "mainline", "remote"),
   ext("mariadb", "11.8.5", "11.8", "lts", "remote"),
   ext("postgres", "18.6", "18", "", "remote"),
@@ -217,6 +241,8 @@ const SOURCES = {
   caddy: "api.github.com",
   php: "windows.php.net",
   java: "api.adoptium.net",
+  python: "github.com/astral-sh/python-build-standalone",
+  composer: "getcomposer.org",
   nginx: "nginx.org",
   mariadb: "downloads.mariadb.org",
   postgres: "www.enterprisedb.com",
@@ -637,6 +663,7 @@ function validateService(b, selfId = "") {
     "php",
     "go",
     "java",
+    "python",
     "caddy",
     "nginx",
     "mariadb",
@@ -999,7 +1026,15 @@ function fakeJob({ type, fields = {}, steps = ["Working"], ms = 400, work }) {
   })();
   return { ...job };
 }
-const FEATURES = [databasesFeature, snapshotsFeature, migrationsFeature];
+const FEATURES = [
+  databasesFeature,
+  snapshotsFeature,
+  migrationsFeature,
+  tasksFeature,
+  detectFeature,
+  frameworksFeature,
+  newProjectFeature,
+];
 const featureCtx = { state, emit, send, fail, id, now, sleep, procs, setState, addLog, startProc, stopProc, fakeJob };
 
 // ---------- router ----------
@@ -1038,7 +1073,7 @@ async function api(req, res, url) {
   }
   if (m === "GET" && p === "/api/status") {
     return send(res, 200, {
-      version: "0.0.5",
+      version: "0.0.6",
       uptimeSeconds: Math.floor((Date.now() - started) / 1000),
       os: THIS_PC.os,
       arch: THIS_PC.arch,

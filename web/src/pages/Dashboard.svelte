@@ -237,6 +237,7 @@
           <div class="sect-head">
             <h2 id="prj-h">Projects</h2>
             <span class="spacer"></span>
+            <a class="small" href="#/create" data-testid="dash-create">New from a framework</a>
             <a class="small" href="#/projects">Manage projects</a>
           </div>
           <div class="card list">

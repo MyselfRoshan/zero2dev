@@ -194,6 +194,10 @@
     background: rgb(255 120 105 / 0.07);
     box-shadow: inset 2px 0 0 var(--log-err);
   }
+  /* Output of a one-off task (npm install ...): a marker on the left sets it apart from the service's own lines. */
+  .ln.task {
+    box-shadow: inset 2px 0 0 var(--log-sys);
+  }
   .ln.system .tx {
     color: var(--log-sys);
     font-style: italic;

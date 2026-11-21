@@ -195,3 +195,33 @@ func (m *Manager) drop(ctx context.Context, t Target, logID string, dbs []string
 	_, err := m.sql(ctx, t, logID, "drop "+strings.Join(dbs, ", "), "", b.String())
 	return err
 }
+
+// DropUser removes a user (the server must run). A user that does not exist is not an error. For
+// PostgreSQL the role must own nothing and have no privileges left: drop its database first.
+func (m *Manager) DropUser(ctx context.Context, serviceID, user string) error {
+	svc, err := m.sqlService(serviceID, "users to drop")
+	if err != nil {
+		return err
+	}
+	if err := checkName("user", user); err != nil {
+		return err
+	}
+	if err := m.needRunning(svc); err != nil {
+		return err
+	}
+	t, err := m.local(svc)
+	if err != nil {
+		return err
+	}
+	var b strings.Builder
+	if family(t.Kind) == "mysql" {
+		for _, host := range []string{"%", "localhost"} {
+			fmt.Fprintf(&b, "DROP USER IF EXISTS %s@%s;\n", mysqlString(user), mysqlString(host))
+		}
+		b.WriteString("FLUSH PRIVILEGES;\n")
+	} else {
+		fmt.Fprintf(&b, "DROP ROLE IF EXISTS %s;\n", quoteIdent(t.Kind, user))
+	}
+	_, err = m.sql(ctx, t, svc.ID, "drop user "+user, "", b.String())
+	return err
+}

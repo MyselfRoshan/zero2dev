@@ -159,6 +159,12 @@ try {
       hash: `#/projects/${projectId}/snapshots`,
       title: "Project snapshots: take, restore, clone",
     },
+    {
+      name: "create",
+      hash: "#/create?framework=laravel&name=Atelier&parent=D%3A%5Cwww",
+      title: "Create a project from a framework: choices and the plan",
+      ready: "[data-testid=create-plan][data-phase=ready]",
+    },
     { name: "runtimes", hash: "#/runtimes", title: "Runtimes: installed versions and the catalog" },
     { name: "sites", hash: "#/sites", title: "Sites: local domains" },
     { name: "site-new", hash: "#/sites?new", title: "New site form" },

@@ -8,6 +8,7 @@ export type Route =
   | { name: "projectNew" }
   | { name: "projectEdit"; id: string }
   | { name: "projectSnapshots"; id: string }
+  | { name: "create" }
   | { name: "runtimes" }
   | { name: "sites" }
   | { name: "environment" }
@@ -32,6 +33,8 @@ export function parseHash(hash: string): Route {
       if (parts[1] && parts[2] === "edit") return { name: "projectEdit", id: decodeURIComponent(parts[1]) };
       if (parts[1] && parts[2] === "snapshots") return { name: "projectSnapshots", id: decodeURIComponent(parts[1]) };
       return { name: "projects" };
+    case "create":
+      return { name: "create" };
     case "runtimes":
       return { name: "runtimes" };
     case "sites":

@@ -17,7 +17,7 @@ Status: **done** (shipped and tested), **in progress** (code exists but is not f
 | 0.0.3 | Databases, code editors, database tools, settings for each service type, no console window (tray icon), a new dashboard, in-app tutorials, and an Ant Design look with your own accent colour | done |
 | 0.0.4 | **Projects**: one click starts the whole stack, in the right order, and tells you when something crashes; a `.env` file and database variables for every service; runtimes usable from your own terminals; Node.js 26 LTS | done (a few checks on a real Windows desktop are still open, see below) |
 | 0.0.5 | **Data**: databases you can create, fill and reset; snapshots of a whole environment; Mailpit; **Import from this PC** your installed editors, runtimes and databases | done (checks on a real Windows desktop are still open, see below) |
-| 0.0.6 | **More languages** and **one-click new projects** for each language and framework | planned |
+| 0.0.6 | **More languages** and **one-click new projects** for each language and framework | done (checks on a real Windows desktop are still open, see below) |
 | 0.0.7 | **WSL aware**: run, detect and open projects that live in WSL | planned |
 | 0.0.8 | **Real domains**: ports 80/443, `.test` domains, sharing | planned |
 | Later | Updates, signing, other systems, command line | planned |
@@ -116,15 +116,15 @@ database, then filling in a service and a site by hand. **New project** does all
 
 | Stage | What | Why it helps | Status |
 | --- | --- | --- | --- |
-| 1 | **Python** runtime with a virtual environment per service (in `data\`) | The most requested missing language; no global `pip install` | planned |
-| 2 | **Composer** for PHP, run with the service's PHP version | `composer install` with the right PHP, from the service page | planned |
-| 3 | **pnpm and Yarn** through Node's Corepack, with their caches in `data\` | Projects that do not use npm work without a global install | planned |
-| 4 | **Run a one-off task** from the service page (`npm install`, `composer install`, `go mod download`, migrations) with its output in the log | Setup commands with the right runtime, without a terminal | planned |
-| 5 | **Detect the project type** from the folder (`package.json`, `composer.json`, `go.mod`, `pom.xml`, `manage.py`) and fill in the form | A new service is mostly filled in after choosing the folder | planned |
-| 6 | **New project**: choose a language, then a framework, a folder and a name | One form instead of a terminal, a generator's documentation and three Zero2Dev forms | planned |
-| 7 | Zero2Dev **installs what is missing** (the runtime version the framework needs, Composer, a database) and **runs the framework's own generator** with it | The project is made the way its framework intends, with the right versions | planned |
-| 8 | It then **creates the project**: its services, its database with a user, a `name.localhost` site, a `.env` with the connection filled in, and opens the folder in the installed editor | From nothing to a running app in the browser in one click | planned |
-| 9 | Frameworks are a **list shipped with Zero2Dev** (like the runtime catalog), so new ones are added without code | The list can grow quickly and be updated between releases | planned |
+| 1 | **Python** runtime with a virtual environment per service (in `data\`) | The most requested missing language; no global `pip install` | done |
+| 2 | **Composer** for PHP, run with the service's PHP version | `composer install` with the right PHP, from the service page | done |
+| 3 | **pnpm and Yarn** through Node's Corepack, with their caches in `data\` | Projects that do not use npm work without a global install | done |
+| 4 | **Run a one-off task** from the service page (`npm install`, `composer install`, `go mod download`, migrations) with its output in the log | Setup commands with the right runtime, without a terminal | done |
+| 5 | **Detect the project type** from the folder (`package.json`, `composer.json`, `go.mod`, `pom.xml`, `manage.py`) and fill in the form | A new service is mostly filled in after choosing the folder | done |
+| 6 | **New project**: choose a language, then a framework, a folder and a name | One form instead of a terminal, a generator's documentation and three Zero2Dev forms | done |
+| 7 | Zero2Dev **installs what is missing** (the runtime version the framework needs, Composer, a database) and **runs the framework's own generator** with it | The project is made the way its framework intends, with the right versions | done |
+| 8 | It then **creates the project**: its services, its database with a user, a `name.localhost` site, a `.env` with the connection filled in, and opens the folder in the installed editor | From nothing to a running app in the browser in one click | done |
+| 9 | Frameworks are a **list shipped with Zero2Dev** (like the runtime catalog), so new ones are added without code | The list can grow quickly and be updated between releases | done |
 
 Frameworks in the first list, each with the generator Zero2Dev runs:
 
@@ -134,8 +134,17 @@ Frameworks in the first list, each with the generator Zero2Dev runs:
 | JavaScript / TypeScript | Express, NestJS, Next.js, Vite (React, Vue, Svelte), Astro | `npm create ...`, `npx create-next-app` |
 | Python | Django, FastAPI, Flask | `django-admin startproject`, a starter folder for FastAPI and Flask, in a virtual environment |
 | Go | net/http, Gin, Fiber | `go mod init` and a starter `main.go` |
-| Java | Spring Boot | a project from start.spring.io (Maven or Gradle) |
+| Java | Spring Boot | a Maven project from start.spring.io, built with its wrapper |
 | Static | HTML and CSS | a starter folder served by the site server |
+
+Release 0.0.6: **done**. The tests use fakes for the runtimes, the downloads, the databases and the generators, so these checks need a real Windows desktop:
+- **Python**: install Python from the catalog (`python.exe` at the folder's root and `Scripts\pip.exe` in the real `install_only` archive), start a Flask, a Uvicorn and a Django service from their virtual environments, delete a service with a running venv (locked files), and the `pip` shim in cmd and PowerShell.
+- **Composer**: install it, run `composer install` from a PHP service's page and `composer` in a terminal that has another PHP first on PATH.
+- **pnpm and Yarn**: start a pnpm and a Yarn service (Corepack is installed on the first start), and a project with its own `packageManager` field.
+- **Tasks**: a real `npm.cmd`, `composer` and `go` run from the service page: no console window, arguments through `.cmd` files, the process tree ended on a timeout, and the output in the log.
+- **Detection**: choose real Laravel, Next.js, Django, Go and Spring Boot folders in the New service form.
+- **Create a project**: Laravel with MariaDB and Caddy (a page at `https://name.localhost`), WordPress, Next.js, Django, a Go (Gin) project and a Spring Boot project (`mvnw.cmd`, which needs a JDK) from nothing; a failure in the middle (kill the generator) removes the services, site, database and user and keeps the folder; the editor opens on the new folder.
+- **Known limits**: Fiber v3 needs Go 1.26 or newer, so it is offered only when the catalog has one; the PHP frameworks offer MariaDB and MySQL only (the PHP build has no `pdo_pgsql`); start.spring.io publishes no checksum, so that download is marked unverified.
 
 ## 0.0.7: WSL aware
 

@@ -4,13 +4,24 @@ export type DatabaseKind = "mariadb" | "mysql" | "postgres" | "redis";
 export const DATABASE_KINDS: DatabaseKind[] = ["mariadb", "mysql", "postgres", "redis"];
 export type MailKind = "mailpit";
 export const MAIL_KINDS: MailKind[] = ["mailpit"];
-export type ServiceKind = "custom" | "node" | "php" | "go" | "java" | "caddy" | "nginx" | DatabaseKind | MailKind;
+export type ServiceKind =
+  | "custom"
+  | "node"
+  | "php"
+  | "go"
+  | "java"
+  | "python"
+  | "caddy"
+  | "nginx"
+  | DatabaseKind
+  | MailKind;
 export const SERVICE_KINDS: ServiceKind[] = [
   "custom",
   "node",
   "php",
   "go",
   "java",
+  "python",
   "caddy",
   "nginx",
   ...DATABASE_KINDS,
@@ -140,6 +151,8 @@ export type RuntimeKind =
   | "php"
   | "go"
   | "java"
+  | "python"
+  | "composer"
   | "caddy"
   | "nginx"
   | DatabaseKind
@@ -152,6 +165,8 @@ export const RUNTIME_KINDS: RuntimeKind[] = [
   "php",
   "go",
   "java",
+  "python",
+  "composer",
   "caddy",
   "nginx",
   ...DATABASE_KINDS,
@@ -391,7 +406,7 @@ export interface FolderPick {
   cancelled: boolean;
 }
 
-export type LogStream = "stdout" | "stderr" | "system";
+export type LogStream = "stdout" | "stderr" | "system" | "task";
 export interface LogLine {
   ts: string;
   stream: LogStream;
@@ -674,4 +689,107 @@ export interface Migration {
   canCleanup: boolean;
   /** What removing the originals frees. */
   originalsBytes: number;
+}
+
+// ---------------------------------------------------------------------------
+// 0.0.6: languages, one-off tasks, project detection and New project. Mirrors docs/API.md
+// "Amendment: languages, tasks and new projects (0.0.6)".
+// ---------------------------------------------------------------------------
+
+/** A ready-made task of a service kind (the `tasks` of a kind profile). */
+export interface KindTask {
+  id: string;
+  label: string;
+  program: string;
+  args: string[];
+  help?: string;
+  /** Asked in a confirm dialog before the task runs. */
+  confirm?: string;
+  /** A file or folder that must exist in the service's folder. */
+  when?: string;
+  timeout?: number;
+}
+
+/** A script of the project's package.json. */
+export interface TaskScript {
+  name: string;
+  command: string;
+}
+
+/** GET /api/services/{id}/tasks. */
+export interface TaskList {
+  presets: KindTask[];
+  scripts: TaskScript[];
+  /** The id of the task job running for the service now, "" when none. */
+  running: string;
+}
+
+/** POST /api/services/{id}/tasks: a preset id, or a program with its arguments. */
+export interface TaskRequest {
+  preset?: string;
+  program?: string;
+  args?: string[];
+}
+
+/** GET /api/project/detect?dir=. kind "" means the folder says nothing. */
+export interface DetectResult {
+  kind: ServiceKind | "";
+  framework: string;
+  name: string;
+  confidence: "high" | "medium" | "";
+  settings: Record<string, string>;
+  envFile: string;
+  port: number;
+  markers: string[];
+}
+
+export type FrameworkLanguage = "php" | "javascript" | "python" | "go" | "java" | "static";
+
+/** One framework of the shipped list (GET /api/frameworks). */
+export interface Framework {
+  id: string;
+  label: string;
+  language: FrameworkLanguage;
+  summary: string;
+  homepage?: string;
+  runtime: { kind: RuntimeKind | ""; min?: string; max?: string };
+  composer?: boolean;
+  database?: { kinds: ("mariadb" | "mysql" | "postgres")[]; default: string; optional: boolean };
+  steps: { type: "run" | "download" | "files"; label: string; program?: string }[];
+  services: { name: string; kind: ServiceKind; port?: number; usesDatabase?: boolean }[];
+  site?: { type: "proxy" | "php" | "static"; root?: string; https: boolean };
+}
+
+/** The body of POST /api/new-project/plan and POST /api/new-project. */
+export interface NewProjectRequest {
+  framework: string;
+  name: string;
+  /** The folder that will hold the project: the project folder is <parent>\<slug>. */
+  parent: string;
+  databaseKind: "" | "mariadb" | "mysql" | "postgres";
+  domain: string;
+  port: number;
+  openEditor: boolean;
+}
+
+export interface NewProjectInstall {
+  kind: RuntimeKind;
+  version: string;
+  catalogId: string;
+  name: string;
+  reason: string;
+}
+
+/** POST /api/new-project/plan: what the job would do. Problems stop it, warnings do not. */
+export interface NewProjectPlan {
+  dir: string;
+  slug: string;
+  domain: string;
+  port: number;
+  installs: NewProjectInstall[];
+  database: { kind: string; name: string; user: string; serviceId: string } | null;
+  steps: string[];
+  creates: string[];
+  problems: string[];
+  warnings: string[];
 }

@@ -56,6 +56,8 @@ export const DATA_DIR_NAMES: Record<string, string> = {
   postgres: "postgres",
   redis: "redis",
   mailpit: "mailpit",
+  python: "python",
+  composer: "composer",
 };
 
 /** Where a database service keeps its files (supervisor DataDir): <data>/<kind>/<service id>. */

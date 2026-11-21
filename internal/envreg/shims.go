@@ -23,7 +23,7 @@ type File struct {
 
 // kindOrder is the order of the kinds in the shims and on the activated PATH
 // (first listed wins when two kinds offer the same command, e.g. mysql).
-var kindOrder = []string{"node", "php", "java", "go", "mysql", "mariadb", "postgres", "redis"}
+var kindOrder = []string{"node", "php", "java", "go", "python", "composer", "mysql", "mariadb", "postgres", "redis"}
 
 // shimmed lists, per kind, the commands that get a shim. The first command of
 // the node, php, java and go kinds is the runtime's own binary; the others are
@@ -36,17 +36,28 @@ var shimmed = map[string][]string{
 	"php":      {"php"},
 	"java":     {"java", "javac", "jar"},
 	"go":       {"go", "gofmt"},
+	"python":   {"python", "pip"}, // pip.exe is in the Scripts folder below python.exe
+	"composer": {"composer"},      // 0.0.6: composer.bat next to composer.phar (agent composer)
 	"mysql":    {"mysql", "mysqldump"},
 	"mariadb":  {"mariadb", "mysql", "mariadb-dump"},
 	"postgres": {"psql", "pg_dump", "pg_restore"},
 	"redis":    {"redis-cli"},
 }
 
+// toolDirs are the folders a runtime's other commands are looked for in, in order: next to the
+// binary and, for Python, in its Scripts folder.
+func toolDirs(kind, dir string) []string {
+	if kind == "python" {
+		return []string{dir, filepath.Join(dir, "Scripts")}
+	}
+	return []string{dir}
+}
+
 // ownBinary reports whether the first command of the kind is the runtime's
 // binary itself (and so needs no existence check).
 func ownBinary(kind string) bool {
 	switch kind {
-	case "node", "php", "java", "go":
+	case "node", "php", "java", "go", "python":
 		return true
 	}
 	return false
@@ -106,10 +117,31 @@ func FilesAt(home string, d store.Data, exists func(path string) bool, readDir f
 			continue
 		}
 		dir := filepath.Dir(rt.Binary)
+		php, hasPHP := defaultOf(d, "php")
+		if kind == "composer" && !hasPHP {
+			continue // Composer is run by PHP: without one there is nothing to shim or put on PATH
+		}
 		if !containsFold(dirs, dir) {
 			dirs = append(dirs, dir)
 		}
 		env := shimEnv(rt)
+		if kind == "composer" {
+			// Composer runs with the default PHP whatever the user's PATH says: the shim calls
+			// php.exe with composer.phar itself (composer.bat would take the first php on PATH).
+			phar := model.ComposerPhar(rt)
+			if !exists(phar) || seen["composer"] {
+				continue
+			}
+			if home != "" {
+				env = map[string]string{"COMPOSER_HOME": model.ComposerHome(home), "COMPOSER_CACHE_DIR": model.ComposerCache(home)}
+			}
+			for name, v := range env {
+				activateEnv[name] = v
+			}
+			seen["composer"] = true
+			out = append(out, File{Name: "composer.cmd", Content: ShimCmdArgs(php.Binary, []string{phar}, env)})
+			continue
+		}
 		if home != "" && kind == "go" {
 			if env == nil {
 				env = map[string]string{}
@@ -129,11 +161,18 @@ func FilesAt(home string, d store.Data, exists func(path string) bool, readDir f
 			if i == 0 && ownBinary(kind) {
 				target = rt.Binary
 			} else {
-				// The tool may be an .exe or (npm) a .cmd next to the binary.
-				for _, e := range []string{ext, ".cmd", ".bat"} {
-					if p := filepath.Join(dir, cmd+e); exists(p) {
-						target = p
-						break
+				// The tool may be an .exe or (npm) a .cmd next to the binary; Python keeps pip.exe in
+				// the Scripts folder below it.
+			find:
+				for _, tdir := range toolDirs(kind, dir) {
+					for _, e := range []string{ext, ".cmd", ".bat"} {
+						if p := filepath.Join(tdir, cmd+e); exists(p) {
+							target = p
+							if tdir != dir && !containsFold(dirs, tdir) {
+								dirs = append(dirs, tdir) // the tools its packages install are on the activated PATH too
+							}
+							break find
+						}
 					}
 				}
 			}
@@ -254,7 +293,11 @@ func cmdSet(name, value string) string {
 // ShimCmd is the content of a shim: it runs target with the arguments it got.
 // env (JAVA_HOME / GOROOT) is set for that run only (setlocal), so the shim does
 // not leak anything into the calling terminal.
-func ShimCmd(target string, env map[string]string) string {
+func ShimCmd(target string, env map[string]string) string { return ShimCmdArgs(target, nil, env) }
+
+// ShimCmdArgs is ShimCmd for a program that always gets the same first arguments (php.exe and
+// the composer.phar it runs).
+func ShimCmdArgs(target string, args []string, env map[string]string) string {
 	lines := []string{"@echo off", "rem " + marker + ". Do not edit: it is rewritten when the runtimes change."}
 	if len(env) > 0 {
 		lines = append(lines, "setlocal")
@@ -262,7 +305,11 @@ func ShimCmd(target string, env map[string]string) string {
 			lines = append(lines, cmdSet(k, env[k]))
 		}
 	}
-	lines = append(lines, cmdQuote(target)+" %*")
+	cmd := cmdQuote(target)
+	for _, a := range args {
+		cmd += " " + cmdQuote(a)
+	}
+	lines = append(lines, cmd+" %*")
 	return crlf(lines)
 }
 

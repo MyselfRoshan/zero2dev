@@ -10,10 +10,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"zero2dev/internal/apperr"
+	"zero2dev/internal/kinds"
 	"zero2dev/internal/model"
 	"zero2dev/internal/store"
 )
@@ -31,6 +33,8 @@ type Supervisor struct {
 	HealthTimeout time.Duration
 	KillGrace     time.Duration
 	DBGrace       time.Duration // databases get longer to shut down cleanly
+	// PreRun runs the pre-steps of a service (see runPre); nil is the real runner. Tests replace it.
+	PreRun PreRunner
 
 	// Restart on crash (restart.go): the first delay (doubled for every
 	// further attempt), the longest delay, and how long a service has to stay
@@ -229,6 +233,11 @@ func (s *Supervisor) start(id string, auto *crashState) error {
 		return err
 	}
 	if err := s.prepare(id, r); err != nil {
+		s.logLine(id, "system", err.Error())
+		revert()
+		return apperr.Conflict("%v", err)
+	}
+	if err := s.runPre(id, r); err != nil {
 		s.logLine(id, "system", err.Error())
 		revert()
 		return apperr.Conflict("%v", err)
@@ -489,6 +498,9 @@ func (s *Supervisor) Remove(id string) error {
 	}
 	_ = os.Remove(s.logPath(id))
 	_ = os.Remove(s.logPath(id) + ".1")
+	if id != "" && !strings.ContainsAny(id, "/\\") && id != "." && id != ".." {
+		_ = os.RemoveAll(kinds.VenvDir(s.home, id)) // a Python service's virtual environment
+	}
 	return nil
 }
 

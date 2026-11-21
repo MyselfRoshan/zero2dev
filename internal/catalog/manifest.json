@@ -313,5 +313,137 @@
     "binaryRelPath": "dbeaver.exe",
     "stripComponents": 1,
     "homepage": "https://github.com/dbeaver/dbeaver/releases/tag/26.2.4"
+  },
+  {
+    "os": "windows",
+    "arch": "amd64",
+    "id": "composer-2.11.1-windows-amd64",
+    "kind": "composer",
+    "version": "2.11.1",
+    "name": "Composer 2.11.1",
+    "url": "https://getcomposer.org/download/2.11.1/composer.phar",
+    "checksum": {
+      "type": "sha256",
+      "value": "6f1b891e1d4927d62740276c540fb490e47689e19e102c49e8da849794882f8c"
+    },
+    "binaryRelPath": "composer.bat",
+    "stripComponents": 0,
+    "homepage": "https://getcomposer.org/download/"
+  },
+  {
+    "os": "windows",
+    "arch": "arm64",
+    "id": "composer-2.11.1-windows-arm64",
+    "kind": "composer",
+    "version": "2.11.1",
+    "name": "Composer 2.11.1",
+    "url": "https://getcomposer.org/download/2.11.1/composer.phar",
+    "checksum": {
+      "type": "sha256",
+      "value": "6f1b891e1d4927d62740276c540fb490e47689e19e102c49e8da849794882f8c"
+    },
+    "binaryRelPath": "composer.bat",
+    "stripComponents": 0,
+    "homepage": "https://getcomposer.org/download/"
+  },
+  {
+    "os": "windows",
+    "arch": "amd64",
+    "id": "composer-2.2.31-windows-amd64",
+    "kind": "composer",
+    "version": "2.2.31",
+    "name": "Composer 2.2.31 (LTS)",
+    "url": "https://getcomposer.org/download/2.2.31/composer.phar",
+    "checksum": {
+      "type": "sha256",
+      "value": "e13af0ac1ab0a96dcf7de2f1eada9cce442f2a99ed23023784a2627f3e476215"
+    },
+    "binaryRelPath": "composer.bat",
+    "stripComponents": 0,
+    "homepage": "https://getcomposer.org/download/"
+  },
+  {
+    "os": "windows",
+    "arch": "arm64",
+    "id": "composer-2.2.31-windows-arm64",
+    "kind": "composer",
+    "version": "2.2.31",
+    "name": "Composer 2.2.31 (LTS)",
+    "url": "https://getcomposer.org/download/2.2.31/composer.phar",
+    "checksum": {
+      "type": "sha256",
+      "value": "e13af0ac1ab0a96dcf7de2f1eada9cce442f2a99ed23023784a2627f3e476215"
+    },
+    "binaryRelPath": "composer.bat",
+    "stripComponents": 0,
+    "homepage": "https://getcomposer.org/download/"
+  },
+  {
+    "os": "windows",
+    "arch": "amd64",
+    "id": "python-3.13.18-windows-amd64",
+    "kind": "python",
+    "version": "3.13.18",
+    "name": "Python 3.13.18",
+    "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261026/cpython-3.13.18%2B20261026-x86_64-pc-windows-msvc-install_only.tar.gz",
+    "checksum": {
+      "type": "sha256",
+      "value": "ebe90cc1dce2dd2d7afa1f0aa9b6c269c7c0174aeabdc6a801381602b7283424"
+    },
+    "binaryRelPath": "python.exe",
+    "stripComponents": 1,
+    "homepage": "https://github.com/astral-sh/python-build-standalone/releases/tag/20261026",
+    "line": "3.13"
+  },
+  {
+    "os": "windows",
+    "arch": "arm64",
+    "id": "python-3.13.18-windows-arm64",
+    "kind": "python",
+    "version": "3.13.18",
+    "name": "Python 3.13.18",
+    "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261026/cpython-3.13.18%2B20261026-aarch64-pc-windows-msvc-install_only.tar.gz",
+    "checksum": {
+      "type": "sha256",
+      "value": "13f8bb6ff296a826dd903ea732255ca02fc3a4db4287c2b0ebe0781360b6028d"
+    },
+    "binaryRelPath": "python.exe",
+    "stripComponents": 1,
+    "homepage": "https://github.com/astral-sh/python-build-standalone/releases/tag/20261026",
+    "line": "3.13"
+  },
+  {
+    "os": "windows",
+    "arch": "amd64",
+    "id": "python-3.12.16-windows-amd64",
+    "kind": "python",
+    "version": "3.12.16",
+    "name": "Python 3.12.16",
+    "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261026/cpython-3.12.16%2B20261026-x86_64-pc-windows-msvc-install_only.tar.gz",
+    "checksum": {
+      "type": "sha256",
+      "value": "590dfcbe3a34c07301e6332e13e2188b98655cd072b08afa45a7998dc4c22bc5"
+    },
+    "binaryRelPath": "python.exe",
+    "stripComponents": 1,
+    "homepage": "https://github.com/astral-sh/python-build-standalone/releases/tag/20261026",
+    "line": "3.12"
+  },
+  {
+    "os": "windows",
+    "arch": "arm64",
+    "id": "python-3.12.16-windows-arm64",
+    "kind": "python",
+    "version": "3.12.16",
+    "name": "Python 3.12.16",
+    "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261026/cpython-3.12.16%2B20261026-aarch64-pc-windows-msvc-install_only.tar.gz",
+    "checksum": {
+      "type": "sha256",
+      "value": "ad585318bfe47980cbaa90be12a65319c5b4eec7472655428528068e710a6c9a"
+    },
+    "binaryRelPath": "python.exe",
+    "stripComponents": 1,
+    "homepage": "https://github.com/astral-sh/python-build-standalone/releases/tag/20261026",
+    "line": "3.12"
   }
 ]

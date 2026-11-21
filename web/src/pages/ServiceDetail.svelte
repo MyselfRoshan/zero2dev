@@ -17,6 +17,7 @@
   import DatabaseTools from "../ui/DatabaseTools.svelte";
   import MailInfo from "../ui/MailInfo.svelte";
   import ServiceSnapshots from "../ui/ServiceSnapshots.svelte";
+  import TaskPanel from "../ui/TaskPanel.svelte";
   import Icon from "../ui/Icon.svelte";
   import KindIcon from "../ui/KindIcon.svelte";
   import LogViewer from "../ui/LogViewer.svelte";
@@ -163,6 +164,8 @@
   <!-- 0.0.5: each of these renders nothing for a service it does not apply to. -->
   <DatabaseTools {service} />
   <ServiceSnapshots {service} />
+  <!-- 0.0.6: one-off tasks (npm install, composer install ...); renders nothing for kinds without any. -->
+  <TaskPanel {service} />
 
   <h2 class="lh">Live output</h2>
   <div class="vh">

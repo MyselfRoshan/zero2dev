@@ -251,6 +251,61 @@ export const TOURS: Tour[] = [
     ],
   },
   {
+    id: "create",
+    title: "Create a project",
+    summary:
+      "Start from a framework such as Laravel or Next.js: Zero2Dev installs what is missing and sets everything up.",
+    minutes: 3,
+    icon: "rocket",
+    steps: [
+      {
+        title: "Open Projects",
+        text: "New projects start from the Projects page. Click Projects in the sidebar.",
+        target: '[data-tour="nav-projects"]',
+        done: on("#/projects"),
+      },
+      {
+        title: "Start from a framework",
+        text: "Press New project from a framework.",
+        route: "#/projects",
+        target: '[data-tour="create-project"]',
+        done: on("#/create"),
+      },
+      {
+        title: "Choose a language and a framework",
+        text: "Pick the language, then the framework. Each card says what it needs, such as PHP, Composer or a database.",
+        route: "#/create",
+        target: '[data-tour="create-framework"]',
+      },
+      {
+        title: "Name and folder",
+        text: "Give the project a name and choose the folder it goes in. The project gets its own folder inside it, named like the short name shown under the field.",
+        route: "#/create",
+        target: '[data-tour="create-name"]',
+      },
+      {
+        title: "Read the plan",
+        text: "What will happen is always on the right: what is installed first, the steps, and what is created. A problem, such as a folder that already exists, is shown here and stops Create until you fix it.",
+        route: "#/create",
+        target: '[data-tour="create-plan"]',
+      },
+      {
+        title: "Create it",
+        text: "Press Create project. Nothing outside the project folder and the Zero2Dev data folder is touched. A progress list follows each step.",
+        route: "#/create",
+        target: '[data-tour="create-go"]',
+        done: (s, b) => s.services.length > b.services || s.sites.length > b.sites,
+        waiting: "Waiting for the project to be created",
+      },
+      {
+        title: "Done",
+        text: "The project exists. Press Start the project to run its services, or open its site from the result.",
+        route: "#/create",
+        target: '[data-testid="create-result"]',
+      },
+    ],
+  },
+  {
     id: "tour",
     title: "A quick look around",
     summary: "One minute through every page, to see where things are.",

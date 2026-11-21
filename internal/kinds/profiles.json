@@ -36,6 +36,71 @@
         ],
         "path": "{home}/node/global",
         "help": "After an import moved or copied npm's global packages into the data folder: npm installs global packages there, and their commands are on PATH."
+      },
+      {
+        "when": {
+          "setting": "packageManager",
+          "not": "npm"
+        },
+        "env": [
+          {
+            "name": "COREPACK_HOME",
+            "value": "{home}/node/corepack-home",
+            "help": "Corepack keeps the pnpm and Yarn versions it downloads in the data folder."
+          },
+          {
+            "name": "COREPACK_ENABLE_DOWNLOAD_PROMPT",
+            "value": "0",
+            "help": "Corepack downloads the package manager without asking (there is no one to answer in a service)."
+          },
+          {
+            "name": "npm_config_store_dir",
+            "value": "{home}/node/pnpm-store",
+            "help": "pnpm keeps its package store in the data folder."
+          },
+          {
+            "name": "YARN_CACHE_FOLDER",
+            "value": "{home}/node/yarn-cache",
+            "help": "Yarn keeps its download cache in the data folder."
+          }
+        ],
+        "path": "{home}/node/corepack/bin",
+        "help": "While the package manager is pnpm or Yarn: Corepack's commands (pnpm, yarn) are first on PATH, and their versions, store and cache live in the data folder."
+      }
+    ],
+    "tasks": [
+      {
+        "id": "npm-install",
+        "label": "Install packages",
+        "program": "{s.packageManager}",
+        "args": [
+          "install"
+        ],
+        "help": "Installs the packages package.json lists into node_modules, with the package manager chosen in the service's settings (npm unless set).",
+        "when": "package.json",
+        "timeout": 1200
+      },
+      {
+        "id": "npm-build",
+        "label": "Build",
+        "program": "{s.packageManager}",
+        "args": [
+          "run",
+          "build"
+        ],
+        "help": "Runs the build script of package.json.",
+        "when": "package.json",
+        "timeout": 1200
+      },
+      {
+        "id": "npm-test",
+        "label": "Run tests",
+        "program": "{s.packageManager}",
+        "args": [
+          "test"
+        ],
+        "help": "Runs the test script of package.json.",
+        "when": "package.json"
       }
     ],
     "options": [
@@ -106,6 +171,29 @@
           ]
         },
         "help": "The name of a script in package.json. npm is taken from the same folder as the selected Node version."
+      },
+      {
+        "key": "packageManager",
+        "group": "Run",
+        "label": "Package manager",
+        "common": true,
+        "type": "select",
+        "default": "npm",
+        "choices": [
+          {
+            "value": "npm",
+            "label": "npm"
+          },
+          {
+            "value": "pnpm",
+            "label": "pnpm"
+          },
+          {
+            "value": "yarn",
+            "label": "Yarn"
+          }
+        ],
+        "help": "Runs the npm script and the install tasks with it. pnpm and Yarn come from Corepack, which Zero2Dev installs into the data folder the first time they are needed (an internet connection is needed once)."
       },
       {
         "key": "watch",
@@ -225,6 +313,22 @@
     ],
     "portable": [
       {
+        "always": true,
+        "env": [
+          {
+            "name": "COMPOSER_HOME",
+            "value": "{home}/composer",
+            "help": "Composer keeps its settings, auth.json and global packages in the data folder."
+          },
+          {
+            "name": "COMPOSER_CACHE_DIR",
+            "value": "{home}/composer/cache",
+            "help": "Composer's download cache is in the data folder too."
+          }
+        ],
+        "help": "Composer's home and cache are always in the data folder, whichever terminal or service runs it."
+      },
+      {
         "setting": "composer",
         "env": [
           {
@@ -235,6 +339,64 @@
         ],
         "path": "{home}/composer/vendor/bin",
         "help": "After an import moved or copied Composer's home into the data folder: Composer uses it, and the commands of global packages are on PATH."
+      }
+    ],
+    "tasks": [
+      {
+        "id": "composer-install",
+        "label": "Composer install",
+        "program": "composer",
+        "args": [
+          "install"
+        ],
+        "help": "Installs the packages composer.lock (or composer.json) lists into vendor, using the service's PHP.",
+        "when": "composer.json",
+        "timeout": 1200
+      },
+      {
+        "id": "composer-update",
+        "label": "Composer update",
+        "program": "composer",
+        "args": [
+          "update"
+        ],
+        "help": "Moves the packages to the newest versions composer.json allows and rewrites composer.lock.",
+        "confirm": "Composer update changes composer.lock and the files in vendor. Continue?",
+        "when": "composer.json",
+        "timeout": 1200
+      },
+      {
+        "id": "composer-dump-autoload",
+        "label": "Dump autoload",
+        "program": "composer",
+        "args": [
+          "dump-autoload"
+        ],
+        "help": "Rebuilds Composer's class map after you added classes or changed the autoload settings.",
+        "when": "composer.json"
+      },
+      {
+        "id": "artisan-migrate",
+        "label": "Run migrations",
+        "program": "php",
+        "args": [
+          "artisan",
+          "migrate"
+        ],
+        "help": "Applies the migrations of a Laravel project that have not run yet (php artisan migrate).",
+        "confirm": "This changes the tables of the project's database. Run the pending migrations?",
+        "when": "artisan"
+      },
+      {
+        "id": "artisan-cache-clear",
+        "label": "Clear caches",
+        "program": "php",
+        "args": [
+          "artisan",
+          "cache:clear"
+        ],
+        "help": "Empties the application cache of a Laravel project (php artisan cache:clear).",
+        "when": "artisan"
       }
     ],
     "options": [
@@ -515,6 +677,52 @@
         "help": "After an import moved or copied Go's module and build caches into the data folder: Go uses them there, also when the setting below is off. They are the same folders that setting uses."
       }
     ],
+    "tasks": [
+      {
+        "id": "go-mod-download",
+        "label": "Download modules",
+        "program": "go",
+        "args": [
+          "mod",
+          "download"
+        ],
+        "help": "Fetches the modules go.mod lists into Go's module cache, so the first build does not have to.",
+        "when": "go.mod"
+      },
+      {
+        "id": "go-mod-tidy",
+        "label": "Tidy modules",
+        "program": "go",
+        "args": [
+          "mod",
+          "tidy"
+        ],
+        "help": "Adds the modules your code imports and drops the ones it does not, rewriting go.mod and go.sum.",
+        "when": "go.mod"
+      },
+      {
+        "id": "go-test",
+        "label": "Run tests",
+        "program": "go",
+        "args": [
+          "test",
+          "./..."
+        ],
+        "help": "Runs every test of the project (go test ./...). The output is in the service log.",
+        "when": "go.mod"
+      },
+      {
+        "id": "go-build",
+        "label": "Build",
+        "program": "go",
+        "args": [
+          "build",
+          "./..."
+        ],
+        "help": "Compiles every package to check that the project builds (go build ./...); it writes no program for a library.",
+        "when": "go.mod"
+      }
+    ],
     "options": [
       {
         "key": "package",
@@ -563,6 +771,247 @@
           }
         },
         "help": "Modules and compiled packages go to data\\go instead of your user profile. The first run downloads the modules again once. Programs you install with go install (air, dlv, gopls) go to data\\go\\path\\bin, which is on PATH. Off: Go keeps its own default folder (your user profile's go\\bin, also put on PATH)."
+      }
+    ]
+  },
+  {
+    "kind": "python",
+    "label": "Python",
+    "summary": "Runs a Python script, module or web app (Uvicorn, Flask, Django) in a virtual environment of its own.",
+    "folder": {
+      "use": "required",
+      "label": "Project folder",
+      "hint": "Your app's code. Its virtual environment is kept in the data folder (python\\venvs), not here."
+    },
+    "port": {
+      "use": "optional",
+      "default": 8000,
+      "hint": "Your app also gets it as the PORT variable. The web app modes listen on it."
+    },
+    "health": true,
+    "dataDir": "shared",
+    "extraArgs": "Arguments for your app",
+    "extraArgsHint": "Added at the end of the command (sys.argv for a script, or more options for Uvicorn, Flask and Django, like --reload). {port} is replaced with the port.",
+    "env": [
+      {
+        "name": "PYTHONUNBUFFERED",
+        "value": "1",
+        "help": "Python writes print() output straight to the log instead of holding it back in a buffer."
+      }
+    ],
+    "options": [
+      {
+        "key": "run",
+        "group": "Run",
+        "label": "Run",
+        "common": true,
+        "type": "select",
+        "default": "script",
+        "choices": [
+          {
+            "value": "script",
+            "label": "A script (python main.py)",
+            "args": []
+          },
+          {
+            "value": "module",
+            "label": "A module (python -m name)",
+            "args": []
+          },
+          {
+            "value": "uvicorn",
+            "label": "Uvicorn (FastAPI)",
+            "args": [
+              "-m",
+              "uvicorn",
+              "--host",
+              "{s.host}",
+              "--port",
+              "{port}"
+            ]
+          },
+          {
+            "value": "flask",
+            "label": "Flask (flask run)",
+            "args": [
+              "-m",
+              "flask",
+              "run",
+              "--host",
+              "{s.host}",
+              "--port",
+              "{port}"
+            ]
+          },
+          {
+            "value": "django",
+            "label": "Django (runserver)",
+            "args": []
+          }
+        ],
+        "help": "How your app starts. The web app modes need their package in the project (pip install uvicorn, flask or django, for example with the Install requirements task)."
+      },
+      {
+        "key": "script",
+        "group": "Run",
+        "label": "Script",
+        "common": true,
+        "type": "text",
+        "default": "main.py",
+        "placeholder": "main.py",
+        "required": true,
+        "show": {
+          "run": "script"
+        },
+        "pattern": "^[A-Za-z0-9_./\\\\-]+$",
+        "emit": {
+          "arg": [
+            "{v}"
+          ]
+        },
+        "help": "The Python file to run, relative to the project folder."
+      },
+      {
+        "key": "module",
+        "group": "Run",
+        "label": "Module",
+        "common": true,
+        "type": "text",
+        "default": "",
+        "placeholder": "myapp.server",
+        "required": true,
+        "show": {
+          "run": "module"
+        },
+        "pattern": "^[A-Za-z_][A-Za-z0-9_.]*$",
+        "emit": {
+          "arg": [
+            "-m",
+            "{v}"
+          ]
+        },
+        "help": "The module to run, as in python -m myapp.server. It is found in the project folder."
+      },
+      {
+        "key": "app",
+        "group": "Run",
+        "label": "Application",
+        "common": true,
+        "type": "text",
+        "default": "main:app",
+        "placeholder": "main:app",
+        "required": true,
+        "show": {
+          "run": "uvicorn"
+        },
+        "pattern": "^[A-Za-z_][A-Za-z0-9_.]*:[A-Za-z_][A-Za-z0-9_.]*$",
+        "emit": {
+          "arg": [
+            "{v}"
+          ]
+        },
+        "help": "The module and the app object inside it, like main:app (the file main.py with app = FastAPI()). Add --factory to the arguments for an app factory."
+      },
+      {
+        "key": "flaskApp",
+        "group": "Run",
+        "label": "Flask application",
+        "common": true,
+        "type": "text",
+        "default": "",
+        "placeholder": "app (or wsgi)",
+        "show": {
+          "run": "flask"
+        },
+        "pattern": "^[A-Za-z0-9_.:()/\\\\-]*$",
+        "emit": {
+          "env": "FLASK_APP"
+        },
+        "help": "The module of your Flask app, like app or myapp:create_app. Empty: Flask looks for app.py or wsgi.py. Set as FLASK_APP."
+      },
+      {
+        "key": "manage",
+        "group": "Run",
+        "label": "manage.py",
+        "common": true,
+        "type": "text",
+        "default": "manage.py",
+        "placeholder": "manage.py",
+        "required": true,
+        "show": {
+          "run": "django"
+        },
+        "pattern": "^[A-Za-z0-9_./\\\\-]+$",
+        "emit": {
+          "arg": [
+            "{v}",
+            "runserver",
+            "{s.host}:{port}"
+          ]
+        },
+        "help": "Django's command file, relative to the project folder. It starts python manage.py runserver on the host and port."
+      },
+      {
+        "key": "host",
+        "group": "Run",
+        "label": "Host",
+        "common": true,
+        "type": "text",
+        "default": "127.0.0.1",
+        "placeholder": "127.0.0.1",
+        "required": true,
+        "pattern": "^[A-Za-z0-9_.:-]+$",
+        "emit": {
+          "env": "HOST"
+        },
+        "help": "The address the web app modes listen on. 127.0.0.1 is only this PC; 0.0.0.0 lets other devices on your network connect. Your own script or module gets it as HOST."
+      }
+    ],
+    "tasks": [
+      {
+        "id": "pip-install",
+        "label": "Install requirements",
+        "program": "pip",
+        "args": [
+          "install",
+          "-r",
+          "requirements.txt"
+        ],
+        "when": "requirements.txt",
+        "help": "Installs the packages of requirements.txt into the virtual environment of this service."
+      },
+      {
+        "id": "pip-list",
+        "label": "List packages",
+        "program": "pip",
+        "args": [
+          "list"
+        ],
+        "help": "Shows what is installed in the virtual environment of this service."
+      },
+      {
+        "id": "django-migrate",
+        "label": "Django: migrate",
+        "program": "python",
+        "args": [
+          "manage.py",
+          "migrate"
+        ],
+        "when": "manage.py",
+        "confirm": "Apply the database migrations of this Django project?",
+        "help": "Runs python manage.py migrate with the virtual environment."
+      },
+      {
+        "id": "django-collectstatic",
+        "label": "Django: collectstatic",
+        "program": "python",
+        "args": [
+          "manage.py",
+          "collectstatic",
+          "--noinput"
+        ],
+        "when": "manage.py",
+        "help": "Collects the static files into STATIC_ROOT (python manage.py collectstatic --noinput)."
       }
     ]
   },

@@ -1,0 +1,1046 @@
+{
+  "format": 1,
+  "frameworks": [
+    {
+      "id": "laravel",
+      "label": "Laravel",
+      "language": "php",
+      "summary": "The PHP framework for web artisans, made with composer create-project.",
+      "homepage": "https://laravel.com",
+      "runtime": {
+        "kind": "php",
+        "min": "8.2"
+      },
+      "composer": true,
+      "database": {
+        "kinds": [
+          "mariadb",
+          "mysql"
+        ],
+        "default": "mariadb",
+        "optional": true
+      },
+      "steps": [
+        {
+          "type": "run",
+          "label": "Creating the Laravel project",
+          "program": "composer",
+          "args": [
+            "create-project",
+            "laravel/laravel",
+            "{slug}",
+            "--no-interaction",
+            "--no-progress"
+          ],
+          "in": "parent"
+        }
+      ],
+      "services": [
+        {
+          "name": "{name}",
+          "kind": "php",
+          "port": 8000,
+          "usesDatabase": true,
+          "settings": {
+            "docroot": "public"
+          }
+        }
+      ],
+      "site": {
+        "type": "php",
+        "root": "public",
+        "https": true
+      },
+      "env": [
+        {
+          "key": "APP_URL",
+          "value": "https://{domain}"
+        },
+        {
+          "key": "DB_CONNECTION",
+          "value": "mysql"
+        },
+        {
+          "key": "DB_HOST",
+          "value": "{dbHost}"
+        },
+        {
+          "key": "DB_PORT",
+          "value": "{dbPort}"
+        },
+        {
+          "key": "DB_DATABASE",
+          "value": "{db}"
+        },
+        {
+          "key": "DB_USERNAME",
+          "value": "{dbUser}"
+        },
+        {
+          "key": "DB_PASSWORD",
+          "value": "{dbPassword}"
+        },
+        {
+          "key": "SESSION_DRIVER",
+          "value": "file"
+        },
+        {
+          "key": "CACHE_STORE",
+          "value": "file"
+        },
+        {
+          "key": "QUEUE_CONNECTION",
+          "value": "sync"
+        }
+      ],
+      "envFile": ".env"
+    },
+    {
+      "id": "symfony",
+      "label": "Symfony",
+      "language": "php",
+      "summary": "The Symfony skeleton, made with composer create-project.",
+      "homepage": "https://symfony.com",
+      "runtime": {
+        "kind": "php",
+        "min": "8.2"
+      },
+      "composer": true,
+      "database": {
+        "kinds": [
+          "mariadb",
+          "mysql"
+        ],
+        "default": "mariadb",
+        "optional": true
+      },
+      "steps": [
+        {
+          "type": "run",
+          "label": "Creating the Symfony project",
+          "program": "composer",
+          "args": [
+            "create-project",
+            "symfony/skeleton",
+            "{slug}",
+            "--no-interaction",
+            "--no-progress"
+          ],
+          "in": "parent"
+        }
+      ],
+      "services": [
+        {
+          "name": "{name}",
+          "kind": "php",
+          "port": 8000,
+          "usesDatabase": true,
+          "settings": {
+            "docroot": "public"
+          }
+        }
+      ],
+      "site": {
+        "type": "php",
+        "root": "public",
+        "https": true
+      },
+      "env": [
+        {
+          "key": "DATABASE_URL",
+          "value": "{dbUrl}"
+        },
+        {
+          "key": "APP_SECRET",
+          "value": "{random}{random}",
+          "ifMissing": true
+        }
+      ],
+      "envFile": ".env"
+    },
+    {
+      "id": "wordpress",
+      "label": "WordPress",
+      "language": "php",
+      "summary": "The latest WordPress from wordpress.org, with its database and wp-config.php.",
+      "homepage": "https://wordpress.org",
+      "runtime": {
+        "kind": "php",
+        "min": "7.4"
+      },
+      "database": {
+        "kinds": [
+          "mariadb",
+          "mysql"
+        ],
+        "default": "mariadb",
+        "optional": false
+      },
+      "steps": [
+        {
+          "type": "download",
+          "label": "Downloading WordPress",
+          "url": "https://wordpress.org/latest.zip",
+          "checksum": "https://wordpress.org/latest.zip.sha1",
+          "strip": 1
+        },
+        {
+          "type": "files",
+          "label": "Writing wp-config.php",
+          "files": {
+            "wp-config.php": "<?php\n// Written by Zero2Dev. The database was made for this site only.\ndefine('DB_NAME', '{db}');\ndefine('DB_USER', '{dbUser}');\ndefine('DB_PASSWORD', '{dbPassword}');\ndefine('DB_HOST', '{dbHost}:{dbPort}');\ndefine('DB_CHARSET', 'utf8mb4');\ndefine('DB_COLLATE', '');\ndefine('AUTH_KEY', '{random}{random}');\ndefine('SECURE_AUTH_KEY', '{random}{random}');\ndefine('LOGGED_IN_KEY', '{random}{random}');\ndefine('NONCE_KEY', '{random}{random}');\ndefine('AUTH_SALT', '{random}{random}');\ndefine('SECURE_AUTH_SALT', '{random}{random}');\ndefine('LOGGED_IN_SALT', '{random}{random}');\ndefine('NONCE_SALT', '{random}{random}');\n$table_prefix = 'wp_';\ndefine('WP_DEBUG', false);\n// The site server terminates HTTPS and tells WordPress so.\nif (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') {\n\t$_SERVER['HTTPS'] = 'on';\n}\nif (!defined('ABSPATH')) {\n\tdefine('ABSPATH', __DIR__ . '/');\n}\nrequire_once ABSPATH . 'wp-settings.php';\n"
+          }
+        }
+      ],
+      "services": [
+        {
+          "name": "{name}",
+          "kind": "php",
+          "port": 8000,
+          "usesDatabase": true
+        }
+      ],
+      "site": {
+        "type": "php",
+        "root": "",
+        "https": true
+      }
+    },
+    {
+      "id": "php",
+      "label": "Plain PHP",
+      "language": "php",
+      "summary": "A starter index.php served by PHP's built-in web server.",
+      "runtime": {
+        "kind": "php",
+        "min": "8.1"
+      },
+      "steps": [
+        {
+          "type": "files",
+          "label": "Writing index.php",
+          "files": {
+            "index.php": "<?php\n$name = '{name}';\n?>\n<!doctype html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\">\n  <title><?= htmlspecialchars($name) ?></title>\n</head>\n<body>\n  <h1><?= htmlspecialchars($name) ?></h1>\n  <p>PHP <?= PHP_VERSION ?> works.</p>\n</body>\n</html>\n"
+          }
+        }
+      ],
+      "services": [
+        {
+          "name": "{name}",
+          "kind": "php",
+          "port": 8000
+        }
+      ],
+      "site": {
+        "type": "php",
+        "root": "",
+        "https": true
+      }
+    },
+    {
+      "id": "express",
+      "label": "Express",
+      "language": "javascript",
+      "summary": "A small Express 5 server with an npm dev script.",
+      "homepage": "https://expressjs.com",
+      "runtime": {
+        "kind": "node",
+        "min": "20"
+      },
+      "steps": [
+        {
+          "type": "files",
+          "label": "Writing package.json and server.js",
+          "files": {
+            "package.json": "{\n  \"name\": \"{slug}\",\n  \"version\": \"1.0.0\",\n  \"private\": true,\n  \"scripts\": {\n    \"start\": \"node server.js\",\n    \"dev\": \"node --watch server.js\"\n  },\n  \"dependencies\": {\n    \"express\": \"^5.1.0\"\n  }\n}\n",
+            "server.js": "const express = require('express');\n\nconst app = express();\nconst port = process.env.PORT || {port};\n\napp.get('/', (req, res) => {\n  res.send('{name} works.');\n});\n\napp.listen(port, '127.0.0.1', () => {\n  console.log('Listening on http://127.0.0.1:' + port);\n});\n"
+          }
+        },
+        {
+          "type": "run",
+          "label": "Installing the packages",
+          "program": "npm",
+          "args": [
+            "install",
+            "--no-fund",
+            "--no-audit"
+          ],
+          "in": "project",
+          "env": {
+            "npm_config_yes": "true",
+            "CI": "1"
+          }
+        }
+      ],
+      "services": [
+        {
+          "name": "{name}",
+          "kind": "node",
+          "port": 3000,
+          "settings": {
+            "run": "npm",
+            "npmScript": "dev"
+          }
+        }
+      ],
+      "site": {
+        "type": "proxy",
+        "https": true
+      }
+    },
+    {
+      "id": "nestjs",
+      "label": "NestJS",
+      "language": "javascript",
+      "summary": "A NestJS application made with the Nest CLI (TypeScript).",
+      "homepage": "https://nestjs.com",
+      "runtime": {
+        "kind": "node",
+        "min": "20"
+      },
+      "steps": [
+        {
+          "type": "run",
+          "label": "Creating the NestJS project",
+          "program": "npx",
+          "args": [
+            "--yes",
+            "@nestjs/cli@latest",
+            "new",
+            "{slug}",
+            "--package-manager",
+            "npm",
+            "--skip-git"
+          ],
+          "in": "parent",
+          "env": {
+            "npm_config_yes": "true",
+            "CI": "1"
+          }
+        }
+      ],
+      "services": [
+        {
+          "name": "{name}",
+          "kind": "node",
+          "port": 3000,
+          "settings": {
+            "run": "npm",
+            "npmScript": "start:dev"
+          }
+        }
+      ],
+      "site": {
+        "type": "proxy",
+        "https": true
+      }
+    },
+    {
+      "id": "nextjs",
+      "label": "Next.js",
+      "language": "javascript",
+      "summary": "A Next.js app with the recommended defaults (TypeScript, App Router, Tailwind CSS).",
+      "homepage": "https://nextjs.org",
+      "runtime": {
+        "kind": "node",
+        "min": "20.9"
+      },
+      "steps": [
+        {
+          "type": "run",
+          "label": "Creating the Next.js project",
+          "program": "npx",
+          "args": [
+            "--yes",
+            "create-next-app@latest",
+            "{slug}",
+            "--yes",
+            "--use-npm",
+            "--disable-git"
+          ],
+          "in": "parent",
+          "env": {
+            "npm_config_yes": "true",
+            "CI": "1"
+          }
+        }
+      ],
+      "services": [
+        {
+          "name": "{name}",
+          "kind": "node",
+          "port": 3000,
+          "settings": {
+            "run": "npm",
+            "npmScript": "dev"
+          }
+        }
+      ],
+      "site": {
+        "type": "proxy",
+        "https": true
+      }
+    },
+    {
+      "id": "vite-react",
+      "label": "Vite and React",
+      "language": "javascript",
+      "summary": "A Vite app with React and TypeScript.",
+      "homepage": "https://vite.dev",
+      "runtime": {
+        "kind": "node",
+        "min": "20.19"
+      },
+      "steps": [
+        {
+          "type": "run",
+          "label": "Creating the Vite and React project",
+          "program": "npm",
+          "args": [
+            "create",
+            "vite@latest",
+            "{slug}",
+            "--",
+            "--template",
+            "react-ts",
+            "--no-interactive"
+          ],
+          "in": "parent",
+          "env": {
+            "npm_config_yes": "true",
+            "CI": "1"
+          }
+        },
+        {
+          "type": "run",
+          "label": "Installing the packages",
+          "program": "npm",
+          "args": [
+            "install",
+            "--no-fund",
+            "--no-audit"
+          ],
+          "in": "project",
+          "env": {
+            "npm_config_yes": "true",
+            "CI": "1"
+          }
+        }
+      ],
+      "services": [
+        {
+          "name": "{name}",
+          "kind": "node",
+          "port": 5173,
+          "settings": {
+            "run": "npm",
+            "npmScript": "dev"
+          },
+          "args": [
+            "--host",
+            "127.0.0.1",
+            "--port",
+            "{port}",
+            "--strictPort"
+          ]
+        }
+      ],
+      "site": {
+        "type": "proxy",
+        "https": true
+      }
+    },
+    {
+      "id": "vite-vue",
+      "label": "Vite and Vue",
+      "language": "javascript",
+      "summary": "A Vite app with Vue and TypeScript.",
+      "homepage": "https://vite.dev",
+      "runtime": {
+        "kind": "node",
+        "min": "20.19"
+      },
+      "steps": [
+        {
+          "type": "run",
+          "label": "Creating the Vite and Vue project",
+          "program": "npm",
+          "args": [
+            "create",
+            "vite@latest",
+            "{slug}",
+            "--",
+            "--template",
+            "vue-ts",
+            "--no-interactive"
+          ],
+          "in": "parent",
+          "env": {
+            "npm_config_yes": "true",
+            "CI": "1"
+          }
+        },
+        {
+          "type": "run",
+          "label": "Installing the packages",
+          "program": "npm",
+          "args": [
+            "install",
+            "--no-fund",
+            "--no-audit"
+          ],
+          "in": "project",
+          "env": {
+            "npm_config_yes": "true",
+            "CI": "1"
+          }
+        }
+      ],
+      "services": [
+        {
+          "name": "{name}",
+          "kind": "node",
+          "port": 5173,
+          "settings": {
+            "run": "npm",
+            "npmScript": "dev"
+          },
+          "args": [
+            "--host",
+            "127.0.0.1",
+            "--port",
+            "{port}",
+            "--strictPort"
+          ]
+        }
+      ],
+      "site": {
+        "type": "proxy",
+        "https": true
+      }
+    },
+    {
+      "id": "vite-svelte",
+      "label": "Vite and Svelte",
+      "language": "javascript",
+      "summary": "A Vite app with Svelte and TypeScript.",
+      "homepage": "https://vite.dev",
+      "runtime": {
+        "kind": "node",
+        "min": "20.19"
+      },
+      "steps": [
+        {
+          "type": "run",
+          "label": "Creating the Vite and Svelte project",
+          "program": "npm",
+          "args": [
+            "create",
+            "vite@latest",
+            "{slug}",
+            "--",
+            "--template",
+            "svelte-ts",
+            "--no-interactive"
+          ],
+          "in": "parent",
+          "env": {
+            "npm_config_yes": "true",
+            "CI": "1"
+          }
+        },
+        {
+          "type": "run",
+          "label": "Installing the packages",
+          "program": "npm",
+          "args": [
+            "install",
+            "--no-fund",
+            "--no-audit"
+          ],
+          "in": "project",
+          "env": {
+            "npm_config_yes": "true",
+            "CI": "1"
+          }
+        }
+      ],
+      "services": [
+        {
+          "name": "{name}",
+          "kind": "node",
+          "port": 5173,
+          "settings": {
+            "run": "npm",
+            "npmScript": "dev"
+          },
+          "args": [
+            "--host",
+            "127.0.0.1",
+            "--port",
+            "{port}",
+            "--strictPort"
+          ]
+        }
+      ],
+      "site": {
+        "type": "proxy",
+        "https": true
+      }
+    },
+    {
+      "id": "astro",
+      "label": "Astro",
+      "language": "javascript",
+      "summary": "An Astro site from the minimal template.",
+      "homepage": "https://astro.build",
+      "runtime": {
+        "kind": "node",
+        "min": "22.12"
+      },
+      "steps": [
+        {
+          "type": "run",
+          "label": "Creating the Astro project",
+          "program": "npm",
+          "args": [
+            "create",
+            "astro@latest",
+            "{slug}",
+            "--",
+            "--template",
+            "minimal",
+            "--install",
+            "--no-git",
+            "--skip-houston",
+            "--yes"
+          ],
+          "in": "parent",
+          "env": {
+            "npm_config_yes": "true",
+            "CI": "1"
+          }
+        }
+      ],
+      "services": [
+        {
+          "name": "{name}",
+          "kind": "node",
+          "port": 4321,
+          "settings": {
+            "run": "npm",
+            "npmScript": "dev"
+          },
+          "args": [
+            "--host",
+            "127.0.0.1",
+            "--port",
+            "{port}"
+          ]
+        }
+      ],
+      "site": {
+        "type": "proxy",
+        "https": true
+      }
+    },
+    {
+      "id": "django",
+      "label": "Django",
+      "language": "python",
+      "summary": "A Django project in its own virtual environment, with the first migration run.",
+      "homepage": "https://www.djangoproject.com",
+      "runtime": {
+        "kind": "python",
+        "min": "3.10"
+      },
+      "steps": [
+        {
+          "type": "files",
+          "label": "Writing requirements.txt",
+          "files": {
+            "requirements.txt": "Django\n"
+          }
+        },
+        {
+          "type": "run",
+          "label": "Installing Django",
+          "program": "pip",
+          "args": [
+            "install",
+            "--disable-pip-version-check",
+            "--no-input",
+            "-r",
+            "requirements.txt"
+          ],
+          "in": "project"
+        },
+        {
+          "type": "run",
+          "label": "Creating the Django project",
+          "program": "django-admin",
+          "args": [
+            "startproject",
+            "config",
+            "."
+          ],
+          "in": "project"
+        },
+        {
+          "type": "run",
+          "label": "Running the first migration",
+          "program": "python",
+          "args": [
+            "manage.py",
+            "migrate",
+            "--no-input"
+          ],
+          "in": "project"
+        }
+      ],
+      "services": [
+        {
+          "name": "{name}",
+          "kind": "python",
+          "port": 8000,
+          "settings": {
+            "run": "django",
+            "manage": "manage.py"
+          }
+        }
+      ],
+      "site": {
+        "type": "proxy",
+        "https": true
+      }
+    },
+    {
+      "id": "fastapi",
+      "label": "FastAPI",
+      "language": "python",
+      "summary": "A FastAPI app served by Uvicorn, in its own virtual environment.",
+      "homepage": "https://fastapi.tiangolo.com",
+      "runtime": {
+        "kind": "python",
+        "min": "3.10"
+      },
+      "steps": [
+        {
+          "type": "files",
+          "label": "Writing main.py and requirements.txt",
+          "files": {
+            "main.py": "from fastapi import FastAPI\n\napp = FastAPI(title=\"{name}\")\n\n\n@app.get(\"/\")\ndef read_root():\n    return {\"message\": \"{name} works.\"}\n",
+            "requirements.txt": "fastapi\nuvicorn[standard]\n"
+          }
+        },
+        {
+          "type": "run",
+          "label": "Installing FastAPI and Uvicorn",
+          "program": "pip",
+          "args": [
+            "install",
+            "--disable-pip-version-check",
+            "--no-input",
+            "-r",
+            "requirements.txt"
+          ],
+          "in": "project"
+        }
+      ],
+      "services": [
+        {
+          "name": "{name}",
+          "kind": "python",
+          "port": 8000,
+          "settings": {
+            "run": "uvicorn",
+            "app": "main:app"
+          }
+        }
+      ],
+      "site": {
+        "type": "proxy",
+        "https": true
+      }
+    },
+    {
+      "id": "flask",
+      "label": "Flask",
+      "language": "python",
+      "summary": "A Flask app run with flask run, in its own virtual environment.",
+      "homepage": "https://flask.palletsprojects.com",
+      "runtime": {
+        "kind": "python",
+        "min": "3.10"
+      },
+      "steps": [
+        {
+          "type": "files",
+          "label": "Writing app.py and requirements.txt",
+          "files": {
+            "app.py": "from flask import Flask\n\napp = Flask(__name__)\n\n\n@app.route(\"/\")\ndef index():\n    return \"{name} works.\"\n",
+            "requirements.txt": "flask\n"
+          }
+        },
+        {
+          "type": "run",
+          "label": "Installing Flask",
+          "program": "pip",
+          "args": [
+            "install",
+            "--disable-pip-version-check",
+            "--no-input",
+            "-r",
+            "requirements.txt"
+          ],
+          "in": "project"
+        }
+      ],
+      "services": [
+        {
+          "name": "{name}",
+          "kind": "python",
+          "port": 5000,
+          "settings": {
+            "run": "flask",
+            "flaskApp": "app"
+          }
+        }
+      ],
+      "site": {
+        "type": "proxy",
+        "https": true
+      }
+    },
+    {
+      "id": "go-nethttp",
+      "label": "Go (net/http)",
+      "language": "go",
+      "summary": "A small web server with the standard library only.",
+      "runtime": {
+        "kind": "go",
+        "min": "1.21"
+      },
+      "steps": [
+        {
+          "type": "run",
+          "label": "Creating the Go module",
+          "program": "go",
+          "args": [
+            "mod",
+            "init",
+            "{slug}"
+          ],
+          "in": "project"
+        },
+        {
+          "type": "files",
+          "label": "Writing main.go",
+          "files": {
+            "main.go": "package main\n\nimport (\n\t\"fmt\"\n\t\"net/http\"\n\t\"os\"\n)\n\nfunc main() {\n\tport := os.Getenv(\"PORT\")\n\tif port == \"\" {\n\t\tport = \"{port}\"\n\t}\n\thttp.HandleFunc(\"/\", func(w http.ResponseWriter, r *http.Request) {\n\t\tfmt.Fprintln(w, \"{name} works.\")\n\t})\n\thttp.ListenAndServe(\"127.0.0.1:\"+port, nil)\n}\n"
+          }
+        }
+      ],
+      "services": [
+        {
+          "name": "{name}",
+          "kind": "go",
+          "settings": {
+            "package": "."
+          },
+          "port": 8080
+        }
+      ],
+      "site": {
+        "type": "proxy",
+        "https": true
+      }
+    },
+    {
+      "id": "gin",
+      "label": "Gin",
+      "language": "go",
+      "summary": "A Gin web server (github.com/gin-gonic/gin).",
+      "homepage": "https://gin-gonic.com",
+      "runtime": {
+        "kind": "go",
+        "min": "1.24"
+      },
+      "steps": [
+        {
+          "type": "run",
+          "label": "Creating the Go module",
+          "program": "go",
+          "args": [
+            "mod",
+            "init",
+            "{slug}"
+          ],
+          "in": "project"
+        },
+        {
+          "type": "files",
+          "label": "Writing main.go",
+          "files": {
+            "main.go": "package main\n\nimport (\n\t\"net/http\"\n\t\"os\"\n\n\t\"github.com/gin-gonic/gin\"\n)\n\nfunc main() {\n\tport := os.Getenv(\"PORT\")\n\tif port == \"\" {\n\t\tport = \"{port}\"\n\t}\n\tr := gin.Default()\n\tr.GET(\"/\", func(c *gin.Context) {\n\t\tc.String(http.StatusOK, \"{name} works.\")\n\t})\n\tr.Run(\"127.0.0.1:\" + port)\n}\n"
+          }
+        },
+        {
+          "type": "run",
+          "label": "Downloading the modules",
+          "program": "go",
+          "args": [
+            "mod",
+            "tidy"
+          ],
+          "in": "project"
+        }
+      ],
+      "services": [
+        {
+          "name": "{name}",
+          "kind": "go",
+          "settings": {
+            "package": "."
+          },
+          "port": 8080
+        }
+      ],
+      "site": {
+        "type": "proxy",
+        "https": true
+      }
+    },
+    {
+      "id": "fiber",
+      "label": "Fiber",
+      "language": "go",
+      "summary": "A Fiber v3 web server (github.com/gofiber/fiber).",
+      "homepage": "https://gofiber.io",
+      "runtime": {
+        "kind": "go",
+        "min": "1.26"
+      },
+      "steps": [
+        {
+          "type": "run",
+          "label": "Creating the Go module",
+          "program": "go",
+          "args": [
+            "mod",
+            "init",
+            "{slug}"
+          ],
+          "in": "project"
+        },
+        {
+          "type": "files",
+          "label": "Writing main.go",
+          "files": {
+            "main.go": "package main\n\nimport (\n\t\"log\"\n\t\"os\"\n\n\t\"github.com/gofiber/fiber/v3\"\n)\n\nfunc main() {\n\tport := os.Getenv(\"PORT\")\n\tif port == \"\" {\n\t\tport = \"{port}\"\n\t}\n\tapp := fiber.New()\n\tapp.Get(\"/\", func(c fiber.Ctx) error {\n\t\treturn c.SendString(\"{name} works.\")\n\t})\n\tlog.Fatal(app.Listen(\"127.0.0.1:\" + port))\n}\n"
+          }
+        },
+        {
+          "type": "run",
+          "label": "Downloading the modules",
+          "program": "go",
+          "args": [
+            "mod",
+            "tidy"
+          ],
+          "in": "project"
+        }
+      ],
+      "services": [
+        {
+          "name": "{name}",
+          "kind": "go",
+          "settings": {
+            "package": "."
+          },
+          "port": 3000
+        }
+      ],
+      "site": {
+        "type": "proxy",
+        "https": true
+      }
+    },
+    {
+      "id": "springboot",
+      "label": "Spring Boot",
+      "language": "java",
+      "summary": "A Maven project from start.spring.io with Spring Web, built with its Maven wrapper.",
+      "homepage": "https://spring.io/projects/spring-boot",
+      "runtime": {
+        "kind": "java",
+        "min": "17"
+      },
+      "steps": [
+        {
+          "type": "download",
+          "label": "Downloading the project from start.spring.io",
+          "url": "https://start.spring.io/starter.zip?type=maven-project&language=java&groupId=com.example&artifactId={slug}&name={slug}&dependencies=web&javaVersion=17",
+          "unverified": true,
+          "reason": "start.spring.io builds the project when you ask for it and publishes no checksum, so the download is protected by HTTPS only",
+          "strip": 0
+        },
+        {
+          "type": "run",
+          "label": "Building the project",
+          "program": "./mvnw.cmd",
+          "args": [
+            "-q",
+            "-DskipTests",
+            "package"
+          ],
+          "in": "project",
+          "env": {
+            "MAVEN_USER_HOME": "{home}/java/maven"
+          }
+        }
+      ],
+      "services": [
+        {
+          "name": "{name}",
+          "kind": "java",
+          "port": 8080,
+          "settings": {
+            "run": "jar",
+            "jar": "target/{slug}-0.0.1-SNAPSHOT.jar",
+            "springPort": "true"
+          }
+        }
+      ],
+      "site": {
+        "type": "proxy",
+        "https": true
+      }
+    },
+    {
+      "id": "html",
+      "label": "HTML and CSS",
+      "language": "static",
+      "summary": "A starter page served by the site server.",
+      "runtime": {
+        "kind": ""
+      },
+      "steps": [
+        {
+          "type": "files",
+          "label": "Writing the starter page",
+          "files": {
+            "index.html": "<!doctype html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n  <title>{name}</title>\n  <link rel=\"stylesheet\" href=\"style.css\">\n</head>\n<body>\n  <h1>{name}</h1>\n  <p>It works.</p>\n</body>\n</html>\n",
+            "style.css": "body { font-family: system-ui, sans-serif; margin: 2rem; }\n"
+          }
+        }
+      ],
+      "services": [],
+      "site": {
+        "type": "static",
+        "root": ".",
+        "https": true
+      }
+    }
+  ]
+}

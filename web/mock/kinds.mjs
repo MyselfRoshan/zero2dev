@@ -15,12 +15,15 @@ const DATA_DIR = {
   php: "php",
   node: "node",
   go: "go",
+  python: "python",
+  composer: "composer",
 };
 const PROG = {
   node: "node.exe",
   php: "php.exe",
   go: "go.exe",
   java: "java.exe",
+  python: "python.exe",
   caddy: "caddy.exe",
   nginx: "nginx.exe",
   mariadb: "mariadbd.exe",
@@ -145,11 +148,20 @@ export function preview(svc, { home, runtimes }) {
       if (e.program?.[v]) program = program.replace(/[^\\/]*$/, `${e.program[v]}.cmd`);
     }
     args.push(...tail);
+    // pnpm and Yarn come from Corepack (the daemon makes it before the first start).
+    if (svc.kind === "node" && ["pnpm", "yarn"].includes(eff.packageManager) && program.endsWith("npm.cmd"))
+      program = `${home}\\node\\corepack\\bin\\${eff.packageManager}.cmd`;
     if ((svc.args ?? []).length) {
       if (program.endsWith("npm.cmd")) args.push("--");
       args.push(...svc.args.map(plain));
     }
     if (svc.kind === "php") files.push(`${dataDir}\\php.ini`);
+  }
+  // A Python service runs in a virtual environment of its own, made before the first start.
+  if (svc.kind === "python" && !svc.customArgs && !svc.command) {
+    const venv = `${home}\\python\\venvs\\${svc.id}`;
+    program = `${venv}\\Scripts\\python.exe`;
+    env.push(`VIRTUAL_ENV=${venv}`);
   }
   for (const e of p?.env ?? []) env.push(`${e.name}=${expand(e.value)}`);
   for (const [k, v] of Object.entries(svc.env ?? {})) env.push(`${k}=${v}`);

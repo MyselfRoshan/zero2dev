@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.0.6
+
+### Python
+
+- **Python runtime.** Python comes from python-build-standalone (`install_only` `.tar.gz`, checked with the SHA-256 of the release). Python 3.13 and 3.12 are built in for Windows (amd64 and arm64); `Check for new versions` adds the newest patch of each of the last four lines from the project's GitHub releases. Python has its own card in the Languages group.
+- **Python services.** A new service type with a **Run** setting: a script, a module, Uvicorn (FastAPI), Flask or Django `runserver`, with fields for the script, module, application and host. The port reaches Uvicorn, Flask and Django as their own option and every mode as `PORT`. `PYTHONUNBUFFERED=1` is set so `print()` shows up in the log at once.
+- **A virtual environment for each service.** Before the first start Zero2Dev makes `data\python\venvs\<service id>` (`python -m venv`) and runs the service with its `python.exe`, `VIRTUAL_ENV` set and its `Scripts` folder first on `PATH`. When the service's runtime changed, the environment is made again and the log says so. Deleting the service deletes its environment; snapshots never copy it.
+- **Tasks of a Python service.** Install requirements (`pip install -r requirements.txt`), List packages, and for Django projects migrate and collectstatic.
+- **`python` and `pip` in the command line shims.** `pip` is found in the runtime's `Scripts` folder, which the activate scripts put on `PATH` too.
+
+### Composer, pnpm and Yarn
+
+- **Composer** is a tool on the Runtimes page: install a version (2.11 and the 2.2 long-term-support line, checked with the publisher's SHA-256, for Windows on x64 and on arm64). It is one `composer.phar` with a `composer.bat` launcher, and the list of versions comes from getcomposer.org.
+- Composer runs with the PHP of the service. The `composer` command in your own terminal always uses your default PHP, whatever PHP is on your PATH.
+- Composer's home and cache are now always in the data folder (`COMPOSER_HOME`, `COMPOSER_CACHE_DIR`) for PHP services, Open terminal and the `composer` command, not only after an import.
+- A Node service has a **Package manager** setting: npm, pnpm or Yarn. pnpm and Yarn come from Corepack, which Zero2Dev installs into the data folder the first time (Node 26 does not include it). Corepack's versions, pnpm's store and Yarn's cache are in the data folder too.
+- A service can have steps that run before it starts (the Corepack setup is the first one); their output is in the service's log and a failing step stops the start.
+- API: a catalog source for Composer, and the `composer` and pnpm/Yarn environment; see "Composer and package manager details" in `docs/API.md`.
+
+### Tasks and project detection
+
+- **One-off tasks of a service.** `GET /api/services/{id}/tasks` lists what can be run: the ready-made tasks of the service's kind whose file is in the project folder (`npm install`, `composer install`, `go mod tidy`, `php artisan migrate` ...) and the scripts of a Node project's `package.json`. `POST` runs one, or a program of your own, as a job.
+- **Same environment as the service, no shell.** A task runs in the project folder with the environment the service starts with (the runtime on `PATH`, the `.env` file, the database variables), after the service's own preparation (the Python virtual environment, Corepack). The program and each argument reach the program as they are. A service that is running may have a task; a second task for the same service is refused.
+- **Output in the service's log.** Every line of a task goes to the service's log as it comes, starting with `$ program args`. A failing program fails the job with its exit code and the last lines it wrote; a task that runs too long is stopped with its whole process tree.
+- **Presets for Node, PHP and Go.** Node: install, build and test with the service's package manager (npm unless set). PHP: Composer install, update and dump-autoload, and Laravel's migrate (asks first) and cache:clear. Go: mod download, mod tidy, test and build.
+- **Project detection.** `GET /api/project/detect?dir=` reads a folder (it never writes) and says which kind and framework it holds (Laravel, Symfony, WordPress, Next.js, NestJS, Astro, Vite, Express, Gin, Fiber, Spring Boot, Django, FastAPI, Flask), a name, the usual port, the `.env` file, and settings for the kind's options, so the New service form can fill itself in.
+- **Run a task, on the service's page.** A new **Run a task** section lists the presets of the service's type (with their help and the exact command), the `package.json` scripts of a Node service (run with its package manager) and a **Run your own command** form (program and arguments, split on spaces with quotes; no shell, and the form says so). While a task runs a progress row shows it, every Run button is off and the output streams into **Live output** (lines of the stream `task` get a mark on the left); the result, or the error with the last output lines, stays until the next run. Tasks with a confirm text (Composer update, `artisan migrate`, Django migrate) ask first. A task already running, started elsewhere, is shown after a reload. A missing Composer is explained with a link to Runtimes.
+- **The New service form detects the project.** Choosing or typing a folder calls `GET /api/project/detect`: it picks the type when none is chosen, and fills only the empty fields (name, settings, port, `.env` file). A dismissible note says what it recognised and filled in, with **Undo**. Nothing you typed is replaced, it never runs when editing a service, and a failure is silent. The Python rules now set the run mode: Django (`run` Django, `manage.py`), FastAPI (Uvicorn, `main:app`, `app:app` or `app.main:app` from the files found) and Flask (`flaskApp` `app` or `wsgi`).
+
+### Create a project from a framework
+
+- **A list of 19 frameworks** shipped as data (`internal/frameworks/frameworks.json`, or `<data>\frameworks.json`): PHP (Laravel, Symfony, WordPress, plain PHP), JavaScript (Express, NestJS, Next.js, Vite with React, Vue or Svelte, Astro), Python (Django, FastAPI, Flask), Go (net/http, Gin, Fiber), Java (Spring Boot) and HTML and CSS. Every generator runs without questions (`--no-interaction`, `--yes`, `--no-git`, `CI=1`).
+- **`POST /api/new-project/plan` and `POST /api/new-project`.** The plan says what would be installed, created and run, and lists problems (folder not empty, domain or port taken, no runtime version fits) and warnings. The job installs the missing runtime, Composer and database server, creates the database with a user of its own (random password, only in the `.env`), runs the framework's generator with the runtime's own tools (no shell, no console window), writes the `.env`, creates the services, site and project in one change, and opens the folder in the installed editor.
+- **Safe failure.** A failed step stops the job and removes only what it created (services, site, project, database and user); the generated folder and the installed runtimes are kept, and the error says so. A project name may use letters, digits, spaces and `. _ - ( )`; it becomes the folder and host name (`My Shop` is `my-shop`).
+- **Schema additions for the list:** a step may set `env`; a `download` step may be `unverified` with a `reason` (shown as a warning; start.spring.io publishes no checksum); a program written `./name` is a file of the project (`./mvnw.cmd`); the placeholders `{venv}` and `{home}`.
+- **Shared code.** The checks of the service and project routes are in `internal/validate`, the free-port search in `internal/netutil`, the `.env` editor in `internal/envfile`; `dbtools` can drop a user and `sites` exports its domain check.
+- **Create a project page (`#/create`).** Choose a language (PHP, JavaScript / TypeScript, Python, Go, Java, Static) and a framework (each card says what it needs: runtime, Composer, database), a name, a folder and, where the framework has one, a database. The plan on the right is always visible and follows every change: what is installed first and why, the steps in order, what is created, and the problems (which stop Create, with a link or a button to fix them) and warnings.
+- **Progress, result and failure.** Create shows the steps of the plan as a list (waiting, running with its percent, done, failed) with the generator's output. A finished project shows links to its service, site and project, with **Start the project** and **Create another**. A failed one shows the error (it names the kept folder), says what was removed, and **Back to the form** keeps your choices.
+- **Entry points and links.** **New project from a framework** on Projects (a plain button next to **New project**) and on the Dashboard's Projects box. `#/create?framework=laravel&name=Shop` prefills the form (also `parent`, `db`, `domain`, `port`). The last folder is remembered in the browser. A **Create a project** tutorial and a Help entry explain it.
+- **Mock.** `GET /api/frameworks`, `POST /api/new-project/plan` and `POST /api/new-project` in the dashboard's fake daemon, with the names `taken` (folder in the way) and `fail-me` (the generator fails), and e2e steps for the whole flow.
+
 ## 0.0.5
 
 ### Databases

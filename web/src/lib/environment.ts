@@ -8,7 +8,18 @@ import { kindLabel, runtimeTitle } from "./catalog";
 import type { EnvConfig, EnvPath, EnvPathStatus, EnvReport, EnvVar, EnvVarStatus, Runtime } from "./types";
 
 /** Kinds whose default version a variable can follow. Same list as the daemon's. */
-export const ENV_KINDS = ["node", "php", "java", "go", "mysql", "mariadb", "postgres", "redis"] as const;
+export const ENV_KINDS = [
+  "node",
+  "php",
+  "java",
+  "go",
+  "python",
+  "composer",
+  "mysql",
+  "mariadb",
+  "postgres",
+  "redis",
+] as const;
 
 /** The commands each kind's folder gives a terminal (the daemon's shim list), for items not applied yet. */
 export const KIND_COMMANDS: Record<string, string[]> = {
@@ -16,6 +27,8 @@ export const KIND_COMMANDS: Record<string, string[]> = {
   php: ["php"],
   java: ["jar", "java", "javac"],
   go: ["go", "gofmt"],
+  python: ["python", "pip"],
+  composer: ["composer"],
   mysql: ["mysql", "mysqldump"],
   mariadb: ["mariadb", "mariadb-dump", "mysql"],
   postgres: ["pg_dump", "pg_restore", "psql"],

@@ -835,6 +835,26 @@ func TestDropDatabases(t *testing.T) {
 	}
 }
 
+func TestDropUser(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	wantErr(t, e.m.DropUser(ctx, "m", "app"), 409, "first")
+	e.running("m", "p")
+	wantErr(t, e.m.DropUser(ctx, "m", "bad-name"), 400, "user name must be")
+	if err := e.m.DropUser(ctx, "m", "app"); err != nil {
+		t.Fatal(err)
+	}
+	if c := e.run.find("DROP USER"); len(c) != 1 || c[0].Stdin != "DROP USER IF EXISTS 'app'@'%';\nDROP USER IF EXISTS 'app'@'localhost';\nFLUSH PRIVILEGES;\n" {
+		t.Fatalf("mariadb SQL %+v", c)
+	}
+	if err := e.m.DropUser(ctx, "p", "app"); err != nil {
+		t.Fatal(err)
+	}
+	if c := e.run.find("DROP ROLE"); len(c) != 1 || c[0].Stdin != "DROP ROLE IF EXISTS \"app\";\n" {
+		t.Fatalf("postgres SQL %+v", c)
+	}
+}
+
 func TestWriteAtomicAndOpenDump(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "x.sql.GZ")

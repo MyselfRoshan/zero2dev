@@ -31,7 +31,7 @@ function memStore() {
 
 describe("tour definitions", () => {
   it("cover the major tasks, each with steps that say what to do", () => {
-    expect(TOURS.map((t) => t.id)).toEqual(["runtime", "service", "site", "database", "editor", "tour"]);
+    expect(TOURS.map((t) => t.id)).toEqual(["runtime", "service", "site", "database", "editor", "create", "tour"]);
     for (const t of TOURS) {
       expect(t.title && t.summary && t.minutes > 0, t.id).toBeTruthy();
       expect(t.steps.length, t.id).toBeGreaterThan(1);

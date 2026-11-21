@@ -42,6 +42,7 @@
 </script>
 
 <PageHead sub="A project groups the services and sites of one piece of work, so you can start and stop them together.">
+  <button class="btn" type="button" onclick={() => navigate("#/create")} data-tour="create-project" data-testid="projects-from-framework"><Icon name="rocket" /> New project from a framework</button>
   <button class="btn primary" type="button" onclick={() => navigate("#/projects/new")} data-tour="new-project"><Icon name="plus" /> New project</button>
 </PageHead>
 
@@ -49,7 +50,10 @@
   <div class="card empty" data-testid="projects-empty">
     <h2>No projects yet</h2>
     <p>Group the services and sites that belong together, such as an API, its database and its local address. One click then starts the whole set.</p>
-    <button class="btn primary" type="button" onclick={() => navigate("#/projects/new")}><Icon name="plus" /> Create your first project</button>
+    <div class="row wrap">
+      <button class="btn primary" type="button" onclick={() => navigate("#/projects/new")}><Icon name="plus" /> Create your first project</button>
+      <button class="btn" type="button" onclick={() => navigate("#/create")} data-testid="projects-empty-from-framework"><Icon name="rocket" /> Start from a framework</button>
+    </div>
   </div>
 {:else}
   <div class="card t-wrap">

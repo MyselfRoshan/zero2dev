@@ -82,6 +82,7 @@ var ghFixtures = map[string]string{
 		ghRel("26.2.4", false, "dbeaver-ce-26.2.4-windows-x86_64.zip", "e667f516d64f29b87e3571203fc3eb02f0a419b9ff66865043bf9954ebc230c6"),
 		ghRel("26.2.3", false, "dbeaver-ce-26.2.3-windows-x86_64.zip", "")), // no digest: unverified
 	// Mailpit: the ZIP name carries no version, the tag does.
+	"astral-sh/python-build-standalone": pythonFixture,
 	"axllent/mailpit": ghJSON(
 		ghRel("v1.35.0-beta.1", false, "mailpit-windows-amd64.zip", strings.Repeat("8", 64)), // not a release tag: skipped
 		ghRel("v1.34.0", true, "mailpit-windows-amd64.zip", strings.Repeat("9", 64)),         // pre-release: skipped
@@ -287,7 +288,7 @@ func TestToolSourcesRefreshOffline(t *testing.T) {
 	for _, e := range es {
 		counts[e.Kind]++
 	}
-	want := map[string]int{"mariadb": 5, "mysql": 2, "postgres": 3, "vscode": 1, "redis": 3, "vscodium": 1, "notepadpp": 1, "heidisql": 1, "dbeaver": 2, "mailpit": 3}
+	want := map[string]int{"mariadb": 5, "mysql": 2, "postgres": 3, "vscode": 1, "redis": 3, "vscodium": 1, "notepadpp": 1, "heidisql": 1, "dbeaver": 2, "mailpit": 3, "python": 9}
 	for k, n := range want {
 		if counts[k] != n {
 			t.Errorf("%s: %d remote entries, want %d (%v)", k, counts[k], n, counts)
@@ -297,5 +298,85 @@ func TestToolSourcesRefreshOffline(t *testing.T) {
 		if model.In(e.Kind, []string{"mariadb", "postgres", "vscode"}) && e.Source == "remote" && strings.Contains(e.URL, "127.0.0.1") {
 			t.Errorf("%s: download link must be the publisher's, got %s", e.ID, e.URL)
 		}
+	}
+}
+
+// pythonFixture mimics python-build-standalone: each release holds many Pythons. The newest
+// release has 3.13.19 for amd64 and arm64 and no digest for 3.12.17; the older one has older
+// patches, a line the newest lacks (3.10), free-threaded and stripped builds and a pre-release.
+var pythonFixture = func() string {
+	asset := func(name, digest string) string {
+		d := ""
+		if digest != "" {
+			d = `,"digest":"sha256:` + digest + `"`
+		}
+		return fmt.Sprintf(`{"name":%q,"browser_download_url":"https://github.com/o/r/releases/download/x/%s"%s}`, name, strings.ReplaceAll(name, "+", "%2B"), d)
+	}
+	h := func(c string) string { return strings.Repeat(c, 64) }
+	rel := func(tag string, assets ...string) string {
+		return `{"tag_name":"` + tag + `","draft":false,"prerelease":false,"assets":[` + strings.Join(assets, ",") + `]}`
+	}
+	const tail = "-pc-windows-msvc-install_only.tar.gz"
+	newest := rel("20261026",
+		asset("cpython-3.14.10+20261026-x86_64"+tail, h("1")),
+		asset("cpython-3.14.10+20261026-x86_64-pc-windows-msvc-freethreaded-install_only.tar.gz", h("f")),
+		asset("cpython-3.14.10+20261026-x86_64-pc-windows-msvc-install_only_stripped.tar.gz", h("e")),
+		asset("cpython-3.14.10+20261026-x86_64-unknown-linux-gnu-install_only.tar.gz", h("d")),
+		asset("cpython-3.16.0a1+20261026-x86_64"+tail, h("c")),
+		asset("cpython-3.13.19+20261026-x86_64"+tail, h("2")),
+		asset("cpython-3.13.19+20261026-aarch64"+tail, h("3")),
+		asset("cpython-3.12.17+20261026-x86_64"+tail, ""),
+		asset("cpython-3.11.19+20261026-x86_64"+tail, h("4")))
+	older := rel("20261010",
+		asset("cpython-3.13.18+20261010-x86_64"+tail, h("5")),
+		asset("cpython-3.12.16+20261010-x86_64"+tail, h("6")),
+		asset("cpython-3.10.21+20261010-x86_64"+tail, h("7")),
+		asset("cpython-3.9.30+20261010-x86_64"+tail, h("8")))
+	return "[" + newest + "," + older + "]"
+}()
+
+func TestParsePython(t *testing.T) {
+	es, err := parsePython([]byte(pythonFixture))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := []string{}
+	for _, e := range es {
+		ids = append(ids, e.ID)
+		if err := validate(&e); err != nil {
+			t.Fatalf("%s: %v", e.ID, err)
+		}
+		if e.Kind != "python" || e.BinaryRelPath != "python.exe" || e.StripComponents != 1 || e.OS != "windows" || e.Source != "remote" {
+			t.Fatalf("%s: %+v", e.ID, e)
+		}
+	}
+	// The newest 4 lines (3.16 is a pre-release, 3.9 is too old), the newest patch of each,
+	// no free-threaded, stripped or Linux builds; the line 3.10 does not fit the four.
+	want := "python-3.14.10-windows-amd64 python-3.13.19-windows-amd64 python-3.13.19-windows-arm64 python-3.12.17-windows-amd64 python-3.11.19-windows-amd64"
+	if strings.Join(ids, " ") != want {
+		t.Fatalf("ids %v, want %s", ids, want)
+	}
+	if es[0].Line != "3.14" || es[0].Name != "Python 3.14.10" || es[0].Checksum.Value != strings.Repeat("1", 64) ||
+		es[0].URL != "https://github.com/o/r/releases/download/x/cpython-3.14.10%2B20261026-x86_64-pc-windows-msvc-install_only.tar.gz" ||
+		es[0].Homepage != "https://github.com/astral-sh/python-build-standalone/releases/tag/20261026" {
+		t.Fatalf("%+v", es[0])
+	}
+	if es[2].Arch != "arm64" || es[2].Checksum.Value != strings.Repeat("3", 64) {
+		t.Fatalf("%+v", es[2])
+	}
+	if e := es[3]; e.Checksum.Type != "none" || !e.Unverified {
+		t.Fatalf("no digest: unverified: %+v", e)
+	}
+	// A line the newest release lacks is taken from the one before.
+	only := `[` + strings.SplitN(strings.TrimPrefix(pythonFixture, "["), `},{"tag_name":"20261010"`, 2)[0] + `}]`
+	if es, err := parsePython([]byte(only)); err != nil || len(es) != 5 {
+		t.Fatalf("newest release only: %v %d", err, len(es))
+	}
+	bad := strings.ReplaceAll(pythonFixture, "https://github.com/o/", "https://evil.example/o/")
+	if _, err := parsePython([]byte(bad)); err == nil {
+		t.Fatal("foreign host must be refused")
+	}
+	if _, err := parsePython([]byte(`[]`)); err == nil {
+		t.Fatal("no asset: error")
 	}
 }

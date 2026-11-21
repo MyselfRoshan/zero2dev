@@ -275,6 +275,114 @@ Mailpit is a pretend mail server. Your app sends its e-mails to it, and you read
 
 ---
 
+## Composer, pnpm and Yarn
+
+### Composer
+
+Composer is PHP's package manager. It is a **tool** on the **Runtimes** page (group "Tools"): pick a version and click **Install**. Composer is one file (`composer.phar`) with a small launcher next to it, and it runs with PHP, so install a PHP version too.
+
+- **Which PHP runs it:** the PHP of the service you run it for. In your own terminal, the `composer` command always uses your **default PHP**, whatever other PHP is on your PATH. Make a version the default on the Runtimes page.
+- **Where it keeps its files:** Composer's home (settings, `auth.json`, global packages) is `data\composer`, and its download cache is `data\composer\cache`. This applies to every PHP service, to **Open terminal** on a PHP service and to the `composer` command of the command line, so nothing is written to your user profile.
+- **On a new PC or after an import:** the home is created when Composer first needs it. **Import from this PC** can copy your old Composer home into the data folder.
+- If a task needs Composer and it is not installed, Zero2Dev says "Composer is not installed: install it on the Runtimes page".
+
+### pnpm and Yarn for a Node service
+
+A Node service has a **Package manager** setting under **Run**: **npm** (the default), **pnpm** or **Yarn**.
+
+1. Edit the service, set **Package manager** to pnpm or Yarn and save.
+2. Start the service. The first time, the log shows "Installing Corepack" and "Making the pnpm and yarn commands". This needs an internet connection once: Zero2Dev installs Corepack with npm into `data\node\corepack`, because Node 26 no longer comes with it. The first run of pnpm or Yarn then downloads that package manager through Corepack.
+3. After that nothing is downloaded again. An npm script runs as `pnpm run dev` or `yarn run dev`, and the install tasks of the service use the same package manager.
+
+Where things are kept (all in the data folder, so they move with it):
+
+| What | Folder |
+| --- | --- |
+| Corepack and the `pnpm` and `yarn` commands | `data\node\corepack` (the commands in its `bin` folder, first on the PATH of the service and of Open terminal) |
+| The pnpm and Yarn versions Corepack downloads | `data\node\corepack-home` |
+| pnpm's package store | `data\node\pnpm-store` |
+| Yarn's download cache | `data\node\yarn-cache` |
+
+If a project says which package manager it wants (the `packageManager` field of `package.json`), Corepack uses that version. With the setting on **npm** none of this is set up.
+
+
+## Python services
+
+Zero2Dev downloads Python for you and runs your script or web app in a virtual environment of its own, so the packages of one project never mix with another's.
+
+1. On **Runtimes**, install **Python** from the **Languages** group (3.13 and 3.12 are listed; **Check for new versions** adds the newest patch of each recent line).
+2. Add a service of type **Python**, choose the **Project folder** and what to **Run**:
+   - **A script** runs `python main.py` (the **Script** field).
+   - **A module** runs `python -m name` (the **Module** field).
+   - **Uvicorn (FastAPI)** runs `python -m uvicorn --host <host> --port <port> main:app`. The **Application** is the module and the app object, like `main:app`.
+   - **Flask** runs `python -m flask run --host <host> --port <port>`. **Flask application** is optional (Flask looks for `app.py` or `wsgi.py`) and is set as `FLASK_APP`.
+   - **Django (runserver)** runs `python manage.py runserver <host>:<port>`.
+3. The **command preview** shows the exact line. The program is the `python.exe` of the service's virtual environment. Put more options in **Arguments for your app** (for example `--reload` for Uvicorn).
+4. Start it. The first start makes the virtual environment, which takes a few seconds, and the log says so. Every start after that skips this.
+
+- **Virtual environment.** It lives in `data\python\venvs\<service id>`, not in your project, so there is nothing to put in `.gitignore`. The service runs with `VIRTUAL_ENV` set and the environment's `Scripts` folder first on `PATH`, so `pip`, `python` and the tools your packages install (`uvicorn`, `flask`, `django-admin`) all come from it. **Open terminal** on the service gives the same.
+- **Install your packages** with the **Install requirements** task (`pip install -r requirements.txt`, offered when the project has a `requirements.txt`). **List packages** shows what is installed. Django projects also get **migrate** and **collectstatic**. Tasks are described under Run a task.
+- **Another Python version.** Switch the service's runtime in its settings. At the next start Zero2Dev notices that the environment was made from another Python, logs a warning and makes it again, so run **Install requirements** once more.
+- **Deleting the service** deletes its virtual environment. **Snapshots** never copy it: after a restore or a clone, the first start makes an empty one and **Install requirements** fills it.
+- **`print()` shows up at once.** Zero2Dev sets `PYTHONUNBUFFERED=1`, so output reaches the log without waiting for a buffer to fill.
+- **Host.** The web app modes listen on `127.0.0.1`, which only this PC can reach. Set **Host** to `0.0.0.0` to let your phone or another PC connect. Your own script or module gets the host as `HOST` and the port as `PORT`.
+- **In your own terminal.** `python` and `pip` are in the command line shims (see Command line) and use the default Python runtime; a project's own packages are in the service's environment, not there.
+
+## Run a task
+
+Some jobs run once and end: installing packages, building, running tests, migrating a database. A service's page has a **Run a task** section for them, under the snapshots and above **Live output**. It is there for Node, PHP, Go and Python services.
+
+1. Open the service's page and find **Run a task**. It lists the ready-made tasks of the service's type, each with a short explanation and the exact command it runs (for example `npm install`, `composer install`, `go mod tidy`, `pip install -r requirements.txt`). A task is only listed when the file it needs is in the project folder: **Composer install** needs `composer.json`, **Install requirements** needs `requirements.txt`.
+2. For a Node service the section also lists the **Scripts in package.json** (`dev`, `lint`, ...). They run with the service's package manager (the **Package manager** setting, npm unless you changed it), so `lint` runs `pnpm run lint` for a pnpm service.
+3. Press **Run**. A progress row shows what is running, and the other **Run** buttons are off until it ends. The command's output appears line by line under **Live output** (the lines start with `$ program arguments` and have a mark on the left), even while the service itself runs.
+4. When it ends, the result stays under the heading until you run the next task: **finished**, or the error with the last lines the program wrote, for example `npm exited with code 1` and the `npm ERR!` lines. The full output is in **Live output**.
+
+- **Tasks that change data ask first.** **Composer update**, **Run migrations** (Laravel) and **Django: migrate** open a question before they start. **Cancel** starts nothing.
+- **Same environment as the service.** A task runs in the project folder with what the service gets: the runtime on `PATH`, the `.env` file, the database variables, and for Python the virtual environment. Nothing is stopped: a service that is running keeps running.
+- **One at a time per service.** While a task runs there is no second one for that service. If you open the page while one runs (it was started from another window), the page shows it.
+- **No Cancel.** A task ends when the program does, or after 10 minutes (some tasks have their own limit): then the whole program tree is stopped and the result says it timed out.
+- **Composer needs Composer.** Without Composer installed, **Composer install** says so and has an **Open Runtimes** button; install **Composer** from the **Tools** group there and run the task again.
+
+### Run your own command
+
+Open **Run your own command** to run any program once: type the **Program** (a name such as `npm`, `php` or `git`, without a folder) and its **Arguments**.
+
+- Arguments are split on spaces. Put a value that has spaces in quotes: `run build -- --mode "my mode"` is `run`, `build`, `--`, `--mode`, `my mode`. A backslash is just a character, so `C:\my folder\file.txt` in quotes works.
+- **There is no shell.** `|`, `&&`, `>` and `%VARIABLES%` do not work: they are passed to the program as plain text. To chain two commands, run them one after the other, or use a script.
+- The program is looked for on the service's `PATH` (its runtime first). A name that is not found fails the task with a message in the result.
+
+## Detect the project type
+
+When you add a service, **What do you want to run?** starts with **Already have a project? Choose its folder**. Browse to the folder (or paste its path) and Zero2Dev looks inside it, without changing anything:
+
+- `composer.json`, `artisan`, `wp-config.php` for PHP (Laravel, Symfony, WordPress);
+- `package.json` for Node (Next.js, NestJS, Astro, Vite, Express) and its scripts;
+- `go.mod` for Go (Gin, Fiber), `pom.xml` or `build.gradle` for Java (Spring Boot);
+- `manage.py`, `requirements.txt` or `pyproject.toml` for Python (Django, FastAPI, Flask).
+
+It then chooses the type and fills in the fields that are still empty: the name, the usual port, the run mode (for example Django's `manage.py` or Uvicorn's `main:app`), the document root and the `.env` file. A note under the folder says what it found and what it filled in, for example *Looks like a Laravel project (composer.json, artisan). Filled in: type PHP, name, document root, port 8000, .env.* **Undo** puts the form back as it was, and the **x** closes the note.
+
+- **Your own entries win.** Detection never replaces something you typed or changed. If you already chose a type, a folder of another type changes nothing.
+- **Only when adding.** Editing an existing service does not look at the folder.
+- **It is a suggestion.** Check the fields before **Save**. A folder that says nothing (an empty one, or a plain `index.html`) changes nothing, and a folder that cannot be read says nothing either.
+
+
+## Create a project from a framework
+
+Start a new Laravel, WordPress, Next.js, Vite, Django, FastAPI, Go, Spring Boot or plain HTML project without installing anything first. Open **Projects** and press **New project from a framework** (or use the link on the Dashboard).
+
+1. **Language and framework.** Pick the language, then the framework. Each card says what it needs, for example *PHP 8.2 or newer, Composer, optional database*.
+2. **Name and folder.** The name is required; under it you see the short name (letters, digits, `-` and `_`, in lower case) that is used for the folder, the database and the domain. **Folder** is the parent folder: the project goes in `<folder>\<short name>`. Zero2Dev remembers the last folder.
+3. **Settings.** *Database*: the kinds the framework offers (and *None* when it is optional), with the framework's usual one chosen. *Domain*: `<short name>.localhost` unless you change it. *Port*: empty means the framework's usual port or the next free one. *Open in my editor* opens the finished folder in the first editor Zero2Dev has.
+4. **Read the plan.** *What will happen* on the right is checked again a moment after every change. It lists what is installed first (a runtime, Composer or a database server, each with the reason), the steps in order, and what is created: the services, the site, the project and the `.env` file. A **problem** (the folder already exists and is not empty, the parent folder is missing, the domain or port is taken, no runtime version fits) stops **Create project** and says what to change. A **warning** does not.
+5. **Create project.** The page switches to a progress list. Zero2Dev installs what is missing, starts the database and makes a database and a user for this project only (the password goes only in the project's `.env`), runs the framework's own generator, writes the `.env` and creates the services, the site and the project. Nothing outside the project folder and the Zero2Dev data folder is touched. You can leave the page; a message tells you when it is ready.
+
+When it is done, the result lists what was made with links to the service, the site and the project. **Start the project** runs its services and switches the site on; **Create another** returns to the form.
+
+If a step fails, the page shows the error, removes what Zero2Dev had created (services, site, project, database and user) and keeps the generated folder, whose path is in the message, so you can look at it or delete it. Runtimes that were installed stay installed. **Back to the form** keeps your choices; change the name or delete the folder and try again.
+
+`#/create?framework=laravel&name=Shop` opens the form with a framework and a name filled in (`parent`, `db`, `domain` and `port` work too).
+
 ## Snapshots: undo for a whole project
 
 A *snapshot* is a named copy of a project as it is now: the settings of its services, the runtime version each one uses, its sites, its `php.ini` files and the data of its databases. The code in the project folders is not copied. Snapshots are kept in `data\snapshots`, so they move with the data folder.

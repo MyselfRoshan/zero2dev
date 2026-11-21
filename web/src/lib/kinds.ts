@@ -1,3 +1,4 @@
+import type { KindTask } from "./types";
 // The per-kind service profiles (internal/kinds/profiles.json, served at GET /api/kinds)
 // and pure helpers the service form uses. The daemon builds the real command line;
 // these helpers only decide what the form shows.
@@ -59,6 +60,8 @@ export interface KindProfile {
   fixed?: { args: string[]; help: string; windows?: boolean }[];
   env?: { name: string; value: string; help: string }[];
   options: KindOption[];
+  /** Ready-made one-off tasks of the kind (0.0.6). */
+  tasks?: KindTask[];
 }
 
 export type Settings = Record<string, string>;
