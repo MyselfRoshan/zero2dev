@@ -13,6 +13,7 @@
     { icon: "sites", title: "Site", href: "#/sites", text: "A local address like shop.localhost that leads to a service, a port or a folder. Caddy or nginx serves it." },
     { icon: "folder", title: "Data folder", href: "#/settings", text: "Everything Zero2Dev keeps (settings, logs, databases, editor settings) sits next to zero2dev.exe. Move the folder to move it all." },
     { icon: "history", title: "Snapshot", href: "#/projects", text: "A saved copy of a project's services, runtime versions, sites and database data. Restore it to undo a risky change, or clone it into a second project." },
+    { icon: "rocket", title: "Create a project", href: "#/create", text: "Pick a language and a framework (Laravel, Next.js, Django, Spring Boot and more), a name and a folder. Zero2Dev installs what is missing, runs the framework's own generator and sets up the services, the site and a project for you." },
     { icon: "download", title: "Import from this PC", href: "#/migrate", text: "Copy or move the settings of your installed VS Code, Notepad++, HeidiSQL or DBeaver, a runtime or a database into Zero2Dev. Every step can be reverted." },
   ];
 

@@ -161,9 +161,9 @@ try {
     },
     {
       name: "create",
-      hash: "#/create",
-      title: "Create a project from a framework",
-      ready: "[data-testid=create-page]",
+      hash: "#/create?framework=laravel&name=Atelier&parent=D%3A%5Cwww",
+      title: "Create a project from a framework: choices and the plan",
+      ready: "[data-testid=create-plan][data-phase=ready]",
     },
     { name: "runtimes", hash: "#/runtimes", title: "Runtimes: installed versions and the catalog" },
     { name: "sites", hash: "#/sites", title: "Sites: local domains" },
