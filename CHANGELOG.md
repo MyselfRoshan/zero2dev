@@ -72,6 +72,10 @@
 
 <!-- projectfile: export a project, Import project -->
 
+- **Export** on each project's row on the Projects page: the Save as dialog suggests `zero2dev.json` in the project's folder, the result lists what was left out (secret-looking variables, folders outside the file's folder), and an existing file is replaced only after you press **Overwrite**.
+- **Import project** page (`#/projects/import`, button on the Projects page): choose a `zero2dev.json` or the folder of a cloned repository, press **Check** to see the services and sites that would be created, the runtimes that would be installed, what differs from the file and any warnings, then **Import**. A problem is listed in words and turns Import off. A progress view follows, then a result with links to the project, its services and its sites, and **Start the project**.
+- Help explains sharing a project in plain words (a new entry under "How Zero2Dev fits together" and one under "Something went wrong?").
+
 ## 0.0.5
 
 ### Databases

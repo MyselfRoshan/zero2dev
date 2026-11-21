@@ -424,7 +424,28 @@ The Services page has a **CPU** and a **Memory** column, each Dashboard card sho
 - **CPU** is the share of the **whole machine**, not of one core: a program that keeps one of eight cores fully busy shows `12.5 %`. It is the CPU time of the **whole process tree** (the service and everything it started, such as the workers of a dev server), also of children that have already exited. The first number appears after the second sample, about 4 seconds after the start.
 - **Memory** is the **working set** of the whole process tree: the memory the processes hold in RAM right now. It is the number Task Manager calls "Memory" per process, summed. Memory that processes share is counted once per process, so a tree of many workers can show more than it really uses.
 - The numbers are for orientation: they carry no warnings and no colours. Zero2Dev's own use is not included.
-<!-- 0.0.6 projectfile: "## Share a project: zero2dev.json" goes here. -->
+## Share a project: zero2dev.json
+
+A project can be written to one small file, `zero2dev.json`, that you keep in the project's repository. Whoever clones the repository can set the project up on their own PC with one button.
+
+**What the file holds:** the project's name, its services (name, type, port, settings, start order, the database they use), its sites (domain, type, folder), and the runtimes it needs as a type and a version range, such as "PHP 8.2 or newer". Folders are written relative to the folder of the file, so the file works wherever the repository is cloned.
+
+**What it never holds:**
+
+- No passwords, and no variable whose name looks like a secret (a name with PASSWORD, SECRET, TOKEN, KEY, CREDENTIAL, AUTH, PRIVATE, SIGNATURE, COOKIE or SESSION in it). The export lists each one it left out.
+- No absolute paths, so nothing from your PC's folders. A service whose folder is outside the file's folder is left out, and the export says so.
+- No contents of `.env`, no database data, no runtime programs and no Zero2Dev ids.
+
+**Export.** On the **Projects** page press **Export** on the project's row. The Save as dialog suggests `zero2dev.json` in the project's folder: keep it there, next to the code. The result lists what was left out. If the file already exists, Zero2Dev says so and only replaces it when you press **Overwrite**.
+
+**Import a cloned repository.** On the **Projects** page press **Import project**, choose the `zero2dev.json` or the folder of the clone, and press **Check**. Nothing is changed yet: you see the services and sites that would be created, the runtimes that would be installed, what differs from the file, and any warnings. A **problem** (a file from a newer format, an unknown type, a service that names one that is not there) stops the import and is listed in words; **Import** stays off until there is none. Then press **Import**. A progress view follows, and the result links to the project, its services and its sites, with a **Start the project** button.
+
+**What Zero2Dev installs and changes.** It installs the missing runtimes the same way **Create a project** does, then creates the services, the sites and the project together: if something fails, nothing is left half done (installed runtimes stay). It writes no file in the project's folder.
+
+**Ports and domains may change.** The file's port is used when it is free; otherwise the next free one is taken, and a domain that is already used gets a number. The plan lists every such change under "Different from the file". A runtime is matched by type and version range, so a service may use a newer version than on the PC that exported it.
+
+**Secrets must be set again.** Because the file never holds a secret, open the imported project's services afterwards and set the passwords and keys (for example in `.env` or the service's variables) yourself.
+
 
 ## Snapshots: undo for a whole project
 
