@@ -70,7 +70,9 @@
 
 ### Project file
 
-<!-- projectfile: export a project, Import project -->
+- **Export a project as a project file.** A project can be written as `zero2dev.json`: its services, sites and runtimes, with folders relative to the file, so the file can sit in the project's repository. Services point at each other by name, domains are written without the suffix and runtimes as a kind and a version range. Nothing that belongs to one PC or is secret goes in: no ids, no absolute paths, no database administrator password, no `.env` contents and no variable whose name contains PASSWORD, SECRET, TOKEN, KEY, CREDENTIAL, AUTH, PRIVATE, SIGNATURE, COOKIE or SESSION. Everything left out is listed as a warning. An existing file is replaced only when asked, and it is written in one piece, so a failed export never leaves half a file.
+- **Check a project file before importing it.** `zero2dev.json`, or a folder that holds one (a cloned repository), gets a plan first: the services and sites that would be made, the runtimes that would be installed, what has to change on this PC (a port that is taken moves to the next free one, a domain that is taken gets `-2`) and anything wrong with the file (another format, an unknown kind, a missing folder, services that depend on each other in a loop). A plan changes nothing.
+- **Import a project from a project file.** The import installs the missing runtimes, then creates the services, the sites and the project in one step with new ids. A failure leaves nothing created, and nothing is written into the project's folder. Secret variables are not in the file, so a service that needs one has to get it again; a warning says when a service's `.env` file does not exist yet.
 
 ## 0.0.5
 

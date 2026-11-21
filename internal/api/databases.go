@@ -9,7 +9,6 @@ import (
 	"zero2dev/internal/detect"
 	"zero2dev/internal/migrate"
 	"zero2dev/internal/newproject"
-	"zero2dev/internal/projectfile"
 	"zero2dev/internal/snapshot"
 	"zero2dev/internal/tasks"
 )
@@ -17,7 +16,7 @@ import (
 // notYet turns a Wave 0 stub's error into 501 (the feature is not built yet).
 func notYet(err error) error {
 	if errors.Is(err, dbtools.ErrNotImplemented) || errors.Is(err, snapshot.ErrNotImplemented) || errors.Is(err, migrate.ErrNotImplemented) ||
-		errors.Is(err, tasks.ErrNotImplemented) || errors.Is(err, detect.ErrNotImplemented) || errors.Is(err, newproject.ErrNotImplemented) || errors.Is(err, projectfile.ErrNotImplemented) {
+		errors.Is(err, tasks.ErrNotImplemented) || errors.Is(err, detect.ErrNotImplemented) || errors.Is(err, newproject.ErrNotImplemented) {
 		return &apperr.Error{Status: http.StatusNotImplemented, Code: "not_supported", Message: "not available in this build yet"}
 	}
 	return err

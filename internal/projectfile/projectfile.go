@@ -7,25 +7,23 @@
 // runtime selection, installs, port and domain checks and validation, so an import is a plan first
 // and a job second.
 //
-// Contract: docs/API.md, "Amendment: 0.0.6, part 2". Wave 0 stub: the shapes are final, the bodies
-// are filled in by the project-file work.
+// Contract: docs/API.md, "Amendment: 0.0.6, part 2" and its "Project file details" subsection.
 package projectfile
 
 import (
-	"errors"
+	"time"
 
+	"zero2dev/internal/catalog"
 	"zero2dev/internal/installer"
 	"zero2dev/internal/jobs"
 	"zero2dev/internal/model"
+	"zero2dev/internal/netutil"
 	"zero2dev/internal/newproject"
 	"zero2dev/internal/runtimes"
 	"zero2dev/internal/sites"
 	"zero2dev/internal/store"
 	"zero2dev/internal/supervisor"
 )
-
-// ErrNotImplemented is returned by the Wave 0 stubs (the API answers 501).
-var ErrNotImplemented = errors.New("not implemented yet")
 
 // FileName is the name of the project file; an import of a folder looks for it there.
 const FileName = "zero2dev.json"
@@ -104,8 +102,8 @@ type ExportRequest struct {
 type ExportResult struct {
 	Path string `json:"path"` // the file written
 	// Warnings say what was left out or could not be made relative: "Variable DB_PASSWORD of
-	// Shop API was not written", "The folder of Worker is outside <dir> and was written as an
-	// absolute path"... (an absolute path is never written: the service is skipped with a warning).
+	// Shop API was not written", "The folder of Worker is outside <dir>: Worker was left out"...
+	// (an absolute path is never written: the service is skipped with a warning).
 	Warnings []string `json:"warnings"`
 }
 
@@ -134,34 +132,66 @@ type Plan struct {
 	Warnings []string `json:"warnings"`
 }
 
+// Logger is what the import needs from the supervisor (*supervisor.Supervisor): a line in a
+// service's log.
+type Logger interface {
+	Log(id, stream, text string)
+}
+
 // Manager does the work. Fields may be replaced in tests before first use.
 type Manager struct {
 	Home      string
 	St        *store.Store
-	Sup       *supervisor.Supervisor
-	Installer *installer.Installer
+	Sup       Logger
+	Installer newproject.InstallerAPI
 	Runtimes  *runtimes.Manager
-	Sites     *sites.Manager
+	Sites     newproject.SitesAPI
 	Jobs      *jobs.Registry
 	// Emit publishes events (services.changed, sites.changed, projects.changed); may be nil.
 	Emit func(typ string, data any)
+
+	// Catalog lists the downloadable runtimes (nil: catalog.Load of Home).
+	Catalog func() ([]model.CatalogEntry, error)
+	// PortFree reports whether a TCP port can be listened on (nil: netutil.PortFree).
+	PortFree func(port int) bool
+	// Timing knobs; zero means the default (the same as New project).
+	PollEvery   time.Duration // how often an install job is looked at (300 ms)
+	InstallWait time.Duration // how long an install may take (30 min)
 }
 
 // New returns a Manager.
 func New(home string, st *store.Store, sup *supervisor.Supervisor, inst *installer.Installer, rt *runtimes.Manager,
 	sm *sites.Manager, j *jobs.Registry, emit func(string, any)) *Manager {
-	return &Manager{Home: home, St: st, Sup: sup, Installer: inst, Runtimes: rt, Sites: sm, Jobs: j, Emit: emit}
+	m := &Manager{Home: home, St: st, Runtimes: rt, Jobs: j, Emit: emit}
+	// A nil pointer must not become a non-nil interface.
+	if sup != nil {
+		m.Sup = sup
+	}
+	if inst != nil {
+		m.Installer = inst
+	}
+	if sm != nil {
+		m.Sites = sm
+	}
+	return m
 }
 
-// Export writes the project as a project file. It is a 404 for an unknown project and a 409 for an
-// existing file without Overwrite.
-func (m *Manager) Export(projectID string, req ExportRequest) (ExportResult, error) {
-	return ExportResult{}, ErrNotImplemented
+func (m *Manager) emit(typ string) {
+	if m.Emit != nil {
+		m.Emit(typ, struct{}{})
+	}
 }
 
-// Plan reads the file and works out what Start would do. It changes nothing.
-func (m *Manager) Plan(req ImportRequest) (Plan, error) { return Plan{}, ErrNotImplemented }
+func (m *Manager) portFree(p int) bool {
+	if m.PortFree != nil {
+		return m.PortFree(p)
+	}
+	return netutil.PortFree(p)
+}
 
-// Start runs the import as a job (type "project-import"; job.done carries projectId and path). It
-// answers the same problems as Plan with a 409.
-func (m *Manager) Start(req ImportRequest) (model.Job, error) { return model.Job{}, ErrNotImplemented }
+func (m *Manager) catalog() ([]model.CatalogEntry, error) {
+	if m.Catalog != nil {
+		return m.Catalog()
+	}
+	return catalog.Load(m.Home)
+}

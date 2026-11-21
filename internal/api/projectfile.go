@@ -3,9 +3,13 @@ package api
 import (
 	"net/http"
 
+	"zero2dev/internal/apperr"
 	"zero2dev/internal/newproject"
 	"zero2dev/internal/projectfile"
 )
+
+// errProjectFileUnwired is what the routes answer when the server has no project file manager.
+var errProjectFileUnwired = &apperr.Error{Status: http.StatusNotImplemented, Code: "not_supported", Message: "not available in this build yet"}
 
 // 0.0.6, part 2 (docs/API.md, "Amendment: 0.0.6, part 2"): export a project as zero2dev.json and
 // import one.
@@ -17,7 +21,7 @@ func (s *Server) projectFileRoutes() {
 
 func (s *Server) exportProject(w http.ResponseWriter, r *http.Request) error {
 	if s.ProjectFile == nil {
-		return notYet(projectfile.ErrNotImplemented)
+		return errProjectFileUnwired
 	}
 	var in projectfile.ExportRequest
 	if err := decode(w, r, &in); err != nil {
@@ -25,7 +29,7 @@ func (s *Server) exportProject(w http.ResponseWriter, r *http.Request) error {
 	}
 	res, err := s.ProjectFile.Export(r.PathValue("id"), in)
 	if err != nil {
-		return notYet(err)
+		return err
 	}
 	if res.Warnings == nil {
 		res.Warnings = []string{}
@@ -36,7 +40,7 @@ func (s *Server) exportProject(w http.ResponseWriter, r *http.Request) error {
 
 func (s *Server) planProjectImport(w http.ResponseWriter, r *http.Request) error {
 	if s.ProjectFile == nil {
-		return notYet(projectfile.ErrNotImplemented)
+		return errProjectFileUnwired
 	}
 	var in projectfile.ImportRequest
 	if err := decode(w, r, &in); err != nil {
@@ -44,7 +48,7 @@ func (s *Server) planProjectImport(w http.ResponseWriter, r *http.Request) error
 	}
 	p, err := s.ProjectFile.Plan(in)
 	if err != nil {
-		return notYet(err)
+		return err
 	}
 	for _, l := range []*[]string{&p.Services, &p.Sites, &p.Changes, &p.Problems, &p.Warnings} {
 		if *l == nil {
@@ -60,7 +64,7 @@ func (s *Server) planProjectImport(w http.ResponseWriter, r *http.Request) error
 
 func (s *Server) startProjectImport(w http.ResponseWriter, r *http.Request) error {
 	if s.ProjectFile == nil {
-		return notYet(projectfile.ErrNotImplemented)
+		return errProjectFileUnwired
 	}
 	var in projectfile.ImportRequest
 	if err := decode(w, r, &in); err != nil {
@@ -68,7 +72,7 @@ func (s *Server) startProjectImport(w http.ResponseWriter, r *http.Request) erro
 	}
 	j, err := s.ProjectFile.Start(in)
 	if err != nil {
-		return notYet(err)
+		return err
 	}
 	writeJSON(w, http.StatusAccepted, j)
 	return nil

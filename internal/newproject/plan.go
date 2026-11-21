@@ -483,6 +483,11 @@ func (m *Manager) pickEntry(kind, min, max string) (model.CatalogEntry, bool) {
 	if err != nil {
 		return model.CatalogEntry{}, false
 	}
+	return PickEntry(es, kind, min, max)
+}
+
+// PickEntry is pickEntry on a given catalog (shared with the project file import).
+func PickEntry(es []model.CatalogEntry, kind, min, max string) (model.CatalogEntry, bool) {
 	var best, mainline *model.CatalogEntry
 	for i := range es {
 		e := &es[i]
@@ -505,3 +510,18 @@ func (m *Manager) pickEntry(kind, min, max string) (model.CatalogEntry, bool) {
 	}
 	return *best, true
 }
+
+// SelectRuntime is selectRuntime for other packages: the installed runtime of kind inside the
+// bounds (the default of the kind when it fits, else the newest), nil when none fits.
+func SelectRuntime(rts []model.Runtime, kind, min, max string) *model.Runtime {
+	return selectRuntime(rts, kind, min, max)
+}
+
+// KindLabel is the human name of a runtime or service kind ("PHP", "Node.js").
+func KindLabel(kind string) string { return kindLabel(kind) }
+
+// BoundsText says a version range in words (" 8.2 or newer"); "" for no bounds.
+func BoundsText(min, max string) string { return boundsText(min, max) }
+
+// InstallOf is the Install the plan shows for a catalog entry.
+func InstallOf(e model.CatalogEntry, reason string) Install { return installOf(e, reason) }
