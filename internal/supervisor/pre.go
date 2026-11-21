@@ -9,9 +9,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"zero2dev/internal/apperr"
+	"zero2dev/internal/kinds"
 	"zero2dev/internal/model"
 )
 
@@ -142,4 +144,16 @@ func FindProgram(name string, env []string) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("%s was not found on the service's PATH", name)
+}
+
+// rustHintEmit logs cargo's stderr lines and, once per start, adds a system line when one of
+// them says a C compiler or linker is missing (kinds.RustHint).
+func (s *Supervisor) rustHintEmit(id string) func(string) {
+	var once sync.Once
+	return func(t string) {
+		s.logLine(id, "stderr", t)
+		if h := kinds.RustHint(t); h != "" {
+			once.Do(func() { s.logLine(id, "system", h) })
+		}
+	}
 }

@@ -236,6 +236,7 @@ func catalogEntries() []model.CatalogEntry {
 		mk("mariadb-11.4.0", "mariadb", "11.4.0", "MariaDB 11.4.0"),
 		mk("node-22.1.0", "node", "22.1.0", "Node.js 22.1.0"),
 		mk("python-3.13.1", "python", "3.13.1", "Python 3.13.1"),
+		mk("rust-1.100.0-windows-amd64", "rust", "1.100.0", "Rust 1.100.0 (stable, GNU)"),
 	}
 }
 

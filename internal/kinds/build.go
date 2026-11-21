@@ -144,8 +144,8 @@ func Build(kind string, settings map[string]string, extra []string, c Ctx) *Plan
 		nodePackageManager(pl, eff, c)
 	}
 	if len(extra) > 0 {
-		if pl.Program == "npm" {
-			pl.Args = append(pl.Args, "--") // npm passes what follows to the script
+		if pl.Program == "npm" || kind == "rust" {
+			pl.Args = append(pl.Args, "--") // npm passes what follows to the script, cargo to your program
 		}
 		pl.Args = append(pl.Args, c.ExpandPlain(extra)...)
 	}
@@ -160,6 +160,9 @@ func Build(kind string, settings map[string]string, extra []string, c Ctx) *Plan
 	}
 	if kind == "python" && c.Home != "" && c.ServiceID != "" {
 		pythonPlan(pl, c) // the virtual environment of the service
+	}
+	if kind == "rust" && c.Home != "" && c.ServiceID != "" {
+		rustPlan(pl, c) // CARGO_TARGET_DIR of the service
 	}
 	if kind == "mailpit" && c.Data != "" {
 		pl.Dirs = append(pl.Dirs, c.Data) // Mailpit creates its database file, not the folder
@@ -216,6 +219,9 @@ func BuildCustom(kind string, args []string, c Ctx) *Plan {
 		for _, e := range p.Env {
 			pl.Env = append(pl.Env, e.Name+"="+c.expand(e.Value, "", eff, nil))
 		}
+	}
+	if kind == "rust" && c.Home != "" && c.ServiceID != "" {
+		rustPlan(pl, c)
 	}
 	return pl
 }

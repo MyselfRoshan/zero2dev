@@ -54,7 +54,7 @@ func Dir(dir string) (Result, error) {
 	d := &folder{dir: dir}
 	var best *Result
 	// The order is the contract's; the strongest evidence wins, the earlier group on a tie.
-	for _, probe := range []func(*folder) *Result{probePHP, probeNode, probeGo, probeJava, probePython} {
+	for _, probe := range []func(*folder) *Result{probePHP, probeNode, probeGo, probeJava, probePython, probeRust} {
 		if r := probe(d); r != nil && (best == nil || rank(r.Confidence) > rank(best.Confidence)) {
 			best = r
 		}

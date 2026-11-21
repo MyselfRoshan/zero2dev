@@ -33,7 +33,7 @@ type planned struct {
 	newDBPort int
 }
 
-var kindLabels = map[string]string{"php": "PHP", "node": "Node.js", "python": "Python", "go": "Go", "java": "Java",
+var kindLabels = map[string]string{"php": "PHP", "node": "Node.js", "python": "Python", "go": "Go", "java": "Java", "rust": "Rust",
 	"mariadb": "MariaDB", "mysql": "MySQL", "postgres": "PostgreSQL", "composer": "Composer"}
 
 func kindLabel(kind string) string {

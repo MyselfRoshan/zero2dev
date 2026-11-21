@@ -30,6 +30,7 @@ export const LANGUAGES: LanguageInfo[] = [
   { id: "python", label: "Python", icon: "python" },
   { id: "go", label: "Go", icon: "go" },
   { id: "java", label: "Java", icon: "java" },
+  { id: "rust", label: "Rust", icon: "rust" },
   { id: "static", label: "Static", icon: "" },
 ];
 

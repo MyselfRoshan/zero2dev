@@ -383,7 +383,20 @@ If a step fails, the page shows the error, removes what Zero2Dev had created (se
 
 `#/create?framework=laravel&name=Shop` opens the form with a framework and a name filled in (`parent`, `db`, `domain` and `port` work too).
 
-<!-- 0.0.6 rust: "## Rust services" goes here. -->
+## Rust services
+
+Run a Rust program or web server (Axum, Actix, Rocket ...) with Cargo, without installing Rust yourself.
+
+1. **Install Rust.** On the **Runtimes** page open the Rust card and press **Install**. Zero2Dev downloads rustup (`rustup-init.exe`, checked against the checksum rust-lang publishes) and runs it for you, with the **GNU** toolchain (`x86_64-pc-windows-gnu`). That needs no administrator install and no Visual Studio Build Tools, and nothing outside the Zero2Dev folder is changed (your `PATH` and the registry stay as they are). The first install downloads a few hundred MB and can take several minutes; the card shows what rustup is doing. The version shown on the card is the stable release of the day Zero2Dev was built; rustup installs the current `stable`.
+2. **Create the service.** **New service**, type **Rust**, your project folder (it holds `Cargo.toml`). Choosing the folder fills in the name and, for Axum, port 3000.
+3. **Choose how it runs.** *Run*: `cargo run` (debug build) or `cargo run --release` (optimised, slower to build). *Package* is for a workspace (`-p name`), *Binary* for a package with more than one (`--bin name`), *Features* is a comma list (`--features a,b`). *Arguments for your app* are added after `--`.
+4. **The first start compiles** the project and all its crates, which can take minutes (watch the log). The build output goes to `data\rust\target\<service>`, not into your project, and every service has its own folder. Your program gets the port as the `PORT` variable, so read it, as the Axum starter does.
+
+Zero2Dev sets `RUSTUP_HOME` and `CARGO_HOME` (inside the Rust folder) and puts `cargo\bin` on `PATH`. **Tasks** on the service page run `cargo build`, `cargo test`, `cargo fetch` and `cargo clippy`. The installed toolchain is the *minimal* profile, so run **Add Clippy** once before Clippy. `cargo`, `rustc` and `rustup` also work in your own terminal after **Environment** has them switched on.
+
+**A crate that needs a C compiler** (many `*-sys` crates) cannot be built with the GNU toolchain alone: install MinGW-w64 (or MSYS2) and put its `bin` folder on `PATH`. When a build fails because the linker or compiler is missing, the service log says so in one line.
+
+**New project from a framework** has an **Axum** starter (language Rust): it installs Rust when it is missing, writes `src/main.rs`, runs `cargo init` and `cargo add axum` and `tokio`, and creates the service and a site that proxies to it.
 <!-- 0.0.6 apiclients: "### Try an API with Bruno or Hoppscotch" goes here. -->
 <!-- 0.0.6 viteplus: "### Vite+ projects" goes here. -->
 <!-- 0.0.6 usage: "### CPU and memory" goes here. -->

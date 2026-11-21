@@ -17,8 +17,8 @@ export default async function steps({ page, BASE, step, apiCall, shot, assert })
     await page.goto(BASE + "/#/create");
     await page.getByTestId("create-page").waitFor();
     await page.getByTestId("create-languages").waitFor();
-    assert.equal(await page.getByTestId("create-languages").locator("label").count(), 6);
-    for (const l of ["PHP", "JavaScript / TypeScript", "Python", "Go", "Java", "Static"])
+    assert.equal(await page.getByTestId("create-languages").locator("label").count(), 7);
+    for (const l of ["PHP", "JavaScript / TypeScript", "Python", "Go", "Java", "Rust", "Static"])
       await lang(l).first().waitFor();
     // PHP is chosen first, with its first framework
     assert.ok(await page.locator('input[name="cp-language"][value="php"]').isChecked());
