@@ -58,6 +58,10 @@ export const DATA_DIR_NAMES: Record<string, string> = {
   mailpit: "mailpit",
   python: "python",
   composer: "composer",
+  rust: "rust",
+  viteplus: "vite-plus",
+  bruno: "bruno",
+  hoppscotch: "hoppscotch",
 };
 
 /** Where a database service keeps its files (supervisor DataDir): <data>/<kind>/<service id>. */

@@ -41,6 +41,26 @@
 - **Entry points and links.** **New project from a framework** on Projects (a plain button next to **New project**) and on the Dashboard's Projects box. `#/create?framework=laravel&name=Shop` prefills the form (also `parent`, `db`, `domain`, `port`). The last folder is remembered in the browser. A **Create a project** tutorial and a Help entry explain it.
 - **Mock.** `GET /api/frameworks`, `POST /api/new-project/plan` and `POST /api/new-project` in the dashboard's fake daemon, with the names `taken` (folder in the way) and `fail-me` (the generator fails), and e2e steps for the whole flow.
 
+### Rust
+
+<!-- rust: runtime installed with rustup (GNU), service type, Axum starter -->
+
+### API clients
+
+<!-- apiclients: Bruno and Hoppscotch Desktop, the API clients group -->
+
+### Vite+
+
+<!-- viteplus: vp run modes, detection, Node from Zero2Dev or Vite+ -->
+
+### CPU and memory per service
+
+<!-- usage: the sampler, service.usage, the columns -->
+
+### Project file
+
+<!-- projectfile: export a project, Import project -->
+
 ## 0.0.5
 
 ### Databases

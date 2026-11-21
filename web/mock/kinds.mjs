@@ -17,6 +17,7 @@ const DATA_DIR = {
   go: "go",
   python: "python",
   composer: "composer",
+  rust: "rust",
 };
 const PROG = {
   node: "node.exe",
@@ -24,6 +25,7 @@ const PROG = {
   go: "go.exe",
   java: "java.exe",
   python: "python.exe",
+  rust: "cargo.exe",
   caddy: "caddy.exe",
   nginx: "nginx.exe",
   mariadb: "mariadbd.exe",

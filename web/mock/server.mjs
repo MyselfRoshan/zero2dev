@@ -15,6 +15,7 @@ import * as tasksFeature from "./features/tasks.mjs";
 import * as detectFeature from "./features/detect.mjs";
 import * as frameworksFeature from "./features/frameworks.mjs";
 import * as newProjectFeature from "./features/newproject.mjs";
+import * as projectFileFeature from "./features/projectfile.mjs";
 
 const PORT = Number(process.env.MOCK_PORT || 7000);
 const TOKEN = process.env.MOCK_TOKEN || "devtoken";
@@ -83,7 +84,9 @@ const KINDS = [
   "php",
   "java",
   "python",
+  "rust",
   "composer",
+  "viteplus",
   "nginx",
   "mariadb",
   "mysql",
@@ -112,6 +115,10 @@ function ext(kind, version, line, channel, source, o = {}) {
       `cpython-${version}+20261026-x86_64-pc-windows-msvc-install_only.tar.gz`,
     ),
     composer: `https://getcomposer.org/download/${version}/composer.phar`,
+    rust: "https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-gnu/rustup-init.exe",
+    viteplus: gh("voidzero-dev/vite-plus", "v" + version, "vp-x86_64-pc-windows-msvc.zip"),
+    bruno: gh("usebruno/bruno", "v" + version, `bruno_${version}_x64_win.zip`),
+    hoppscotch: gh("hoppscotch/releases", "v" + version + "-0", "Hoppscotch_Cloud_win_x64_portable.zip"),
     nginx: `https://nginx.org/download/nginx-${version}.zip`,
     mariadb: `https://downloads.mariadb.org/rest-api/mariadb/${version}/mariadb-${version}-winx64.zip`,
     mysql: `https://cdn.mysql.com/Downloads/MySQL-${line}/mysql-${version}-winx64.zip`,
@@ -132,6 +139,10 @@ function ext(kind, version, line, channel, source, o = {}) {
     java: "Java (Temurin)",
     python: "Python",
     composer: "Composer",
+    rust: "Rust",
+    viteplus: "Vite+",
+    bruno: "Bruno",
+    hoppscotch: "Hoppscotch",
     nginx: "nginx",
     mariadb: "MariaDB",
     mysql: "MySQL",
@@ -166,6 +177,10 @@ function ext(kind, version, line, channel, source, o = {}) {
       java: "bin/java.exe",
       python: "python.exe",
       composer: "composer.bat",
+      rust: "cargo/bin/cargo.exe",
+      viteplus: "vp.exe",
+      bruno: "Bruno.exe",
+      hoppscotch: "Hoppscotch.exe",
       nginx: "nginx.exe",
       mariadb: "bin/mariadbd.exe",
       mysql: "bin/mysqld.exe",
@@ -207,6 +222,10 @@ const BUILTIN = [
   ext("python", "3.13.18", "3.13", "stable", "builtin"),
   ext("python", "3.12.16", "3.12", "stable", "builtin"),
   ext("composer", "2.11.1", "2", "stable", "builtin"),
+  ext("rust", "1.91.0", "", "stable", "builtin"),
+  ext("viteplus", "1.6.0", "", "", "builtin"),
+  ext("bruno", "4.3.0", "", "", "builtin"),
+  ext("hoppscotch", "26.10.1", "", "", "builtin"),
   ext("nginx", "1.26.2", "1.26", "stable", "builtin"),
   ext("mariadb", "11.4.13", "11.4", "lts", "builtin"),
   ext("mysql", "8.4.13", "8.4", "lts", "builtin"),
@@ -243,6 +262,10 @@ const SOURCES = {
   java: "api.adoptium.net",
   python: "github.com/astral-sh/python-build-standalone",
   composer: "getcomposer.org",
+  rust: "static.rust-lang.org",
+  viteplus: "github.com/voidzero-dev/vite-plus",
+  bruno: "github.com/usebruno/bruno",
+  hoppscotch: "github.com/hoppscotch/releases",
   nginx: "nginx.org",
   mariadb: "downloads.mariadb.org",
   postgres: "www.enterprisedb.com",
@@ -664,6 +687,7 @@ function validateService(b, selfId = "") {
     "go",
     "java",
     "python",
+    "rust",
     "caddy",
     "nginx",
     "mariadb",
@@ -1034,6 +1058,7 @@ const FEATURES = [
   detectFeature,
   frameworksFeature,
   newProjectFeature,
+  projectFileFeature,
 ];
 const featureCtx = { state, emit, send, fail, id, now, sleep, procs, setState, addLog, startProc, stopProc, fakeJob };
 

@@ -1,4 +1,8 @@
 import type {
+  ProjectExportRequest,
+  ProjectExportResult,
+  ProjectImportPlan,
+  ProjectImportRequest,
   DetectResult,
   Framework,
   NewProjectPlan,
@@ -330,4 +334,10 @@ export const api = {
   listFrameworks: () => request<{ frameworks: Framework[] }>("GET", "/api/frameworks"),
   planNewProject: (b: NewProjectRequest) => request<NewProjectPlan>("POST", "/api/new-project/plan", b),
   startNewProject: (b: NewProjectRequest) => request<Job>("POST", "/api/new-project", b),
+
+  // ---- 0.0.6, part 2: project files (docs/API.md, "Amendment: 0.0.6, part 2") ----
+  exportProject: (projectId: string, b: ProjectExportRequest) =>
+    request<ProjectExportResult>("POST", `/api/projects/${enc(projectId)}/export`, b),
+  planProjectImport: (b: ProjectImportRequest) => request<ProjectImportPlan>("POST", "/api/projects/import/plan", b),
+  importProject: (b: ProjectImportRequest) => request<Job>("POST", "/api/projects/import", b),
 };

@@ -251,3 +251,11 @@ func TestNewProjectRoutes(t *testing.T) {
 	// the folder now has files: the same request is a 409
 	e.errCode("POST", "/api/new-project", req, 409)
 }
+
+// 0.0.6 part 2, Wave 0: the project file routes exist and answer 501 until they are built.
+func TestProjectFileRoutesWave0(t *testing.T) {
+	e := newEnv(t)
+	e.errCode("POST", "/api/projects/prj_x/export", map[string]any{"path": "x"}, 501)
+	e.errCode("POST", "/api/projects/import/plan", map[string]any{"path": "x"}, 501)
+	e.errCode("POST", "/api/projects/import", map[string]any{"path": "x"}, 501)
+}

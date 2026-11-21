@@ -1016,6 +1016,26 @@
     ]
   },
   {
+    "kind": "rust",
+    "label": "Rust",
+    "summary": "Builds and runs a Rust program with Cargo.",
+    "folder": {
+      "use": "required",
+      "label": "Project folder",
+      "hint": "Your project's code, with Cargo.toml. Cargo's build output is kept in the data folder, not here."
+    },
+    "port": {
+      "use": "optional",
+      "default": 8080,
+      "hint": "Your app also gets it as the PORT variable."
+    },
+    "health": true,
+    "dataDir": "shared",
+    "extraArgs": "Arguments for your app",
+    "extraArgsHint": "Added after --, for your app to read. {port} is replaced with the port.",
+    "options": []
+  },
+  {
     "kind": "java",
     "label": "Java",
     "summary": "Runs a JAR or a Java main class.",

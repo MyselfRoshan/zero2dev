@@ -383,6 +383,12 @@ If a step fails, the page shows the error, removes what Zero2Dev had created (se
 
 `#/create?framework=laravel&name=Shop` opens the form with a framework and a name filled in (`parent`, `db`, `domain` and `port` work too).
 
+<!-- 0.0.6 rust: "## Rust services" goes here. -->
+<!-- 0.0.6 apiclients: "### Try an API with Bruno or Hoppscotch" goes here. -->
+<!-- 0.0.6 viteplus: "### Vite+ projects" goes here. -->
+<!-- 0.0.6 usage: "### CPU and memory" goes here. -->
+<!-- 0.0.6 projectfile: "## Share a project: zero2dev.json" goes here. -->
+
 ## Snapshots: undo for a whole project
 
 A *snapshot* is a named copy of a project as it is now: the settings of its services, the runtime version each one uses, its sites, its `php.ini` files and the data of its databases. The code in the project folders is not copied. Snapshots are kept in `data\snapshots`, so they move with the data folder.

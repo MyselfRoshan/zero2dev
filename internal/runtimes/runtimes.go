@@ -91,7 +91,7 @@ var tools = []struct {
 // whose version is read from their files instead (editors.go).
 func noProbe(kind, binary string) bool {
 	switch kind {
-	case "notepadpp", "heidisql", "dbeaver", "vscode", "vscodium":
+	case "notepadpp", "heidisql", "dbeaver", "vscode", "vscodium", "bruno", "hoppscotch":
 		return true
 	}
 	return false
@@ -167,7 +167,7 @@ func (m *Manager) Detect() []Detected {
 }
 
 var display = map[string]string{
-	"node": "Node.js", "php": "PHP", "go": "Go", "java": "Java", "python": "Python", "composer": "Composer", "caddy": "Caddy", "nginx": "nginx",
+	"node": "Node.js", "php": "PHP", "go": "Go", "java": "Java", "python": "Python", "rust": "Rust", "composer": "Composer", "viteplus": "Vite+", "bruno": "Bruno", "hoppscotch": "Hoppscotch", "caddy": "Caddy", "nginx": "nginx",
 	"mariadb": "MariaDB", "mysql": "MySQL", "postgres": "PostgreSQL", "redis": "Redis", "mailpit": "Mailpit",
 	"vscode": "VS Code", "vscodium": "VSCodium", "notepadpp": "Notepad++", "heidisql": "HeidiSQL", "dbeaver": "DBeaver",
 }

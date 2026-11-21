@@ -1738,3 +1738,57 @@ Node settings: `run`=`npm` and `npmScript`=`dev` (else `start`) when `package.js
 PHP projects offer MariaDB and MySQL only: the default extension list has `pdo_mysql` and `mysqli`, not `pdo_pgsql`. Vite and Astro are started with `--host 127.0.0.1`, because the site server proxies to `127.0.0.1` and their default host is `localhost`.
 
 **Internal contract.** `newproject.Manager` takes its collaborators as interfaces (`InstallerAPI`, `DatabaseAPI`, `SupervisorAPI`, `SitesAPI`) and the hooks `Run`, `Launch`, `Catalog`, `PortFree`, `HTTP`, `Rand`, so tests use fakes. `dbtools.Manager.DropUser(ctx, serviceID, user)` is new (used by the clean-up). Shared pieces: `sites.CheckDomain` and `sites.Validate`, `installer.ExtractZip`, `launch.ToolDataArgs`, `validate.Service/Links/Project`, `netutil.PortFree/NextFreePort`, `envfile.Apply`.
+
+## Amendment: 0.0.6, part 2 (Vite+, Rust, API clients, project files, CPU and memory)
+
+Everything here is the contract of the second half of 0.0.6. Routes answer `501 not_supported` until their work is in.
+
+### Kinds
+
+- **`rust`** is a service kind and a runtime kind (category `language`, data folder `<home>\rust`). The toolchain is installed with **rustup** from a catalog entry whose `url` is `rustup-init.exe` (the installer's `.exe` type, below): the **GNU** toolchain (`x86_64-pc-windows-gnu`), so no administrator install is needed. The runtime's binary is `<bin>\<id>\cargo\bin\cargo.exe`; `rustc` and `rustup` are next to it. A service of this kind runs `cargo`; env `RUSTUP_HOME`, `CARGO_HOME` (both inside the runtime's folder) and `CARGO_TARGET_DIR=<home>\rust\target\<serviceId>`; `<CARGO_HOME>\bin` is on `PATH`.
+- **Installer `.exe` type.** A catalog download whose file name ends in `.exe` is a program to run, not an archive. It is verified like any download, copied into the install folder and **run** (no window, a timeout, its process tree ended on a timeout) with the arguments and environment of the kind (rustup: `RUSTUP_HOME`, `CARGO_HOME`, `--default-host x86_64-pc-windows-gnu --default-toolchain stable --profile minimal --no-modify-path -y`); its output lines become the job's step and percent. The runtime is registered only when the file named by `binaryRelPath` exists afterwards. A failing install removes the folder.
+- **`viteplus`** is a runtime kind (category `tool`, data folder `<home>\vite-plus`): the Vite+ command line (`vp`). It is installed only if Vite+'s global program can be fetched with a published checksum and kept portable with `VP_HOME=<home>\vite-plus`; otherwise the kind stays registered but has no catalog entry, and the Node-from setting below answers why it is off.
+- **`bruno`** and **`hoppscotch`** are runtime kinds of a new category **`apiclient`** (Launchable like the editors: opened, not supervised; `GET /api/runtimes` and the Runtimes page group "API clients"). Each is a portable zip from GitHub (the asset's `digest` is its sha256). Their data is moved into `<home>\bruno` and `<home>\hoppscotch` by `launch.ToolDataArgs` (Bruno `--user-data-dir=<dir>`; Hoppscotch Desktop's portable build keeps its data next to the program's working directory, which is `<home>\hoppscotch`). A tool that cannot be moved into the data folder is not offered. `POST /api/runtimes/{id}/launch` works for them with no folder argument (Bruno has none).
+
+### Node: Vite+
+
+The Node profile gains, in the **Run** group:
+- run mode `vp` (with the settings `vpCommand` = `dev` | `build` | `test` | `run`, and `vpScript` for `run`): the service runs `<project>\node_modules\.bin\vp.cmd <command>`; port 5173 by default.
+- setting **`nodeFrom`** = `zero2dev` (default) | `viteplus`: where Node comes from. `zero2dev` runs on a Zero2Dev Node runtime. `viteplus` runs through Vite+'s own program with `VP_HOME=<home>\vite-plus`, so Vite+ selects (and installs) the Node the project pins (`.node-version`, `devEngines.runtime`, `engines.node`, `.nvmrc`). The service's command preview and its page say in words which of the two the service uses. Choosing `viteplus` without the Vite+ program installed is a `409` on start with the message "Install the Vite+ command line on the Runtimes page".
+- **Pin warning:** a Node service whose folder pins a Node version that the service's Node runtime does not satisfy gets a warning in its command preview and start log, and the form offers the installed version that does, or a link to install one.
+- `GET /api/project/detect` recognises Vite+ (a `vite-plus` dependency, a `vite.config` that imports `vite-plus`, or a `vp` script) and sets `run=vp` and `vpCommand=dev`.
+
+### CPU and memory per service
+
+- `model.Service` (so `GET /api/services` and `GET /api/services/{id}`) gains `cpu` (percent of the whole machine, 0-100, one decimal) and `memBytes` (the working set summed over the service's whole process tree). Both are `0` while the service is stopped or before the first sample, and are never stored or accepted as input.
+- The supervisor samples every running service every 2 seconds. On Windows the numbers come from the service's job object (every service already runs in one): CPU from the job's accounting (user plus kernel time since the last sample, divided by the wall time and the number of processors), memory from the processes in the job. Off Windows there is no job: both stay `0`.
+- **Event `service.usage`:** one batch for all running services, `[ { "id", "cpu", "memBytes" } ]`, published after each sample; a service missing from the batch has stopped (the dashboard sets its numbers to `0`).
+
+### Project file
+
+`zero2dev.json` (`format: 1`) describes a project without anything that belongs to one PC:
+
+```json
+{ "format": 1, "name": "My Shop",
+  "runtimes": [ { "kind": "php", "min": "8.2" } ],
+  "services": [
+    { "ref": "app", "name": "My Shop", "kind": "php", "cwd": ".", "port": 8000, "settings": { "docroot": "public" },
+      "env": { "APP_ENV": "local" }, "envFile": ".env", "dependsOn": [], "database": "db", "runtime": { "kind": "php", "min": "8.2" } },
+    { "ref": "db", "name": "MariaDB", "kind": "mariadb", "cwd": "", "port": 3306 } ],
+  "sites": [ { "name": "My Shop", "domain": "my-shop", "type": "php", "root": "public", "service": "app", "https": true, "enabled": true } ] }
+```
+
+- **Paths** are relative to the folder of the file, with `/` (`.` is that folder). A service folder outside it is skipped on export with a warning (an absolute path is never written). **Runtimes** are a kind and a version range, never a path, an id or a catalog id. **Services refer to each other by `ref`** (`dependsOn`, `database`, a site's `service`); no Zero2Dev id is in the file. A **domain** is the label before the suffix.
+- **Never written:** ids, runtime binaries, absolute paths, a database service's administrator password, the contents of `.env`, data folders, and every `env` variable whose key looks like a secret (contains `PASSWORD`, `SECRET`, `TOKEN`, `KEY`, `CREDENTIAL`, `AUTH`, `PRIVATE`, `SIGNATURE`, `COOKIE` or `SESSION`, case-insensitive): each one is named in the export's `warnings`.
+- A file with another `format`, an unknown service kind or runtime kind, a `ref` used twice, a `dependsOn`/`database`/`service` that names nothing, or a dependency loop is refused (a plan `problem`).
+
+| Method | Path | Body | Response |
+| --- | --- | --- | --- |
+| POST | `/api/projects/{id}/export` | `{ "path": "D:\\work\\shop\\zero2dev.json", "overwrite": false }` | `{ "path", "warnings": [] }` |
+| POST | `/api/projects/import/plan` | `{ "path": "D:\\work\\shop", "name": "" }` | `ProjectImportPlan` |
+| POST | `/api/projects/import` | the same | `202 Job` (`project-import`) |
+
+- **Export:** `path` is a file, or a folder (then `<folder>\zero2dev.json`). `404` unknown project; `409` the file exists and `overwrite` is not set (`<file> exists`). The folder of the file becomes the base of every relative path, so export next to the project's code.
+- **Import plan:** `path` is a `zero2dev.json` or a folder that holds one (a cloned repository). `{ "path", "dir", "name", "services": ["Shop API (PHP, port 8000)"], "sites": ["https://shop.localhost -> Shop API"], "installs": [ { "kind", "version", "catalogId", "name", "reason" } ], "changes": ["Port 8000 is taken: Shop API uses 8001"], "problems": [], "warnings": [] }`. Nothing is changed. Problems stop the import (`409` on start with the first one as the message).
+- **Import job** (`project-import`, `job.done` carries `projectId` and `path`): checks the plan again; installs the missing runtimes (the same installer and selection as New project); creates the services, the sites and the project in **one** change, with new ids, free ports (the file's port when free), unique domains, and runtimes matched by kind and range (a service that followed the default follows it); a failure leaves nothing created. No file in the project's folder is written. Events: `services.changed`, `sites.changed`, `projects.changed`.
+- The dashboard: **Export** on a project's row (the Save as dialog) and **Import project** on the Projects page (`#/projects/import`: the file or folder picker, the plan, the progress, the result).

@@ -18,6 +18,10 @@ export const KIND_LABEL: Record<string, string> = {
   node: "Node.js",
   go: "Go",
   python: "Python",
+  rust: "Rust",
+  viteplus: "Vite+",
+  bruno: "Bruno",
+  hoppscotch: "Hoppscotch",
   composer: "Composer",
   caddy: "Caddy",
   other: "Other",
@@ -26,7 +30,7 @@ export const kindLabel = (k: string): string => KIND_LABEL[k] ?? k;
 
 /** A category of the Runtimes page. Web servers serve sites; they are not what services run on. */
 export interface RuntimeGroup {
-  id: "languages" | "tools" | "servers" | "databases" | "mail" | "editors" | "dbtools";
+  id: "languages" | "tools" | "servers" | "databases" | "mail" | "editors" | "dbtools" | "apiclients";
   title: string;
   text: string;
   kinds: RuntimeKind[];
@@ -38,13 +42,13 @@ export const RUNTIME_GROUPS: RuntimeGroup[] = [
     id: "languages",
     title: "Languages",
     text: "What your services run on.",
-    kinds: ["node", "php", "go", "java", "python"],
+    kinds: ["node", "php", "go", "java", "python", "rust"],
   },
   {
     id: "tools",
     title: "Tools",
     text: "Programs your languages use, run with the version a service uses.",
-    kinds: ["composer"],
+    kinds: ["composer", "viteplus"],
   },
   {
     id: "servers",
@@ -76,6 +80,12 @@ export const RUNTIME_GROUPS: RuntimeGroup[] = [
     text: "Open a database service with the connection filled in.",
     kinds: ["heidisql", "dbeaver"],
   },
+  {
+    id: "apiclients",
+    title: "API clients",
+    text: "Try the API a service offers. Their settings are kept in the data folder, not in bin.",
+    kinds: ["bruno", "hoppscotch"],
+  },
 ];
 
 /** Groups whose kinds can be services (editors and database tools are opened, not run as services). */
@@ -84,7 +94,7 @@ export const SERVICE_GROUP_IDS: RuntimeGroup["id"][] = ["languages", "servers", 
 /** Desktop programs that are opened (launched), not supervised. */
 export function isLaunchable(kind: string): boolean {
   return RUNTIME_GROUPS.some(
-    (g) => (g.id === "editors" || g.id === "dbtools") && g.kinds.includes(kind as RuntimeKind),
+    (g) => (g.id === "editors" || g.id === "dbtools" || g.id === "apiclients") && g.kinds.includes(kind as RuntimeKind),
   );
 }
 
@@ -269,6 +279,10 @@ export const KIND_SUMMARY: Record<string, string> = {
   go: "The Go compiler and tools",
   java: "Eclipse Temurin JDK",
   python: "Python, with pip and virtual environments",
+  rust: "Rust and Cargo, installed with rustup",
+  viteplus: "The Vite+ command line, which can pick a project's Node version",
+  bruno: "API client whose collections are plain files in your project",
+  hoppscotch: "Light API client",
   composer: "PHP's package manager. It runs with the PHP of the service that uses it, so install a PHP too",
   caddy: "Web server with automatic local HTTPS",
   nginx: "Fast web server and reverse proxy",

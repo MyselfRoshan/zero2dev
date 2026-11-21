@@ -69,6 +69,19 @@ type Service struct {
 	Pid       int        `json:"pid"`
 	StartedAt *time.Time `json:"startedAt"`
 	LastError string     `json:"lastError"`
+	// CPU and MemBytes are the last sample of a running service, summed over its whole process
+	// tree (0.0.6, internal/supervisor sampler): CPU is the percent of the whole machine (0-100),
+	// MemBytes the working set. Both are 0 while the service is stopped or before the first sample;
+	// never stored or accepted as input.
+	CPU      float64 `json:"cpu"`
+	MemBytes uint64  `json:"memBytes"`
+}
+
+// Usage is one entry of the service.usage event (events carry a batch of them).
+type Usage struct {
+	ID       string  `json:"id"`
+	CPU      float64 `json:"cpu"`
+	MemBytes uint64  `json:"memBytes"`
 }
 
 // Restart-on-crash limits.
@@ -279,8 +292,9 @@ const (
 	JobMigrate         = "migrate"
 	JobMigrateRevert   = "migrate-revert"
 	JobMigrateCleanup  = "migrate-cleanup"
-	JobTask            = "task"        // 0.0.6: a one-off task of a service (npm install ...)
-	JobNewProject      = "new-project" // 0.0.6: New project from a framework
+	JobTask            = "task"           // 0.0.6: a one-off task of a service (npm install ...)
+	JobNewProject      = "new-project"    // 0.0.6: New project from a framework
+	JobProjectImport   = "project-import" // 0.0.6: Import project from a project file
 )
 
 // Portable says which user-level caches and global package folders of the
@@ -368,14 +382,14 @@ type LogLine struct {
 
 // ServiceKinds and RuntimeKinds are the accepted enums.
 var (
-	ServiceKinds = []string{"custom", "node", "php", "go", "java", "python", "caddy", "nginx", "mariadb", "mysql", "postgres", "redis", "mailpit"}
-	RuntimeKinds = []string{"node", "php", "go", "java", "python", "composer", "caddy", "nginx",
+	ServiceKinds = []string{"custom", "node", "php", "go", "java", "python", "rust", "caddy", "nginx", "mariadb", "mysql", "postgres", "redis", "mailpit"}
+	RuntimeKinds = []string{"node", "php", "go", "java", "python", "rust", "composer", "viteplus", "caddy", "nginx",
 		"mariadb", "mysql", "postgres", "redis", "mailpit",
 		"vscode", "vscodium", "notepadpp",
-		"heidisql", "dbeaver", "other"}
+		"heidisql", "dbeaver", "bruno", "hoppscotch", "other"}
 	// RemoteKinds can have their version lists fetched from the publishers.
-	RemoteKinds = []string{"node", "go", "caddy", "php", "java", "python", "composer", "nginx",
-		"mariadb", "mysql", "postgres", "redis", "mailpit", "vscode", "vscodium", "notepadpp", "heidisql", "dbeaver"}
+	RemoteKinds = []string{"node", "go", "caddy", "php", "java", "python", "rust", "composer", "viteplus", "nginx",
+		"mariadb", "mysql", "postgres", "redis", "mailpit", "vscode", "vscodium", "notepadpp", "heidisql", "dbeaver", "bruno", "hoppscotch"}
 )
 
 // Kind categories, as grouped on the Runtimes page.
@@ -386,14 +400,16 @@ const (
 	CatEditor   = "editor"
 	CatDBTool   = "dbtool"
 	CatMail     = "mail"
-	CatTool     = "tool" // a program other programs run (Composer)
+	CatTool     = "tool"      // a program other programs run (Composer, the Vite+ CLI)
+	CatAPI      = "apiclient" // a desktop program to try an API (Bruno, Hoppscotch)
 )
 
 // KindCategory maps every runtime kind (except "other") to its category.
 var KindCategory = map[string]string{
-	"node": CatLanguage, "php": CatLanguage, "go": CatLanguage, "java": CatLanguage, "python": CatLanguage,
-	"composer": CatTool,
-	"caddy":    CatServer, "nginx": CatServer,
+	"node": CatLanguage, "php": CatLanguage, "go": CatLanguage, "java": CatLanguage, "python": CatLanguage, "rust": CatLanguage,
+	"composer": CatTool, "viteplus": CatTool,
+	"bruno": CatAPI, "hoppscotch": CatAPI,
+	"caddy": CatServer, "nginx": CatServer,
 	"mariadb": CatDatabase, "mysql": CatDatabase, "postgres": CatDatabase, "redis": CatDatabase,
 	"mailpit": CatMail,
 	"vscode":  CatEditor, "vscodium": CatEditor, "notepadpp": CatEditor,
@@ -403,7 +419,7 @@ var KindCategory = map[string]string{
 // Launchable kinds are desktop programs that are opened, not supervised as services.
 func Launchable(kind string) bool {
 	c := KindCategory[kind]
-	return c == CatEditor || c == CatDBTool
+	return c == CatEditor || c == CatDBTool || c == CatAPI
 }
 
 // dataDirNames are the per-tool folders inside the data folder. Settings,
@@ -412,7 +428,8 @@ func Launchable(kind string) bool {
 var dataDirNames = map[string]string{
 	"vscode": "code", "vscodium": "codium", "notepadpp": "notepadpp", "heidisql": "heidisql", "dbeaver": "dbeaver",
 	"mariadb": "mariadb", "mysql": "mysql", "postgres": "postgres", "redis": "redis", "mailpit": "mailpit",
-	"php": "php", "node": "node", "go": "go", "python": "python", "composer": "composer",
+	"php": "php", "node": "node", "go": "go", "python": "python", "composer": "composer", "rust": "rust", "viteplus": "vite-plus",
+	"bruno": "bruno", "hoppscotch": "hoppscotch",
 }
 
 // DataDirName is the folder name of a kind's data inside the data folder

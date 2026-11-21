@@ -23,7 +23,7 @@ type File struct {
 
 // kindOrder is the order of the kinds in the shims and on the activated PATH
 // (first listed wins when two kinds offer the same command, e.g. mysql).
-var kindOrder = []string{"node", "php", "java", "go", "python", "composer", "mysql", "mariadb", "postgres", "redis"}
+var kindOrder = []string{"node", "php", "java", "go", "python", "rust", "composer", "mysql", "mariadb", "postgres", "redis"}
 
 // shimmed lists, per kind, the commands that get a shim. The first command of
 // the node, php, java and go kinds is the runtime's own binary; the others are
@@ -36,8 +36,9 @@ var shimmed = map[string][]string{
 	"php":      {"php"},
 	"java":     {"java", "javac", "jar"},
 	"go":       {"go", "gofmt"},
-	"python":   {"python", "pip"}, // pip.exe is in the Scripts folder below python.exe
-	"composer": {"composer"},      // 0.0.6: composer.bat next to composer.phar (agent composer)
+	"rust":     {"cargo", "rustc", "rustup"}, // 0.0.6: rustc and rustup are found next to cargo.exe (agent rust)
+	"python":   {"python", "pip"},            // pip.exe is in the Scripts folder below python.exe
+	"composer": {"composer"},                 // 0.0.6: composer.bat next to composer.phar (agent composer)
 	"mysql":    {"mysql", "mysqldump"},
 	"mariadb":  {"mariadb", "mysql", "mariadb-dump"},
 	"postgres": {"psql", "pg_dump", "pg_restore"},
@@ -57,7 +58,7 @@ func toolDirs(kind, dir string) []string {
 // binary itself (and so needs no existence check).
 func ownBinary(kind string) bool {
 	switch kind {
-	case "node", "php", "java", "go", "python":
+	case "node", "php", "java", "go", "python", "rust":
 		return true
 	}
 	return false
