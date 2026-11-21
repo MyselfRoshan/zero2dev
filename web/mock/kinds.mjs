@@ -80,6 +80,8 @@ export function validateSettings(kind, settings) {
       return `${o.label}: must be between ${o.min} and ${o.max}`;
     if (o.type === "select" && !o.choices.some((c) => c.value === v))
       return `${o.label}: "${v}" is not one of the choices`;
+    const off = o.type === "select" && o.choices.find((c) => c.value === v)?.disabled;
+    if (off) return `${o.label}: "${o.choices.find((c) => c.value === v).label}" cannot be chosen: ${off}`;
     if (
       o.pattern &&
       v &&
@@ -153,6 +155,13 @@ export function preview(svc, { home, runtimes }) {
     // pnpm and Yarn come from Corepack (the daemon makes it before the first start).
     if (svc.kind === "node" && ["pnpm", "yarn"].includes(eff.packageManager) && program.endsWith("npm.cmd"))
       program = `${home}\\node\\corepack\\bin\\${eff.packageManager}.cmd`;
+    // Vite+: the project's own vp command. The mock reads no files: a folder name steers the two
+    // answers (no-vp: not installed yet; pinned: the folder pins Node 22.18.0).
+    if (svc.kind === "node" && eff.run === "vp" && !svc.command) {
+      program = `${svc.cwd}\\node_modules\\.bin\\vp.cmd`;
+      if (/no-vp/i.test(svc.cwd))
+        warnings.push("vp is not installed in this project: run npm install (or a task) first");
+    }
     if ((svc.args ?? []).length) {
       if (program.endsWith("npm.cmd")) args.push("--");
       args.push(...svc.args.map(plain));
@@ -165,11 +174,22 @@ export function preview(svc, { home, runtimes }) {
     program = `${venv}\\Scripts\\python.exe`;
     env.push(`VIRTUAL_ENV=${venv}`);
   }
+  if (svc.kind === "node" && rt && !svc.command && /pinned/i.test(svc.cwd ?? "")) {
+    const alt = runtimes.find((r) => r.kind === "node" && r.id !== rt.id && r.version.startsWith("22."));
+    warnings.push(
+      rt.version.startsWith("22.")
+        ? ""
+        : `This folder pins Node 22.18.0 (.node-version) but the Node of this service is ${rt.version}: ` +
+            (alt
+              ? `Node ${alt.version} is installed, select it as this service's runtime`
+              : "install a matching Node on the Runtimes page and select it as this service's runtime"),
+    );
+  }
   for (const e of p?.env ?? []) env.push(`${e.name}=${expand(e.value)}`);
   for (const [k, v] of Object.entries(svc.env ?? {})) env.push(`${k}=${v}`);
   if (svc.port > 0) env.push(`PORT=${svc.port}`);
   const workdir = svc.cwd || (p?.dataDir === "service" ? dataDir : program.replace(/[\\/][^\\/]*$/, ""));
-  return { program, args, env, workdir, dataDir, files, warnings };
+  return { program, args, env, workdir, dataDir, files, warnings: warnings.filter(Boolean) };
 }
 
 /** The bundled extensions of a Windows PHP build, for the mock's PHP runtimes. */

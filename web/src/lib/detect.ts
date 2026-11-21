@@ -9,6 +9,7 @@ const FRAMEWORKS: Record<string, string> = {
   nextjs: "Next.js",
   nestjs: "NestJS",
   astro: "Astro",
+  "vite-plus": "Vite+",
   vite: "Vite",
   "vite-react": "Vite + React",
   "vite-vue": "Vite + Vue",

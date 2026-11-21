@@ -4,7 +4,7 @@
 //
 // The mock has no folders to read, so it judges the folder's NAME (the last part of the path):
 //   "laravel" -> php/laravel (high), "wordpress" -> php/wordpress, "next" -> node/nextjs,
-//   "vite" -> node/vite-react, "django" -> python/django, "fastapi" -> python/fastapi,
+//   "vite-plus" -> node/vite-plus (run=vp), "vite" -> node/vite-react, "django" -> python/django, "fastapi" -> python/fastapi,
 //   "flask" -> python/flask, "go-api" or "gin" -> go/gin, "spring" -> java/springboot,
 //   "plain-node" -> node (medium, no framework); anything else says nothing: { kind: "" }.
 // An empty dir, or one that is not an absolute path, is 400; a name with "missing" is not a folder.
@@ -47,6 +47,18 @@ const RULES = [
       envFile: ".env",
       port: 3000,
       markers: ["package.json", "next.config.js"],
+    },
+  ],
+  [
+    /vite-plus/i,
+    {
+      kind: "node",
+      framework: "vite-plus",
+      confidence: "high",
+      settings: { run: "vp", vpCommand: "dev" },
+      envFile: "",
+      port: 5173,
+      markers: ["package.json", "vite.config.ts"],
     },
   ],
   [

@@ -3,6 +3,7 @@ package kinds
 import (
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -54,5 +55,50 @@ func TestNodePnpmAndYarnMakeCorepackOnce(t *testing.T) {
 	pl = Build("node", map[string]string{"packageManager": "yarn"}, nil, c)
 	if pl.Pre[1].Program != filepath.Join(dir, "node_modules", ".bin", "corepack") || pl.Pre[1].Skip != filepath.Join(dir, "bin", "pnpm") {
 		t.Fatalf("%+v", pl.Pre)
+	}
+}
+
+func TestNodeViteplusRunsTheProjectsVpCommand(t *testing.T) {
+	c := ctx()
+	c.Cwd = filepath.FromSlash("D:/work/app")
+	vp := filepath.Join(c.Cwd, "node_modules", ".bin", "vp.cmd")
+	cases := []struct {
+		set  map[string]string
+		args []string
+	}{
+		{map[string]string{"run": "vp"}, []string{"dev", "--port", "3306", "--strictPort"}},
+		{map[string]string{"run": "vp", "vpCommand": "build"}, []string{"build"}},
+		{map[string]string{"run": "vp", "vpCommand": "test"}, []string{"test"}},
+		{map[string]string{"run": "vp", "vpCommand": "run", "vpScript": "lint:all"}, []string{"run", "lint:all"}},
+	}
+	for _, tc := range cases {
+		if err := Validate("node", tc.set); err != nil {
+			t.Fatalf("%v: %v", tc.set, err)
+		}
+		pl := Build("node", tc.set, nil, c)
+		if pl.Program != vp || !slices.Equal(pl.Args, tc.args) || pl.NotFound != NoVitePlusMessage {
+			t.Errorf("%v: %+v", tc.set, pl)
+		}
+	}
+	// the script field belongs to vp run only
+	if pl := Build("node", map[string]string{"run": "vp", "vpScript": "x"}, nil, c); slices.Contains(pl.Args, "x") {
+		t.Errorf("vpScript without vp run: %v", pl.Args)
+	}
+	// the other modes are unchanged
+	if pl := Build("node", map[string]string{"run": "npm", "npmScript": "dev"}, nil, c); pl.Program != "npm" || pl.NotFound != "" {
+		t.Errorf("%+v", pl)
+	}
+	if err := Validate("node", map[string]string{"run": "vp", "vpCommand": "run", "vpScript": ""}); err == nil {
+		t.Error("vp run needs a script")
+	}
+}
+
+func TestNodeFromViteplusIsNotAvailableYet(t *testing.T) {
+	if err := Validate("node", map[string]string{"run": "vp", "nodeFrom": "zero2dev"}); err != nil {
+		t.Fatal(err)
+	}
+	err := Validate("node", map[string]string{"run": "vp", "nodeFrom": "viteplus"})
+	if err == nil || !strings.Contains(err.Error(), "Not available yet") {
+		t.Fatalf("viteplus must be refused with its reason: %v", err)
 	}
 }

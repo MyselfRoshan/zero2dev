@@ -45,6 +45,9 @@ type Choice struct {
 	Value string   `json:"value"`
 	Label string   `json:"label"`
 	Args  []string `json:"args,omitempty"`
+	// Disabled, when set, says why this value cannot be chosen (the form shows it greyed out with
+	// the reason, Validate refuses it).
+	Disabled string `json:"disabled,omitempty"`
 }
 
 // Emit says what a setting writes.
@@ -313,6 +316,9 @@ func (o *Option) check(v string) error {
 	case "select":
 		if !o.hasChoice(v) {
 			return fmt.Errorf("%q is not one of the choices", v)
+		}
+		if ch := o.choice(v); ch != nil && ch.Disabled != "" {
+			return fmt.Errorf("%q cannot be chosen: %s", ch.Label, ch.Disabled)
 		}
 	case "multi":
 		for _, x := range SplitList(v) {

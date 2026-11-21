@@ -385,7 +385,14 @@ If a step fails, the page shows the error, removes what Zero2Dev had created (se
 
 <!-- 0.0.6 rust: "## Rust services" goes here. -->
 <!-- 0.0.6 apiclients: "### Try an API with Bruno or Hoppscotch" goes here. -->
-<!-- 0.0.6 viteplus: "### Vite+ projects" goes here. -->
+### Vite+ projects
+
+[Vite+](https://viteplus.dev) is a toolchain whose command is `vp` (`vp dev`, `vp build`, `vp test`, `vp run`). To run one as a service, choose the type **Node.js** and the run mode **Vite+ (vp ...)**; picking a folder that has `vite-plus` in its `package.json` does both for you. The command is `<project>\node_modules\.bin\vp.cmd dev --port <port>`, and the port is 5173 unless you change it.
+
+- **`vp` must be installed in the project.** Run **Install packages** on the service page (or `npm install`) first. Without it, Start answers "vp is not installed in this project: run npm install (or a task) first".
+- **Which Node runs it.** The setting **Node from** says it plainly: **Zero2Dev's Node**, the runtime chosen for the service, which Zero2Dev downloaded and checked. "Vite+'s Node" (Vite+ picking the version the project pins) is listed but greyed out: Zero2Dev cannot install the Vite+ command line into its own folder in a way it can check yet. The service page repeats the choice under "Node from".
+- **Pinned Node versions.** If the folder pins a Node (`.node-version`, `devEngines.runtime` in `package.json`, `engines.node` or `.nvmrc`) that the service's Node does not satisfy, the command preview shows one warning, and so does the start log. It names an installed Node that does satisfy it (select it as the service's runtime on the form), or tells you to install one on the Runtimes page. The warning does not stop the start.
+
 ### CPU and memory
 
 The Services page has a **CPU** and a **Memory** column, each Dashboard card shows both next to its uptime, and the service page lists them under Process and Started. They are refreshed every 2 seconds while the service runs, and show "-" while it is stopped.
