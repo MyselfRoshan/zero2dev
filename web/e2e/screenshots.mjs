@@ -165,6 +165,12 @@ try {
       title: "Create a project from a framework: choices and the plan",
       ready: "[data-testid=create-plan][data-phase=ready]",
     },
+    {
+      name: "project-import",
+      hash: "#/projects/import?path=D%3A%5Cwork%5Cmissing-runtime-port-shop",
+      title: "Import project: the file, the plan with installs and changes",
+      ready: "[data-testid=import-plan][data-phase=ready]",
+    },
     { name: "runtimes", hash: "#/runtimes", title: "Runtimes: installed versions and the catalog" },
     { name: "sites", hash: "#/sites", title: "Sites: local domains" },
     { name: "site-new", hash: "#/sites?new", title: "New site form" },
