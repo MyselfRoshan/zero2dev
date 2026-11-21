@@ -1,7 +1,9 @@
 package runtimes
 
 import (
+	"encoding/binary"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -78,4 +80,74 @@ func editorVersion(binary string) string {
 		}
 	}
 	return ""
+}
+
+// Bruno (Electron) and Hoppscotch Desktop (Tauri) are desktop programs too:
+// running them opens a window, so their version is read from files.
+//
+//	Bruno:      <root>/resources/app.asar, whose package.json holds the version
+//	Hoppscotch: nothing readable without the exe's version resource, so the name
+//	            of the folder it is in is used (bin/hoppscotch-26.10.1-windows-amd64/)
+
+// isAPIClient reports whether kind is an API client handled here.
+func isAPIClient(kind string) bool { return kind == "bruno" || kind == "hoppscotch" }
+
+// apiClientVersion returns the version of an API client install, "" when unknown.
+func apiClientVersion(kind, binary string) string {
+	dir := filepath.Dir(binary)
+	if kind == "bruno" {
+		if v := asarPackageVersion(filepath.Join(dir, "resources", "app.asar")); v != "" {
+			return v
+		}
+	}
+	return versionRE.FindString(filepath.Base(dir))
+}
+
+// asarPackageVersion reads "version" from the package.json at the top of an
+// Electron asar archive: a 16-byte pickle prefix, a JSON index of files
+// (offset and size, relative to the end of the index), then the file data.
+func asarPackageVersion(path string) string {
+	f, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	var pre [16]byte
+	if _, err := io.ReadFull(f, pre[:]); err != nil {
+		return ""
+	}
+	jsonLen := int64(binary.LittleEndian.Uint32(pre[12:]))
+	base := 8 + int64(binary.LittleEndian.Uint32(pre[4:])) // end of the index
+	if jsonLen <= 0 || jsonLen > 64<<20 {
+		return ""
+	}
+	hdr := make([]byte, jsonLen)
+	if _, err := f.ReadAt(hdr, 16); err != nil {
+		return ""
+	}
+	var idx struct {
+		Files map[string]struct {
+			Size   int64       `json:"size"`
+			Offset json.Number `json:"offset"`
+		} `json:"files"`
+	}
+	if json.Unmarshal(hdr, &idx) != nil {
+		return ""
+	}
+	pk, ok := idx.Files["package.json"]
+	off, err := pk.Offset.Int64()
+	if !ok || err != nil || pk.Size <= 0 || pk.Size > 1<<20 {
+		return ""
+	}
+	b := make([]byte, pk.Size)
+	if _, err := f.ReadAt(b, base+off); err != nil {
+		return ""
+	}
+	var pkg struct {
+		Version string `json:"version"`
+	}
+	if json.Unmarshal(b, &pkg) != nil {
+		return ""
+	}
+	return versionRE.FindString(pkg.Version)
 }

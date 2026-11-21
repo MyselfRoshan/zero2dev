@@ -384,7 +384,17 @@ If a step fails, the page shows the error, removes what Zero2Dev had created (se
 `#/create?framework=laravel&name=Shop` opens the form with a framework and a name filled in (`parent`, `db`, `domain` and `port` work too).
 
 <!-- 0.0.6 rust: "## Rust services" goes here. -->
-<!-- 0.0.6 apiclients: "### Try an API with Bruno or Hoppscotch" goes here. -->
+### Try an API with Bruno or Hoppscotch
+
+When a service offers an API, an API client sends requests to it and shows the answers. **Runtimes**, group **API clients**, has two:
+
+- **Bruno** keeps each collection as plain files (`.bru` or `.yml`) in a folder you choose, for example inside your project. They go into Git with the code, so the team shares them. Pick Bruno when the requests belong to the project.
+- **Hoppscotch** is lighter and its collections stay in the app, or in a Hoppscotch account if you sign in. They are not in your project. Pick it for quick tries. It needs WebView2, which Windows 11 has built in (on Windows 10 install the WebView2 Runtime from Microsoft first).
+
+Choose a version, **Install**, then **Open**. Neither program can be told to open a project folder, so there is no *Open in* button on a service page: open the program and point it at the service's address (for example `http://127.0.0.1:8000`).
+
+Where the data is: Bruno's preferences and workspaces are in `data\bruno`; your collections are wherever you saved them. Hoppscotch's data and its collections are in `data\hoppscotch`. Only Hoppscotch's window size stays in `%APPDATA%\io.hoppscotch.desktop`. A copy of the `data` folder therefore carries both programs' settings. A Bruno or Hoppscotch you added by path keeps its own usual places.
+
 <!-- 0.0.6 viteplus: "### Vite+ projects" goes here. -->
 <!-- 0.0.6 usage: "### CPU and memory" goes here. -->
 <!-- 0.0.6 projectfile: "## Share a project: zero2dev.json" goes here. -->

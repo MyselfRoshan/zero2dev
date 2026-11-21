@@ -299,6 +299,12 @@ export const KIND_SUMMARY: Record<string, string> = {
   other: "Programs you registered by path",
 };
 
+/** A line of advice shown inside a kind's card, for what its summary cannot say. */
+export const KIND_NOTE: Record<string, string> = {
+  bruno: "Collections are plain files in your project folder, so they go into Git.",
+  hoppscotch: "Collections stay in the app or an account, not in your project. Needs WebView2 (built into Windows 11).",
+};
+
 /** The Runtimes page filters: everything, what is installed, or one group. */
 export type RuntimeFilter = "all" | "installed" | RuntimeGroup["id"];
 

@@ -47,7 +47,10 @@
 
 ### API clients
 
-<!-- apiclients: Bruno and Hoppscotch Desktop, the API clients group -->
+- **Bruno and Hoppscotch Desktop** are installed from the Runtimes page, in a new **API clients** group, and opened with **Open** like the editors and database tools. Both come as portable ZIPs from GitHub (Bruno 4.3.0, Hoppscotch 26.10.1), checked with the SHA-256 GitHub publishes for each file, and newer versions are found like the other tools.
+- **Their settings live in the data folder.** Bruno is started with `--user-data-dir=<data>\bruno` (preferences, workspaces, its profile); Hoppscotch runs in `<data>\hoppscotch` (its `hoppscotch-desktop-data` and logs) with its WebView2 profile in `<data>\hoppscotch\webview2`, where the app keeps its local data. Neither takes a folder, so there is no *Open in* button on a service page. A Bruno or Hoppscotch you registered by path is left alone.
+- Hoppscotch needs WebView2 (built into Windows 11); the card says so. Bruno's card says its collections are plain files in your project, so they go into Git; Hoppscotch's say they stay in the app or an account.
+- **Fix:** programs opened from Zero2Dev no longer inherit `ELECTRON_RUN_AS_NODE`, which a daemon started from VS Code's terminal carries and which stops every Electron program from opening a window.
 
 ### Vite+
 

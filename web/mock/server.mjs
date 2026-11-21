@@ -180,7 +180,7 @@ function ext(kind, version, line, channel, source, o = {}) {
       rust: "cargo/bin/cargo.exe",
       viteplus: "vp.exe",
       bruno: "Bruno.exe",
-      hoppscotch: "Hoppscotch.exe",
+      hoppscotch: "hoppscotch-desktop.exe",
       nginx: "nginx.exe",
       mariadb: "bin/mariadbd.exe",
       mysql: "bin/mysqld.exe",
@@ -1542,9 +1542,10 @@ async function api(req, res, url) {
   if ((m2 = p.match(/^\/api\/runtimes\/([^/]+)\/launch$/)) && m === "POST") {
     const rt = state.runtimes.find((r) => r.id === m2[1]);
     if (!rt) return fail(res, 404, "not_found", `runtime ${m2[1]} not found`);
-    if (!["vscode", "vscodium", "notepadpp", "heidisql", "dbeaver"].includes(rt.kind))
+    if (!["vscode", "vscodium", "notepadpp", "heidisql", "dbeaver", "bruno", "hoppscotch"].includes(rt.kind))
       return fail(res, 400, "bad_request", `${rt.name} is run as a service, not opened`);
-    const b = body || {};
+    // An API client takes no folder and no database: a body is ignored (like the daemon).
+    const b = ["bruno", "hoppscotch"].includes(rt.kind) ? {} : body || {};
     if (b.serviceId) {
       const svc = state.services.find((s) => s.id === b.serviceId);
       if (!svc) return fail(res, 404, "not_found", `service ${b.serviceId} not found`);

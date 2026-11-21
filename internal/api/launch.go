@@ -11,9 +11,10 @@ import (
 	"zero2dev/internal/model"
 )
 
-// launchRuntime opens an installed code editor or database tool.
+// launchRuntime opens an installed code editor, database tool or API client.
 // Body (optional): {"path": "C:\\work\\app"} opens a folder or file in an
 // editor; {"serviceId": "svc_..."} opens a database service in a database tool.
+// An API client (Bruno, Hoppscotch) is opened as it is; a body is ignored.
 // 204 once the program has started; it is not supervised.
 func (s *Server) launchRuntime(w http.ResponseWriter, r *http.Request) error {
 	if s.Launch == nil {
@@ -56,7 +57,12 @@ func (s *Server) launchRuntime(w http.ResponseWriter, r *http.Request) error {
 		_ = s.Runtimes.EnsureEditorData(*rt)
 	}
 	dir := filepath.Dir(rt.Binary)
+	if wd := launch.ToolWorkDir(*rt, s.Cfg.Home); wd != "" {
+		dir = wd
+	}
 	switch {
+	case model.KindCategory[rt.Kind] == model.CatAPI:
+		// Bruno and Hoppscotch take no folder or database: a body is ignored.
 	case in.ServiceID != "":
 		if model.KindCategory[rt.Kind] != model.CatDBTool {
 			return apperr.BadRequest("%s cannot open a database", rt.Name)

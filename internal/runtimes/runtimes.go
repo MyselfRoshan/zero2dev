@@ -212,6 +212,9 @@ func (m *Manager) Register(kind, binary, version string) (model.Runtime, error) 
 	if version == "" && isEditor(kind) {
 		version = editorVersion(binary)
 	}
+	if version == "" && isAPIClient(kind) {
+		version = apiClientVersion(kind, binary)
+	}
 	if version == "" {
 		if args := argsFor(kind, binary); args != nil {
 			version = probe(binary, args)

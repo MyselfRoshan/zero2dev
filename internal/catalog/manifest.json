@@ -317,6 +317,38 @@
   {
     "os": "windows",
     "arch": "amd64",
+    "id": "bruno-4.3.0-windows-amd64",
+    "kind": "bruno",
+    "version": "4.3.0",
+    "name": "Bruno 4.3.0",
+    "url": "https://github.com/usebruno/bruno/releases/download/v4.3.0/bruno_4.3.0_x64_win.zip",
+    "checksum": {
+      "type": "sha256",
+      "value": "d00a649e0120168f26b630aa3253c36f2fdc9a84b1a13ff6fd96abc48f7be3f0"
+    },
+    "binaryRelPath": "Bruno.exe",
+    "stripComponents": 0,
+    "homepage": "https://github.com/usebruno/bruno/releases/tag/v4.3.0"
+  },
+  {
+    "os": "windows",
+    "arch": "amd64",
+    "id": "hoppscotch-26.10.1-windows-amd64",
+    "kind": "hoppscotch",
+    "version": "26.10.1",
+    "name": "Hoppscotch 26.10.1",
+    "url": "https://github.com/hoppscotch/releases/releases/download/v26.10.1-0/Hoppscotch_Cloud_win_x64_portable.zip",
+    "checksum": {
+      "type": "sha256",
+      "value": "00cd055f0a562ea02943069cf2b05d6189c3f26a8a61cec8d81c88000e56b61b"
+    },
+    "binaryRelPath": "hoppscotch-desktop.exe",
+    "stripComponents": 0,
+    "homepage": "https://github.com/hoppscotch/releases/releases/tag/v26.10.1-0"
+  },
+  {
+    "os": "windows",
+    "arch": "amd64",
     "id": "composer-2.11.1-windows-amd64",
     "kind": "composer",
     "version": "2.11.1",

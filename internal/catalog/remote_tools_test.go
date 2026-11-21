@@ -81,6 +81,18 @@ var ghFixtures = map[string]string{
 	"dbeaver/dbeaver": ghJSON(
 		ghRel("26.2.4", false, "dbeaver-ce-26.2.4-windows-x86_64.zip", "e667f516d64f29b87e3571203fc3eb02f0a419b9ff66865043bf9954ebc230c6"),
 		ghRel("26.2.3", false, "dbeaver-ce-26.2.3-windows-x86_64.zip", "")), // no digest: unverified
+	"usebruno/bruno": ghJSON(
+		ghRel("v4.3.0", false, "bruno_4.3.0_x64_win.zip", "d00a649e0120168f26b630aa3253c36f2fdc9a84b1a13ff6fd96abc48f7be3f0"),
+		ghRel("v4.2.1", false, "bruno_4.2.1_arm64_win.zip", strings.Repeat("e", 64)), // ARM build: skipped
+		ghRel("v4.2.0", false, "bruno_4.2.0_x64_win.zip", strings.Repeat("f", 64)),
+		ghRel("v4.1.0", false, "bruno_4.1.0_x64_win.zip", strings.Repeat("1", 64))),
+	// Hoppscotch: own releases repository, "-0" tag suffix, the same ZIP name in every release.
+	"hoppscotch/releases": ghJSON(
+		ghRel("v26.10.2-0", true, "Hoppscotch_Cloud_win_x64_portable.zip", strings.Repeat("2", 64)), // pre-release: skipped
+		ghRel("v26.10.1-0", false, "Hoppscotch_Cloud_win_x64_portable.zip", "00cd055f0a562ea02943069cf2b05d6189c3f26a8a61cec8d81c88000e56b61b"),
+		ghRel("v26.10.0-0", false, "Hoppscotch_SelfHost_win_x64_portable.zip", strings.Repeat("3", 64)), // self-host build: skipped
+		ghRel("v26.9.0-0", false, "Hoppscotch_Cloud_win_x64_portable.zip", strings.Repeat("4", 64)),
+		ghRel("v26.8.2-0", false, "Hoppscotch_Cloud_win_x64_portable.zip", strings.Repeat("5", 64))),
 	// Mailpit: the ZIP name carries no version, the tag does.
 	"astral-sh/python-build-standalone": pythonFixture,
 	"axllent/mailpit": ghJSON(
@@ -146,6 +158,8 @@ func TestParseGitHubTools(t *testing.T) {
 		{"notepadpp", "notepad-plus-plus/notepad-plus-plus", []string{"notepadpp-8.9.8.1-windows-amd64"}, "notepad++.exe", 0},
 		{"heidisql", "HeidiSQL/HeidiSQL", []string{"heidisql-12.22-windows-amd64"}, "heidisql.exe", 0},
 		{"dbeaver", "dbeaver/dbeaver", []string{"dbeaver-26.2.4-windows-amd64", "dbeaver-26.2.3-windows-amd64"}, "dbeaver.exe", 1},
+		{"bruno", "usebruno/bruno", []string{"bruno-4.3.0-windows-amd64", "bruno-4.2.0-windows-amd64"}, "Bruno.exe", 0},
+		{"hoppscotch", "hoppscotch/releases", []string{"hoppscotch-26.10.1-windows-amd64", "hoppscotch-26.9.0-windows-amd64"}, "hoppscotch-desktop.exe", 0},
 		{"mailpit", "axllent/mailpit", []string{"mailpit-1.33.0-windows-amd64", "mailpit-1.32.0-windows-amd64", "mailpit-1.31.6-windows-amd64"}, "mailpit.exe", 0},
 	} {
 		es, err := parseGitHub([]byte(ghFixtures[c.repo]), specFor(c.kind))
@@ -171,6 +185,12 @@ func TestParseGitHubTools(t *testing.T) {
 		mp[0].URL != "https://github.com/o/r/releases/download/v1.33.0/mailpit-windows-amd64.zip" ||
 		mp[0].Homepage != "https://github.com/axllent/mailpit/releases/tag/v1.33.0" {
 		t.Fatalf("mailpit: the version must come from the tag: %+v", mp[0])
+	}
+	hp, _ := parseGitHub([]byte(ghFixtures["hoppscotch/releases"]), specFor("hoppscotch"))
+	if hp[0].Version != "26.10.1" || hp[0].Name != "Hoppscotch 26.10.1" || hp[0].Checksum.Value != "00cd055f0a562ea02943069cf2b05d6189c3f26a8a61cec8d81c88000e56b61b" ||
+		hp[0].URL != "https://github.com/o/r/releases/download/v26.10.1-0/Hoppscotch_Cloud_win_x64_portable.zip" ||
+		hp[0].Homepage != "https://github.com/hoppscotch/releases/releases/tag/v26.10.1-0" {
+		t.Fatalf("hoppscotch: the version must come from the tag without its -0: %+v", hp[0])
 	}
 	db, _ := parseGitHub([]byte(ghFixtures["dbeaver/dbeaver"]), specFor("dbeaver"))
 	if db[0].Checksum.Type != "sha256" || db[0].Checksum.Value != "e667f516d64f29b87e3571203fc3eb02f0a419b9ff66865043bf9954ebc230c6" || db[0].Unverified {
@@ -288,7 +308,7 @@ func TestToolSourcesRefreshOffline(t *testing.T) {
 	for _, e := range es {
 		counts[e.Kind]++
 	}
-	want := map[string]int{"mariadb": 5, "mysql": 2, "postgres": 3, "vscode": 1, "redis": 3, "vscodium": 1, "notepadpp": 1, "heidisql": 1, "dbeaver": 2, "mailpit": 3, "python": 9}
+	want := map[string]int{"mariadb": 5, "mysql": 2, "postgres": 3, "vscode": 1, "redis": 3, "vscodium": 1, "notepadpp": 1, "heidisql": 1, "dbeaver": 2, "bruno": 2, "hoppscotch": 2, "mailpit": 3, "python": 9}
 	for k, n := range want {
 		if counts[k] != n {
 			t.Errorf("%s: %d remote entries, want %d (%v)", k, counts[k], n, counts)

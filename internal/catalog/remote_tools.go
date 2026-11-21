@@ -48,6 +48,14 @@ var ghSpecs = []ghSpec{
 		asset: regexp.MustCompile(`^HeidiSQL_(\d+\.\d+(?:\.\d+)?)_64_Portable\.zip$`), bin: "heidisql.exe", strip: 0, keep: 2},
 	{kind: "dbeaver", label: "DBeaver", repo: "dbeaver/dbeaver",
 		asset: regexp.MustCompile(`^dbeaver-ce-(\d+\.\d+\.\d+)-windows-x86_64\.zip$`), bin: "dbeaver.exe", strip: 1, keep: 2},
+	// Bruno's portable ZIP has the Electron files at its top level (Bruno.exe, resources\portable.json).
+	{kind: "bruno", label: "Bruno", repo: "usebruno/bruno",
+		asset: regexp.MustCompile(`^bruno_(\d+\.\d+\.\d+)_x64_win\.zip$`), bin: "Bruno.exe", strip: 0, keep: 2},
+	// Hoppscotch Desktop is published in its own releases repository. The tag is
+	// v26.10.1-0 (the "-0" is a build number) and the ZIP name carries no version.
+	{kind: "hoppscotch", label: "Hoppscotch", repo: "hoppscotch/releases",
+		asset: regexp.MustCompile(`^Hoppscotch_Cloud_win_x64_portable\.zip$`), tag: regexp.MustCompile(`^v(\d+\.\d+\.\d+)(?:-\d+)?$`),
+		bin: "hoppscotch-desktop.exe", strip: 0, keep: 2},
 	// Mailpit names its ZIP the same in every release; the version is the tag (v1.33.0).
 	{kind: "mailpit", label: "Mailpit", repo: "axllent/mailpit",
 		asset: regexp.MustCompile(`^mailpit-windows-amd64\.zip$`), tag: regexp.MustCompile(`^v(\d+\.\d+\.\d+)$`),
