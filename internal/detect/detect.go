@@ -276,6 +276,8 @@ func probeNode(d *folder) *Result {
 		}
 	}
 	dep := func(n string) bool { return hasAny(p.Dependencies, p.DevDependencies, n) }
+	configs := d.found("vite.config.js", "vite.config.mjs", "vite.config.cjs", "vite.config.ts", "vite.config.mts", "vite.config.cts")
+	vitePlus := usesVitePlus(d, p.Scripts, dep("vite-plus"), configs)
 	switch {
 	case dep("next"):
 		r.Framework, r.Port = "nextjs", 3000
@@ -286,6 +288,9 @@ func probeNode(d *folder) *Result {
 	case dep("astro"):
 		r.Framework, r.Port = "astro", 4321
 		r.Markers = append(r.Markers, d.found("astro.config.mjs", "astro.config.js", "astro.config.ts")...)
+	case vitePlus:
+		r.Framework, r.Port = "vite-plus", 5173
+		r.Markers = append(r.Markers, configs...)
 	case dep("vite"):
 		r.Framework, r.Port = "vite", 5173
 		switch {
@@ -306,6 +311,9 @@ func probeNode(d *folder) *Result {
 	st := newSettings("node")
 	script := func(n string) bool { _, ok := p.Scripts[n].(string); return ok }
 	switch {
+	case vitePlus && r.Framework == "vite-plus": // the project's own vp command (0.0.6)
+		st.set("run", "vp")
+		st.set("vpCommand", "dev")
 	case script("dev"):
 		st.set("run", "npm")
 		st.set("npmScript", "dev")
@@ -497,4 +505,28 @@ func probePython(d *folder) *Result {
 	}
 	r.Settings = st.done()
 	return r
+}
+
+var (
+	vpImportRE = regexp.MustCompile(`['"]vite-plus[/'"]`)
+	vpScriptRE = regexp.MustCompile(`(^|[\s&;|(])vpr?(\s|$)`)
+)
+
+// usesVitePlus reports whether a Node project is a Vite+ project (0.0.6): it has the vite-plus
+// package, a vite.config that imports vite-plus, or a script that runs vp.
+func usesVitePlus(d *folder, scripts map[string]any, hasDep bool, configs []string) bool {
+	if hasDep {
+		return true
+	}
+	for _, c := range configs {
+		if vpImportRE.MatchString(d.read(c)) {
+			return true
+		}
+	}
+	for name, v := range scripts {
+		if cmd, ok := v.(string); ok && (name == "vp" || vpScriptRE.MatchString(cmd)) {
+			return true
+		}
+	}
+	return false
 }

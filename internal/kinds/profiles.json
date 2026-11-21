@@ -119,6 +119,10 @@
           {
             "value": "npm",
             "label": "An npm script (npm run <name>)"
+          },
+          {
+            "value": "vp",
+            "label": "Vite+ (vp dev, build, test or run)"
           }
         ],
         "emit": {
@@ -126,7 +130,7 @@
             "npm": "npm"
           }
         },
-        "help": "Run a JavaScript file directly, or one of the scripts in package.json such as dev or start."
+        "help": "Run a JavaScript file directly, one of the scripts in package.json such as dev or start, or the project's Vite+ command (vp), which needs vite-plus in the project (npm install)."
       },
       {
         "key": "script",
@@ -171,6 +175,99 @@
           ]
         },
         "help": "The name of a script in package.json. npm is taken from the same folder as the selected Node version."
+      },
+      {
+        "key": "vpCommand",
+        "group": "Run",
+        "label": "Vite+ command",
+        "common": true,
+        "type": "select",
+        "default": "dev",
+        "choices": [
+          {
+            "value": "dev",
+            "label": "vp dev (development server)",
+            "args": [
+              "dev",
+              "--port",
+              "{port}",
+              "--strictPort"
+            ]
+          },
+          {
+            "value": "build",
+            "label": "vp build",
+            "args": [
+              "build"
+            ]
+          },
+          {
+            "value": "test",
+            "label": "vp test",
+            "args": [
+              "test"
+            ]
+          },
+          {
+            "value": "run",
+            "label": "vp run <script>",
+            "args": [
+              "run"
+            ]
+          }
+        ],
+        "show": {
+          "run": "vp"
+        },
+        "emit": {},
+        "help": "What vp does. dev starts the Vite development server on the service's port (the port is passed as --port, and the start fails when it is taken). build, test and run do their job and may end by themselves. run runs a script or task of the project."
+      },
+      {
+        "key": "vpScript",
+        "group": "Run",
+        "label": "Script or task",
+        "common": true,
+        "type": "text",
+        "default": "dev",
+        "placeholder": "dev",
+        "required": true,
+        "at": "end",
+        "show": {
+          "run": "vp",
+          "vpCommand": "run"
+        },
+        "pattern": "^[A-Za-z0-9:._@/-]+$",
+        "suggest": "npmScripts",
+        "emit": {
+          "arg": [
+            "{v}"
+          ]
+        },
+        "help": "The name of a script in package.json (or a task of the project) that vp run starts."
+      },
+      {
+        "key": "nodeFrom",
+        "group": "Run",
+        "label": "Node from",
+        "common": true,
+        "type": "select",
+        "default": "zero2dev",
+        "choices": [
+          {
+            "value": "zero2dev",
+            "label": "Zero2Dev's Node (the runtime selected for this service)"
+          },
+          {
+            "value": "viteplus",
+            "label": "Vite+'s Node (the version the project pins)",
+            "disabled": "Not available yet: the Vite+ command line cannot be installed into the Zero2Dev folder in a way that can be checked (its installer changes your user PATH and fetches Node and packages that Zero2Dev cannot verify)."
+          }
+        ],
+        "show": {
+          "run": "vp"
+        },
+        "emit": {},
+        "help": "Which Node runs this service: Zero2Dev's Node, the Node runtime selected for the service (Zero2Dev downloaded and checked it, and keeps it in its data folder), or Vite+'s Node, which Vite+ would pick from the version the project pins. Today the service always runs on Zero2Dev's Node; if the folder pins another version, the command preview warns."
       },
       {
         "key": "packageManager",

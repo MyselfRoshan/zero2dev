@@ -6,9 +6,9 @@
   import { connectionInfo, dbToolsFor, deleteServiceMessage, editorsFor, serviceKindLabel } from "../lib/ux";
   import { dbDataPath } from "../lib/installer";
   import { kindLabel } from "../lib/catalog";
-  import { commandText, profileFor } from "../lib/kinds";
+  import { commandText, nodeFromText, profileFor } from "../lib/kinds";
   import type { CommandPreview, Runtime, Service, ServiceInput } from "../lib/types";
-  import { fmtDateTime } from "../lib/format";
+  import { fmtDateTime, usageText } from "../lib/format";
   import { navigate } from "../lib/router.svelte";
   import { app, attempt, clearLogs, lists, logs, seedLogs, upsertService } from "../lib/store.svelte";
   import ConfirmDialog from "../ui/ConfirmDialog.svelte";
@@ -151,6 +151,9 @@
       {#if !conn}<div><dt>Address</dt><dd class="mono">{#if url}<a href={url} target="_blank" rel="noreferrer">{url} <Icon name="external" size={12} /></a>{:else}no port{/if}</dd></div>{/if}
       <div><dt>Process</dt><dd class="mono">{service.pid ? `pid ${service.pid}` : "not running"}</dd></div>
       <div><dt>Started</dt><dd>{fmtDateTime(service.startedAt) || "-"}</dd></div>
+      <div><dt>CPU</dt><dd class="num" data-testid="detail-cpu" title="Share of the whole machine, over the whole process tree">{usageText(service).cpu}</dd></div>
+      <div><dt>Memory</dt><dd class="num" data-testid="detail-mem" title="Working set of the whole process tree">{usageText(service).mem}</dd></div>
+      {#if service.kind === "node"}<div class="wide"><dt>Node from</dt><dd data-testid="node-from">{nodeFromText(profile, service.settings, serviceRuntimeLabel(service.runtimeId, lists.runtimes))}</dd></div>{/if}
       <div class="wide"><dt>Runs</dt><dd class="mono" data-testid="command-line">{command ? commandText(command.program, command.args) : "..."}
         {#if service.customArgs && service.kind !== "custom"}<span class="muted small"> (your own command line, <button type="button" class="linkish" onclick={askGuided}>use the settings instead</button>)</span>{/if}</dd></div>
       {#if service.cwd && profile?.folder.use !== "hidden"}<div class="wide"><dt>{profile?.folder.label ?? "Folder"}</dt><dd class="mono">{service.cwd}</dd></div>{/if}
@@ -233,6 +236,9 @@
     font-size: 12px;
     color: var(--muted);
     font-weight: 600;
+  }
+  dd.num {
+    font-variant-numeric: tabular-nums;
   }
   dd {
     margin: 0;

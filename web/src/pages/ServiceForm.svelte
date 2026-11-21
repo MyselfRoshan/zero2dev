@@ -17,6 +17,7 @@
     resetKeys,
     settingErrors,
     settingsForSave,
+    modePort,
     splitCommon,
     versionAtLeast,
     type KindOption,
@@ -111,6 +112,22 @@
   function portDefault(k: string): number {
     return profileFor(lists.kinds, k)?.port.default ?? 0;
   }
+  // Vite+ serves on 5173: when a Node service's run mode changes to or from it, the port follows if it
+  // still holds the usual port of the mode it had (a port you typed stays).
+  let prevRun: string | null = null;
+  $effect(() => {
+    const run = kind === "node" ? (eff.run ?? "") : null;
+    if (prevRun === null || run === null) {
+      prevRun = run;
+      return;
+    }
+    if (run === prevRun) return;
+    const was = modePort(kind, prevRun, portDefault(kind));
+    const now = modePort(kind, run, portDefault(kind));
+    prevRun = run;
+    const cur = portText.trim();
+    if (now > 0 && (cur === "" || cur === "0" || Number(cur) === was)) portText = String(now);
+  });
   // A new service starts with its type's usual port.
   $effect(() => {
     if (!init && portText === "" && profile && profile.port.use !== "hidden" && (profile.port.default ?? 0) > 0) {

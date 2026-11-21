@@ -34,6 +34,9 @@ type Plan struct {
 	Dirs     []string // folders to create before the start
 	Pre      []PreStep
 	Warnings []string
+	// NotFound, when set, is the message for a Program (an absolute path) that does not exist, instead
+	// of the general "command ... not found" (Vite+: "vp is not installed in this project ...").
+	NotFound string
 }
 
 // PreStep is a program that runs before the service's own program, to make something it needs
@@ -142,6 +145,7 @@ func Build(kind string, settings map[string]string, extra []string, c Ctx) *Plan
 	pl.Args = append(pl.Args, tail...)
 	if kind == "node" {
 		nodePackageManager(pl, eff, c)
+		nodeVitePlus(pl, eff, c)
 	}
 	if len(extra) > 0 {
 		if pl.Program == "npm" || kind == "rust" {

@@ -1196,7 +1196,7 @@ async function api(req, res, url) {
       return send(
         res,
         200,
-        [...state.services].sort((a, b) => a.name.localeCompare(b.name)),
+        [...state.services].map(withUsage).sort((a, b) => a.name.localeCompare(b.name)),
       );
     if (m === "POST") {
       const err = validateService(body);
@@ -1375,7 +1375,7 @@ async function api(req, res, url) {
     if (!svc) return fail(res, 404, "not_found", `service ${m2[1]} not found`);
     const action = m2[2];
     if (!action) {
-      if (m === "GET") return send(res, 200, svc);
+      if (m === "GET") return send(res, 200, withUsage(svc));
       if (m === "PUT") {
         if (svc.state !== "stopped" && svc.state !== "failed")
           return fail(res, 409, "conflict", "cannot update a running service; stop it first");
@@ -1740,6 +1740,37 @@ const server = http.createServer(async (req, res) => {
     if (!res.headersSent) fail(res, 500, "internal", String(e?.message || e));
   }
 });
+// ---- CPU and memory per service (the daemon's internal/supervisor/usage.go, in miniature) ----
+// Running services get plausible, slowly changing numbers; the rest are 0 (the dashboard shows "-").
+const usageOf = new Map();
+function sampleUsage(svc) {
+  const prev = usageOf.get(svc.id) ?? { base: 60 + Math.floor(Math.random() * 300), n: 0 };
+  prev.n++;
+  prev.cpu = Math.round((1 + 6 * Math.abs(Math.sin(prev.n / 3)) + Math.random() * 3) * 10) / 10;
+  prev.memBytes = Math.round((prev.base + prev.n * 0.4 + Math.random() * 6) * 1024 * 1024);
+  usageOf.set(svc.id, prev);
+  return prev;
+}
+function withUsage(svc) {
+  if (svc.state !== "running") return { ...svc, cpu: 0, memBytes: 0 };
+  const u = usageOf.get(svc.id) ?? sampleUsage(svc);
+  return { ...svc, cpu: u.cpu, memBytes: u.memBytes };
+}
+let usageSent = false;
+function tickUsage() {
+  const batch = [];
+  const live = new Set();
+  for (const svc of state.services) {
+    if (svc.state !== "running") continue;
+    live.add(svc.id);
+    const u = sampleUsage(svc);
+    batch.push({ id: svc.id, cpu: u.cpu, memBytes: u.memBytes });
+  }
+  for (const id of usageOf.keys()) if (!live.has(id)) usageOf.delete(id);
+  if (batch.length || usageSent) emit("service.usage", batch); // one final empty batch when the last one stops
+  usageSent = batch.length > 0;
+}
+setInterval(tickUsage, 1500).unref();
 server.listen(PORT, "127.0.0.1", () => {
   console.log(`mock daemon on http://127.0.0.1:${PORT}/#token=${TOKEN}`);
 });

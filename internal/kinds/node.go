@@ -55,3 +55,27 @@ func nodePackageManager(pl *Plan, eff map[string]string, c Ctx) {
 		pl.Program = PackageManagerShim(c.Home, pm, c.Windows)
 	}
 }
+
+// VitePlusShim is the command `vp` of a project that has Vite+ as a dependency:
+// <project>\node_modules\.bin\vp.cmd (vp elsewhere).
+func VitePlusShim(cwd string, windows bool) string {
+	name := "vp"
+	if windows {
+		name += ".cmd"
+	}
+	return filepath.Join(cwd, "node_modules", ".bin", name)
+}
+
+// NoVitePlusMessage is what a start says when the project has no vp command yet.
+const NoVitePlusMessage = "vp is not installed in this project: run npm install (or a task) first"
+
+// nodeVitePlus makes the run mode "vp" run the project's own vp command (an absolute path below
+// the service's folder, so no Node runtime sits between). The Node the command runs on is the
+// service's runtime (nodeFrom=zero2dev): its folder is first on PATH.
+func nodeVitePlus(pl *Plan, eff map[string]string, c Ctx) {
+	if eff["run"] != "vp" || c.Cwd == "" {
+		return
+	}
+	pl.Program = VitePlusShim(c.Cwd, c.Windows)
+	pl.NotFound = NoVitePlusMessage
+}

@@ -58,11 +58,15 @@
 
 ### Vite+
 
-<!-- viteplus: vp run modes, detection, Node from Zero2Dev or Vite+ -->
+- A Node service has a new run mode, **Vite+** (`vp`): it runs the project's own `node_modules\.bin\vp.cmd` with `dev`, `build`, `test` or `run <script>`. `vp dev` gets the service's port (`--port`, `--strictPort`), and the port field follows the mode (5173). Without `vite-plus` installed in the project the start says "vp is not installed in this project: run npm install (or a task) first".
+- Choosing a folder with a Vite+ project (a `vite-plus` dependency, a `vite.config` that imports it, or a script that runs `vp`) sets the type Node, the run mode Vite+ and the command `dev`.
+- New setting **Node from**: the service page and the form say in words which Node a service uses. Today it is always Zero2Dev's Node; "Vite+'s Node" is shown but cannot be chosen yet, with the reason (Vite+'s global program cannot be installed into the Zero2Dev folder in a way that can be checked, see `docs/API.md`).
+- A Node service whose folder pins a Node version (`.node-version`, `devEngines.runtime`, `engines.node` or `.nvmrc`; exact versions, `22.x`, `>=22`, `^22.18.0 || ^24.11.0`) that its Node runtime does not satisfy gets one warning line in the command preview and in the start log, naming an installed Node that does.
 
 ### CPU and memory per service
 
-<!-- usage: the sampler, service.usage, the columns -->
+- Every service shows its **CPU** and **Memory** use: columns on the Services page, a line on each Dashboard card and two entries on the service page. CPU is the share of the whole machine (all processors), Memory is the working set; both cover the service's whole process tree, so a Node dev server with its workers is counted as one. Stopped services show "-".
+- The daemon samples every running service every 2 seconds from its job object (CPU time from the job's accounting, memory from the processes in the job) and publishes one `service.usage` event with the numbers of all running services. `GET /api/services` and `GET /api/services/{id}` carry `cpu` and `memBytes`. Nothing is sampled while no service runs, and off Windows the numbers stay 0.
 
 ### Project file
 

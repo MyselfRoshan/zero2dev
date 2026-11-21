@@ -12,6 +12,8 @@ import {
   groupedOptions,
   isChanged,
   isVisible,
+  modePort,
+  nodeFromText,
   panelNotes,
   profileFor,
   resetKeys,
@@ -20,6 +22,7 @@ import {
   splitCommon,
   versionAtLeast,
   writesLabel,
+  type KindOption,
   type KindProfile,
 } from "./kinds";
 import { SERVICE_KINDS } from "./types";
@@ -185,5 +188,43 @@ describe("panel notes", () => {
       level: "todo",
       text: expect.stringContaining("Program"),
     });
+  });
+});
+
+describe("Vite+ helpers", () => {
+  it("modePort: vp serves on 5173", () => {
+    expect(modePort("node", "vp", 3000)).toBe(5173);
+    expect(modePort("node", "npm", 3000)).toBe(3000);
+    expect(modePort("python", "vp", 8000)).toBe(8000);
+  });
+  it("checkOption refuses a choice that is not available yet, with the reason", () => {
+    const o = {
+      key: "nodeFrom",
+      group: "Run",
+      label: "Node from",
+      type: "select",
+      default: "zero2dev",
+      help: "",
+      choices: [
+        { value: "zero2dev", label: "Z" },
+        { value: "viteplus", label: "V", disabled: "Not available yet: x" },
+      ],
+    } as KindOption;
+    expect(checkOption(o, "zero2dev")).toBe("");
+    expect(checkOption(o, "viteplus")).toBe("Not available yet: x");
+  });
+  it("nodeFromText says which Node the service uses", () => {
+    expect(nodeFromText(undefined, {}, "Node 22.18.0")).toBe(
+      "Zero2Dev's Node: Node 22.18.0, downloaded and kept by Zero2Dev.",
+    );
+    expect(nodeFromText(undefined, {}, "")).toContain("the default Node runtime");
+  });
+});
+
+describe("panelNotes with vp", () => {
+  it("keeps the name of the vp command as it is", () => {
+    const n = panelNotes(["vp is not installed in this project: run npm install (or a task) first"], (k) => k);
+    expect(n[0].text.startsWith("vp is not installed")).toBe(true);
+    expect(panelNotes(["program x not found"], (k) => k)[0].text).toBe("Program x not found");
   });
 });

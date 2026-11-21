@@ -137,6 +137,11 @@ func (s *Supervisor) resolveWith(svc model.Service, d store.Data, lenient bool) 
 		plan = kinds.Build(svc.Kind, svc.Settings, svc.Args, ctx)
 	}
 	r.warnings = append(r.warnings, plan.Warnings...)
+	if svc.Kind == "node" && rtUsed != nil {
+		if w := nodePinWarning(svc.Cwd, rtUsed, d.Runtimes); w != "" {
+			r.warnings = append(r.warnings, w)
+		}
+	}
 	if plan.Program != "" && strings.TrimSpace(svc.Command) == "" {
 		// e.g. npm next to node.exe: the same Node version runs the script.
 		if filepath.IsAbs(plan.Program) { // a Python service runs the python of its virtual environment
@@ -148,15 +153,21 @@ func (s *Supervisor) resolveWith(svc model.Service, d store.Data, lenient bool) 
 		}
 	}
 
-	if madeByPre(plan, bin) || (len(plan.Pre) > 0 && plan.Program == bin) {
+	if madeByPre(plan, bin) || (len(plan.Pre) > 0 && plan.Program == bin && plan.NotFound == "") {
 		// a program the pre-steps make (the python.exe of a virtual environment, pnpm from Corepack)
 		// is looked for after them
 	} else if filepath.IsAbs(bin) {
 		if st, err := os.Stat(bin); err != nil || st.IsDir() {
-			if !lenient {
+			switch {
+			case plan.NotFound != "" && bin == plan.Program && !lenient:
+				return nil, apperr.Conflict("%s", plan.NotFound)
+			case plan.NotFound != "" && bin == plan.Program:
+				r.warnings = append(r.warnings, plan.NotFound)
+			case !lenient:
 				return nil, apperr.Conflict("command %s not found", bin)
+			default:
+				r.warnings = append(r.warnings, "program "+bin+" not found")
 			}
-			r.warnings = append(r.warnings, "program "+bin+" not found")
 		}
 	} else if bin != "" {
 		if p, err := exec.LookPath(bin); err == nil {
