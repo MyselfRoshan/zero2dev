@@ -1684,3 +1684,57 @@ Node settings: `run`=`npm` and `npmScript`=`dev` (else `start`) when `package.js
   - A service that uses `customArgs`, or that has its own `command`, has no pre-step and runs as it was written.
 - **Tasks** of the kind (`GET /api/kinds`, `tasks`): `pip-install` (`pip install -r requirements.txt`, `when` `requirements.txt`), `pip-list` (`pip list`), `django-migrate` (`python manage.py migrate`, with a `confirm`) and `django-collectstatic` (`python manage.py collectstatic --noinput`), both `when` `manage.py`. Their programs `pip` and `python` must be found on the service's `PATH` first (the environment's `Scripts` folder), not next to the runtime: the runtime's own `python.exe` has no Django.
 - **Shims.** `python` and `pip` get shims for the default Python runtime; `pip` is looked for next to `python.exe` and in `Scripts\` below it. When `pip` is in `Scripts\`, the activate scripts put that folder on `PATH` after the runtime's folder.
+
+#### New project details
+
+**Schema additions** (`format` stays 1; all validated by `frameworks.Parse`):
+
+- A `run` step may have `env` (name to value, placeholders allowed): variables added to the runtime's environment for that program (`CI=1`, `npm_config_yes=true`, `MAVEN_USER_HOME`).
+- A `download` step has either `checksum` or `unverified: true` with a `reason`, never both. An unverified download (start.spring.io builds the project on request and publishes no checksum) is a warning in the plan: `<step label>: <reason>.`
+- A `run` program is a plain name, or `./name` for a file in the folder the step runs in (`./mvnw.cmd`). No path separators, no `..`, no spaces.
+- Placeholders: `{venv}` (Python frameworks only: `<home>\python\venvs\<serviceId>`) and `{home}` (the data folder) are added. A placeholder that is not on the list is refused when the list is loaded, and the database placeholders need a `database`. `{appKey}` and `{random}` give a new value at every use. Without a database the database placeholders are empty and an `env` line that uses one is left out.
+- A `php` or `proxy` site needs a service with a port (a `php` site a `php` service); `cwd`, site `root`, `envFile` and file paths are relative without `..`.
+- The project name is limited to letters, digits, spaces and `. _ - ( )` (at most 64, starting with a letter or digit): it is put into page titles and source files as it is. The slug is the name in lower case ASCII, words joined with `-`, at most 40 characters; Windows device names (`con`, `nul`, `com1` ...) are a problem. The database and its user are the slug with `_` (the user at most 32 characters; `mysql`, `postgres`, `root` and the like are a problem).
+
+**Plan.** A request error (`400`: unknown framework, body not JSON; `409`: the frameworks list is damaged) is an error; everything about the request itself is a `problems` entry of a `200` plan. Runtime choice: an installed runtime of the kind inside `runtime.min`/`max` is used (the default of the kind when it fits, else the newest); otherwise the newest catalog entry that this machine can run and that fits is installed (entries of the `mainline` channel only when nothing else fits). A bound with fewer parts than the version compares those parts (`max: "8.4"` takes 8.4.9). Composer and the database server are installed the same way when missing. An installed database service of the kind is reused (a running one first); otherwise a service is created on the next free port from 3306 (PostgreSQL 5432). `Plan.steps` are the job's steps in words and `Plan.creates` what exists afterwards.
+
+**The job** (key `newproject:<folder>`, one job per folder). Percent: checking 0-5, installs 5-35, database 35-45, generator 45-80, `.env` 80, creating 85, editor 95. `step` is the text of `Plan.steps`.
+
+- *Installs*: `Installer.Start(catalogId)` and wait for its job. An entry that is already installed is skipped.
+- *Database*: create the server service when needed (validated like the API), start it with its dependencies and wait up to 2 minutes for `running`, then create the database and the user (a password of 24 random letters and digits). A database or user that exists already fails the job (nothing of the other is dropped).
+- *Generator steps*, in the folder their `in` says (`parent` or `project`; the project folder is made first for `project`):
+  - `run`: the program is `composer` (the framework's PHP plus `composer.phar`, as `supervisor.ComposerCommand`), `./name` (a file of the step's folder), or a name found on the PATH of a service of the runtime's kind that is not stored: the runtime's folder first, `JAVA_HOME`/`GOROOT`/Composer folders as for a real service, a Python framework's virtual environment `Scripts` first (the environment is made first by `Supervisor.PrepareService`, for the service id that the Python service will get). No shell and no console window; timeout 15 minutes (or `timeout`); a non-zero exit fails the step with the last output lines. Output lines are kept and written to the log of the new project's first service (stream `task`, first line `$ program args`, the database password replaced by `********`); when the job fails before that, to `<home>\logs\newproject-<slug>.log`.
+  - `download`: HTTPS to `<home>\tmp`, the checksum checked while it is written (`sha256:<hex>`, `sha1:<hex>` or a HTTPS URL of a file whose first word is the digest), then unpacked with the installer's zip extractor (entries that leave the folder are refused, links ignored) and `strip`; the file in `tmp` is always removed.
+  - `files`: relative paths only, parents are made, a file that exists is **never overwritten** (the step logs `Kept the existing ...`).
+- *.env*: `env` lines are set, `ifMissing` lines only when the key is not there; every other line, the comments and the line ending stay. Services with the project folder as `cwd` get `envFile`.
+- *Creating*: the services (validated by `internal/validate`, the same code as `POST /api/services`; `usesDatabase` sets `databaseId` and `dependsOn`), the site (`sites.Validate`, then `EnsureServers` and a regenerate) and the project (the new services and the site) are added in **one** state update. The first service with a port gets the planned port, the next ones the next free port.
+- *Editor*: the first installed VS Code, else VSCodium, through `launch` with the same data arguments as `POST /api/runtimes/{id}/launch`. A failure to open it is logged, not a failure of the job.
+- `job.done`: `projectId` and `path`.
+
+**Failure.** The job stops at the first failing step (a crash too). Removed, in reverse order: the project, the site and the services (stopped, their logs and virtual environment removed), the database, its user, and the database service when this job made it. Kept: the generated folder (an empty folder that this job made is removed; no file is ever deleted) and the installed runtimes. The error says what failed, then `The folder D:\www\my-shop was kept.`, the generator output file when there is one, and what could not be cleaned up.
+
+**Python frameworks.** Django: `requirements.txt` (`Django`), `pip install -r`, `django-admin startproject config .`, `python manage.py migrate`, all in the service's virtual environment. FastAPI and Flask: a starter and `requirements.txt`, then `pip install -r requirements.txt` in the environment, so the service runs at once.
+
+**Frameworks:**
+
+| Id | Language | Runtime | Database | Generator | Service |
+| --- | --- | --- | --- | --- | --- |
+| `laravel` | php | php 8.2+, Composer | MariaDB or MySQL, optional | `composer create-project laravel/laravel` | php, port 8000, docroot `public`; `.env` DB_*, APP_URL, file sessions and cache |
+| `symfony` | php | php 8.2+, Composer | MariaDB or MySQL, optional | `composer create-project symfony/skeleton` | php, 8000, `public`; `DATABASE_URL` |
+| `wordpress` | php | php 7.4+ | MariaDB or MySQL, required | `latest.zip` with the SHA-1 of `latest.zip.sha1`, strip 1, `wp-config.php` | php, 8000, php site |
+| `php` | php | php 8.1+ | none | `index.php` | php, 8000 |
+| `express` | javascript | node 20+ | none | `package.json`, `server.js`, `npm install` | node `npm run dev`, 3000 |
+| `nestjs` | javascript | node 20+ | none | `npx --yes @nestjs/cli@latest new --package-manager npm --skip-git` | `npm run start:dev`, 3000 |
+| `nextjs` | javascript | node 20.9+ | none | `npx --yes create-next-app@latest --yes --use-npm --disable-git` | `npm run dev`, 3000 |
+| `vite-react`, `vite-vue`, `vite-svelte` | javascript | node 20.19+ | none | `npm create vite@latest -- --template <t>-ts --no-interactive`, `npm install` | `npm run dev -- --host 127.0.0.1 --port <port> --strictPort`, 5173 |
+| `astro` | javascript | node 22.12+ | none | `npm create astro@latest -- --template minimal --install --no-git --skip-houston --yes` | `npm run dev`, 4321 |
+| `django`, `fastapi`, `flask` | python | python 3.10+ | none | see above | python `django` / `uvicorn` / `flask`, 8000 / 8000 / 5000 |
+| `go-nethttp` | go | go 1.21+ | none | `go mod init`, `main.go` | go, 8080 |
+| `gin` | go | go 1.24+ | none | `go mod init`, `main.go`, `go mod tidy` | go, 8080 |
+| `fiber` | go | go 1.26+ | none | the same with Fiber v3 | go, 3000 |
+| `springboot` | java | java 17+ | none | start.spring.io `starter.zip` (Maven, Spring Web, unverified), `./mvnw.cmd -q -DskipTests package` | java `run: jar`, `springPort`, 8080 |
+| `html` | static | none | none | `index.html`, `style.css` | static site of the folder |
+
+PHP projects offer MariaDB and MySQL only: the default extension list has `pdo_mysql` and `mysqli`, not `pdo_pgsql`. Vite and Astro are started with `--host 127.0.0.1`, because the site server proxies to `127.0.0.1` and their default host is `localhost`.
+
+**Internal contract.** `newproject.Manager` takes its collaborators as interfaces (`InstallerAPI`, `DatabaseAPI`, `SupervisorAPI`, `SitesAPI`) and the hooks `Run`, `Launch`, `Catalog`, `PortFree`, `HTTP`, `Rand`, so tests use fakes. `dbtools.Manager.DropUser(ctx, serviceID, user)` is new (used by the clean-up). Shared pieces: `sites.CheckDomain` and `sites.Validate`, `installer.ExtractZip`, `launch.ToolDataArgs`, `validate.Service/Links/Project`, `netutil.PortFree/NextFreePort`, `envfile.Apply`.

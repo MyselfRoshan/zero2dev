@@ -3,13 +3,13 @@ package api
 import (
 	"net/http"
 	"slices"
-	"strings"
 
 	"zero2dev/internal/apperr"
 	"zero2dev/internal/model"
 	"zero2dev/internal/sites"
 	"zero2dev/internal/store"
 	"zero2dev/internal/supervisor"
+	"zero2dev/internal/validate"
 )
 
 // Projects group services and sites that are started and stopped together
@@ -100,40 +100,9 @@ func (s *Server) deleteProject(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-// validateProject normalises and checks a ProjectInput: a name of 1-64
-// characters, and service / site ids that exist (listed once each).
+// validateProject normalises and checks a ProjectInput (see internal/validate).
 func validateProject(in model.ProjectInput, d store.Data) (model.Project, error) {
-	p := model.Project{Name: strings.TrimSpace(in.Name), ServiceIDs: []string{}, SiteIDs: []string{}}
-	if n := len([]rune(p.Name)); n < 1 || n > 64 {
-		return p, apperr.BadRequest("name must be 1-64 characters")
-	}
-	svc, site := map[string]bool{}, map[string]bool{}
-	for _, sv := range d.Services {
-		svc[sv.ID] = true
-	}
-	for _, st := range d.Sites {
-		site[st.ID] = true
-	}
-	seen := map[string]bool{}
-	for _, id := range in.ServiceIDs {
-		if !svc[id] {
-			return p, apperr.BadRequest("service %s not found", id)
-		}
-		if !seen["s"+id] {
-			seen["s"+id] = true
-			p.ServiceIDs = append(p.ServiceIDs, id)
-		}
-	}
-	for _, id := range in.SiteIDs {
-		if !site[id] {
-			return p, apperr.BadRequest("site %s not found", id)
-		}
-		if !seen["t"+id] {
-			seen["t"+id] = true
-			p.SiteIDs = append(p.SiteIDs, id)
-		}
-	}
-	return p, nil
+	return validate.Project(in, d)
 }
 
 // projectByID returns the project with that id, or a 404.

@@ -11,6 +11,10 @@
 //	{db}          the database name                {dbUser} {dbPassword} {dbHost} {dbPort}
 //	{dbUrl}       a connection URL built from the four above for the database kind
 //	{appKey}      32 random bytes, base64          {random}  16 random hex characters
+//	{venv}        the Python virtual environment   {home}    the Zero2Dev data folder
+//
+// {appKey} and {random} give a new value at every use. The database placeholders are empty when
+// the project has no database, and an env line that uses one is then left out.
 //
 // Contract (docs/API.md, "Amendment: languages, tasks and new projects (0.0.6)").
 package frameworks
@@ -23,6 +27,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	"zero2dev/internal/model"
@@ -93,11 +98,18 @@ type Step struct {
 	In string `json:"in,omitempty"`
 	// Timeout in seconds; 0 is 15 minutes.
 	Timeout int `json:"timeout,omitempty"`
+	// Env are extra environment variables of the program (CI=1, npm_config_yes=true ...), on top
+	// of the runtime's environment. Values may use placeholders.
+	Env map[string]string `json:"env,omitempty"`
 
 	// download
 	URL      string `json:"url,omitempty"`
 	Checksum string `json:"checksum,omitempty"` // "sha256:<hex>" or "sha1:<hex>"; or a https URL of a file holding it
 	Strip    int    `json:"strip,omitempty"`    // leading folders to strip when unpacking
+	// Unverified: the publisher gives no checksum (start.spring.io). Reason says why and is shown
+	// in the plan as a warning; a download step needs a Checksum, or Unverified with a Reason.
+	Unverified bool   `json:"unverified,omitempty"`
+	Reason     string `json:"reason,omitempty"`
 
 	// files: path relative to the project folder -> content (placeholders allowed)
 	Files map[string]string `json:"files,omitempty"`
@@ -201,12 +213,35 @@ func validate(fw *Framework) error {
 	for i, s := range fw.Steps {
 		switch s.Type {
 		case StepRun:
-			if s.Program == "" {
-				return fmt.Errorf("step %d: a run step needs a program", i+1)
+			if err := checkProgram(s.Program); err != nil {
+				return fmt.Errorf("step %d: %v", i+1, err)
+			}
+			if s.In != "" && s.In != "parent" && s.In != "project" {
+				return fmt.Errorf("step %d: in must be parent or project", i+1)
+			}
+			if s.Timeout < 0 || s.Timeout > 3600 {
+				return fmt.Errorf("step %d: timeout must be 0-3600 seconds", i+1)
+			}
+			for k := range s.Env {
+				if k == "" || strings.ContainsAny(k, "=\x00") {
+					return fmt.Errorf("step %d: env name %q is not valid", i+1, k)
+				}
 			}
 		case StepDownload:
-			if !strings.HasPrefix(s.URL, "https://") || s.Checksum == "" {
-				return fmt.Errorf("step %d: a download step needs a https url and a checksum", i+1)
+			if !strings.HasPrefix(s.URL, "https://") {
+				return fmt.Errorf("step %d: a download step needs a https url", i+1)
+			}
+			switch {
+			case s.Unverified && strings.TrimSpace(s.Reason) == "":
+				return fmt.Errorf("step %d: an unverified download needs a reason", i+1)
+			case !s.Unverified && s.Checksum == "":
+				return fmt.Errorf("step %d: a download step needs a checksum (or unverified with a reason)", i+1)
+			case s.Unverified && s.Checksum != "":
+				return fmt.Errorf("step %d: a download is either verified or unverified", i+1)
+			case s.Checksum != "" && !validChecksum(s.Checksum) && !PlaceholderRE.MatchString(s.Checksum):
+				return fmt.Errorf("step %d: checksum must be sha256:<hex>, sha1:<hex> or a https URL", i+1)
+			case s.Strip < 0 || s.Strip > 8:
+				return fmt.Errorf("step %d: strip must be 0-8", i+1)
 			}
 		case StepFiles:
 			if len(s.Files) == 0 {
@@ -232,10 +267,140 @@ func validate(fw *Framework) error {
 			return errors.New("a service uses the database but the framework has none")
 		}
 	}
-	if s := fw.Site; s != nil && s.Type != "proxy" && s.Type != "php" && s.Type != "static" {
-		return errors.New("site type must be proxy, php or static")
+	if s := fw.Site; s != nil {
+		if s.Type != "proxy" && s.Type != "php" && s.Type != "static" {
+			return errors.New("site type must be proxy, php or static")
+		}
+		if !relative(s.Root) {
+			return fmt.Errorf("site root %q must be relative", s.Root)
+		}
+		if s.Type == "php" && !slices.ContainsFunc(fw.Services, func(t ServiceTpl) bool { return t.Kind == "php" }) {
+			return errors.New("a php site needs a php service")
+		}
+		if s.Type != "static" && !slices.ContainsFunc(fw.Services, func(t ServiceTpl) bool { return t.Port > 0 }) {
+			return errors.New("a proxy or php site needs a service with a port")
+		}
+	}
+	for _, sv := range fw.Services {
+		if !relative(sv.Cwd) {
+			return fmt.Errorf("service cwd %q must be relative", sv.Cwd)
+		}
+	}
+	for _, e := range fw.Env {
+		if e.Key == "" || strings.ContainsAny(e.Key, "= \x00") {
+			return fmt.Errorf("env key %q is not valid", e.Key)
+		}
+	}
+	if !relative(fw.EnvFile) {
+		return fmt.Errorf("envFile %q must be relative", fw.EnvFile)
+	}
+	return checkPlaceholders(fw)
+}
+
+// checkProgram: a run step names a program as a plain name, or as ./name for a file in the
+// folder the step runs in (a project's own wrapper such as ./mvnw.cmd).
+func checkProgram(p string) error {
+	switch {
+	case p == "":
+		return errors.New("a run step needs a program")
+	case strings.ContainsAny(p, "\x00\r\n \\") || strings.Contains(p, ".."):
+		return fmt.Errorf("program %q is not valid", p)
+	}
+	if rest, ok := strings.CutPrefix(p, "./"); ok {
+		if rest == "" || strings.Contains(rest, "/") {
+			return fmt.Errorf("program %q must be ./name", p)
+		}
+	} else if strings.Contains(p, "/") {
+		return fmt.Errorf("program %q must be a name or ./name", p)
 	}
 	return nil
+}
+
+func relative(p string) bool {
+	return !filepath.IsAbs(p) && !strings.HasPrefix(p, "/") && !strings.ContainsAny(p, ":\\\x00") && !slices.Contains(strings.Split(p, "/"), "..")
+}
+
+var hexRE = regexp.MustCompile(`^[0-9a-fA-F]+$`)
+
+func validChecksum(c string) bool {
+	if strings.HasPrefix(c, "https://") {
+		return true
+	}
+	algo, v, ok := strings.Cut(c, ":")
+	return ok && ((algo == "sha256" && len(v) == 64) || (algo == "sha1" && len(v) == 40)) && hexRE.MatchString(v)
+}
+
+// Placeholders are the names that may be used between braces in a framework's strings.
+var Placeholders = []string{"name", "slug", "dir", "parent", "port", "domain", "db", "dbUser", "dbPassword",
+	"dbHost", "dbPort", "dbUrl", "appKey", "random", "venv", "home"}
+
+// PlaceholderRE finds {name} references.
+var PlaceholderRE = regexp.MustCompile(`\{([A-Za-z][A-Za-z0-9]*)\}`)
+
+// DatabasePlaceholders are the placeholders that need the project's database.
+var DatabasePlaceholders = []string{"db", "dbUser", "dbPassword", "dbHost", "dbPort", "dbUrl"}
+
+// Strings calls fn with every string of the framework that may hold placeholders.
+func (fw *Framework) Strings(fn func(where, s string)) {
+	for i, st := range fw.Steps {
+		w := fmt.Sprintf("step %d", i+1)
+		fn(w+" label", st.Label)
+		fn(w+" url", st.URL)
+		fn(w+" checksum", st.Checksum)
+		for _, a := range st.Args {
+			fn(w+" args", a)
+		}
+		for k, v := range st.Env {
+			fn(w+" env "+k, v)
+		}
+		for p, c := range st.Files {
+			fn(w+" file "+p, c)
+		}
+	}
+	for _, sv := range fw.Services {
+		fn("service name", sv.Name)
+		fn("service command", sv.Command)
+		fn("service cwd", sv.Cwd)
+		for _, a := range sv.Args {
+			fn("service args", a)
+		}
+		for k, v := range sv.Settings {
+			fn("service setting "+k, v)
+		}
+		for k, v := range sv.Env {
+			fn("service env "+k, v)
+		}
+	}
+	for _, e := range fw.Env {
+		fn("env "+e.Key, e.Value)
+	}
+}
+
+func checkPlaceholders(fw *Framework) error {
+	var err error
+	fw.Strings(func(where, s string) {
+		for _, m := range PlaceholderRE.FindAllStringSubmatch(s, -1) {
+			switch {
+			case !slices.Contains(Placeholders, m[1]):
+				err = errors.Join(err, fmt.Errorf("%s: unknown placeholder {%s}", where, m[1]))
+			case m[1] == "venv" && fw.Runtime.Kind != "python":
+				err = errors.Join(err, fmt.Errorf("%s: {venv} is only for python frameworks", where))
+			case slices.Contains(DatabasePlaceholders, m[1]) && fw.Database == nil:
+				err = errors.Join(err, fmt.Errorf("%s: {%s} needs a database", where, m[1]))
+			}
+		}
+	})
+	return err
+}
+
+// UsesDatabase reports whether s mentions a database placeholder.
+func UsesDatabase(s string) bool {
+	for _, m := range PlaceholderRE.FindAllStringSubmatch(s, -1) {
+		if slices.Contains(DatabasePlaceholders, m[1]) {
+			return true
+		}
+	}
+	return false
 }
 
 // Load returns the list: <home>\frameworks.json when it exists (a damaged file is an error, not

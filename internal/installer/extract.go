@@ -241,3 +241,8 @@ func installFile(file, dest, name string) error {
 var singleFileKinds = map[string]struct{ file, launcher, content string }{
 	"composer": {"composer.phar", "composer.bat", "@echo off\r\nphp \"%~dp0composer.phar\" %*\r\n"},
 }
+
+// ExtractZip unpacks the .zip archive into dest, dropping the first strip folders of every entry.
+// It refuses entries that would leave dest (zip-slip) and ignores symbolic links; it is the
+// extraction the installer uses, shared with New project's download steps.
+func ExtractZip(archive, dest string, strip int) error { return extractZip(archive, dest, strip) }

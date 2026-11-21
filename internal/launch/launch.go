@@ -91,3 +91,50 @@ func ConnectArgs(tool string, svc model.Service) ([]string, error) {
 	}
 	return nil, ErrNoConnection
 }
+
+// ToolDataArgs keeps the settings, extensions and workspaces of a tool that
+// Zero2Dev installed in <home>/<name> (data\code, data\codium, ...), so the
+// bin folder only holds programs. Each tool has its own switch for it. Tools
+// registered by path are the user's own installs and keep their usual
+// settings, so they get nothing.
+func ToolDataArgs(rt model.Runtime, home string) (args, env []string, err error) {
+	name := model.DataDirName(rt.Kind)
+	if rt.Source != "installed" || name == "" {
+		return nil, nil, nil
+	}
+	dir := filepath.Join(home, name)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, nil, err
+	}
+	switch rt.Kind {
+	case "vscode", "vscodium":
+		// Portable mode with the data outside the program folder: VS Code and
+		// VSCodium keep user-data and extensions in $VSCODE_PORTABLE.
+		return nil, []string{"VSCODE_PORTABLE=" + dir}, nil
+	case "notepadpp":
+		return []string{"-settingsDir=" + dir}, nil, nil
+	case "heidisql":
+		// The portable build writes portable_settings.txt next to heidisql.exe
+		// unless told otherwise; the file is created so the setting is used.
+		// O_EXCL: two launches at once must never truncate settings the
+		// other (or HeidiSQL itself) already wrote.
+		f := filepath.Join(dir, "portable_settings.txt")
+		fh, err := os.OpenFile(f, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+		if err == nil {
+			err = fh.Close()
+		} else if errors.Is(err, os.ErrExist) {
+			err = nil
+		}
+		if err != nil {
+			return nil, nil, err
+		}
+		return []string{"--psettings=" + f}, nil, nil
+	case "dbeaver":
+		ws := filepath.Join(dir, "workspace")
+		if err := os.MkdirAll(ws, 0o755); err != nil {
+			return nil, nil, err
+		}
+		return []string{"-data", ws}, nil, nil
+	}
+	return nil, nil, nil
+}

@@ -184,6 +184,7 @@ func run() error {
 	taskMgr := tasks.New(cfg.Home, st, sup, jobReg)
 	newProj := newproject.New(cfg.Home, st, sup, inst, rt, site, dbm, jobReg, hub.Publish)
 	newProj.Launch = launch.Start
+	newProj.Catalog = loadCatalog
 	srv := api.New(api.Deps{
 		Cfg: cfg, Store: st, Hub: hub, Sup: sup, Runtimes: rt, Installer: inst, Sites: site,
 		Catalog: loadCatalog, Remote: remote,
