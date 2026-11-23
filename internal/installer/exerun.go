@@ -73,16 +73,36 @@ var exeKinds = map[string]exeRun{
 
 // postKinds lists the kinds whose ZIP is only a launcher: after the ZIP is unpacked and moved to
 // its final place the launcher runs once more, and it sets itself up. Vite+'s vp.exe, started with
-// VP_HOME, installs the vite-plus package, its own Node and pnpm below VP_HOME, and changes
-// nothing outside it (checked on a real Windows 11: the user PATH, the registry and the default
-// %LOCALAPPDATA%\vite-plus stay as they were). The first run prints its steps.
+// VP_HOME, installs the vite-plus package, its own Node and pnpm below VP_HOME. Left alone, its
+// first run also (1) writes the user PATH in the registry and (2) looks for a previous Vite+ on
+// PATH and, in a run nobody can answer, removes that install (this happened on a real PC: the
+// user's own Vite+ was removed and its PATH entries replaced). So it is started with
+// vitePlusSetupEnv: no previous install can be found (a PATH of the system folders only), the
+// switch VP_SELF_SETUP_NO_MODIFY_PATH, and CI=true (no prompts). Checked on Windows 11 with a decoy
+// previous install on the child's PATH: the decoy, the user PATH in the registry and the shell
+// profiles were unchanged, and the setup finished inside VP_HOME.
 var postKinds = map[string]exeRun{
 	"viteplus": {
 		Args:    []string{"--version"},
-		HomeEnv: func(home string) []string { return []string{"VP_HOME=" + kinds.VitePlusHome(home)} },
+		HomeEnv: vitePlusSetupEnv,
 		Made:    func(home string) string { return filepath.Join(kinds.VitePlusHome(home), "bin", "vp.exe") },
 		Timeout: 20 * time.Minute,
 	},
+}
+
+// vitePlusSetupEnv is the environment of the Vite+ first run, on top of the daemon's own.
+func vitePlusSetupEnv(home string) []string {
+	root := os.Getenv("SystemRoot")
+	if root == "" {
+		root = "C:\\Windows"
+	}
+	return []string{
+		"VP_HOME=" + kinds.VitePlusHome(home),
+		"VP_SELF_SETUP_NO_MODIFY_PATH=1",
+		"CI=true",
+		// system folders only: a vp found on the PATH would be taken for a previous install
+		"PATH=" + filepath.Join(root, "System32") + ";" + root,
+	}
 }
 
 // ExeRunner runs program with args and env in dir (hidden, its process tree ended when ctx ends)

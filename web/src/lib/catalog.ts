@@ -304,7 +304,7 @@ export const KIND_NOTE: Record<string, string> = {
   bruno: "Collections are plain files in your project folder, so they go into Git.",
   hoppscotch: "Collections stay in the app or an account, not in your project. Needs WebView2 (built into Windows 11).",
   viteplus:
-    "Install sets Vite+ up in data\\vite-plus: it downloads its own Node and pnpm, about 270 MB, so the first install takes a few minutes. Used by services set to Node from: Vite+.",
+    "Install sets Vite+ up in data\\vite-plus: it downloads its own Node and pnpm, about 270 MB, so the first install takes a few minutes. Your PATH and any Vite+ you already have are not touched. Used by services set to Node from: Vite+.",
 };
 
 /** The Runtimes page filters: everything, what is installed, or one group. */
