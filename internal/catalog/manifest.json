@@ -237,6 +237,22 @@
   {
     "os": "windows",
     "arch": "amd64",
+    "id": "viteplus-1.7.0-windows-amd64",
+    "kind": "viteplus",
+    "version": "1.7.0",
+    "name": "Vite+ 1.7.0",
+    "url": "https://github.com/voidzero-dev/vite-plus/releases/download/v1.7.0/vp-x86_64-pc-windows-msvc.zip",
+    "checksum": {
+      "type": "sha256",
+      "value": "9c142f380b91069dc20b493d1b2cc1fcedb31b06a909ce2cbc353182ad616f98"
+    },
+    "binaryRelPath": "vp.exe",
+    "stripComponents": 0,
+    "homepage": "https://github.com/voidzero-dev/vite-plus/releases/tag/v1.7.0"
+  },
+  {
+    "os": "windows",
+    "arch": "amd64",
     "id": "vscode-1.145.0-windows-amd64",
     "kind": "vscode",
     "version": "1.145.0",
@@ -313,5 +329,185 @@
     "binaryRelPath": "dbeaver.exe",
     "stripComponents": 1,
     "homepage": "https://github.com/dbeaver/dbeaver/releases/tag/26.2.4"
+  },
+  {
+    "os": "windows",
+    "arch": "amd64",
+    "id": "bruno-4.3.0-windows-amd64",
+    "kind": "bruno",
+    "version": "4.3.0",
+    "name": "Bruno 4.3.0",
+    "url": "https://github.com/usebruno/bruno/releases/download/v4.3.0/bruno_4.3.0_x64_win.zip",
+    "checksum": {
+      "type": "sha256",
+      "value": "d00a649e0120168f26b630aa3253c36f2fdc9a84b1a13ff6fd96abc48f7be3f0"
+    },
+    "binaryRelPath": "Bruno.exe",
+    "stripComponents": 0,
+    "homepage": "https://github.com/usebruno/bruno/releases/tag/v4.3.0"
+  },
+  {
+    "os": "windows",
+    "arch": "amd64",
+    "id": "hoppscotch-26.10.1-windows-amd64",
+    "kind": "hoppscotch",
+    "version": "26.10.1",
+    "name": "Hoppscotch 26.10.1",
+    "url": "https://github.com/hoppscotch/releases/releases/download/v26.10.1-0/Hoppscotch_Cloud_win_x64_portable.zip",
+    "checksum": {
+      "type": "sha256",
+      "value": "00cd055f0a562ea02943069cf2b05d6189c3f26a8a61cec8d81c88000e56b61b"
+    },
+    "binaryRelPath": "hoppscotch-desktop.exe",
+    "stripComponents": 0,
+    "homepage": "https://github.com/hoppscotch/releases/releases/tag/v26.10.1-0"
+  },
+  {
+    "os": "windows",
+    "arch": "amd64",
+    "id": "composer-2.11.1-windows-amd64",
+    "kind": "composer",
+    "version": "2.11.1",
+    "name": "Composer 2.11.1",
+    "url": "https://getcomposer.org/download/2.11.1/composer.phar",
+    "checksum": {
+      "type": "sha256",
+      "value": "6f1b891e1d4927d62740276c540fb490e47689e19e102c49e8da849794882f8c"
+    },
+    "binaryRelPath": "composer.bat",
+    "stripComponents": 0,
+    "homepage": "https://getcomposer.org/download/"
+  },
+  {
+    "os": "windows",
+    "arch": "arm64",
+    "id": "composer-2.11.1-windows-arm64",
+    "kind": "composer",
+    "version": "2.11.1",
+    "name": "Composer 2.11.1",
+    "url": "https://getcomposer.org/download/2.11.1/composer.phar",
+    "checksum": {
+      "type": "sha256",
+      "value": "6f1b891e1d4927d62740276c540fb490e47689e19e102c49e8da849794882f8c"
+    },
+    "binaryRelPath": "composer.bat",
+    "stripComponents": 0,
+    "homepage": "https://getcomposer.org/download/"
+  },
+  {
+    "os": "windows",
+    "arch": "amd64",
+    "id": "composer-2.2.31-windows-amd64",
+    "kind": "composer",
+    "version": "2.2.31",
+    "name": "Composer 2.2.31 (LTS)",
+    "url": "https://getcomposer.org/download/2.2.31/composer.phar",
+    "checksum": {
+      "type": "sha256",
+      "value": "e13af0ac1ab0a96dcf7de2f1eada9cce442f2a99ed23023784a2627f3e476215"
+    },
+    "binaryRelPath": "composer.bat",
+    "stripComponents": 0,
+    "homepage": "https://getcomposer.org/download/"
+  },
+  {
+    "os": "windows",
+    "arch": "arm64",
+    "id": "composer-2.2.31-windows-arm64",
+    "kind": "composer",
+    "version": "2.2.31",
+    "name": "Composer 2.2.31 (LTS)",
+    "url": "https://getcomposer.org/download/2.2.31/composer.phar",
+    "checksum": {
+      "type": "sha256",
+      "value": "e13af0ac1ab0a96dcf7de2f1eada9cce442f2a99ed23023784a2627f3e476215"
+    },
+    "binaryRelPath": "composer.bat",
+    "stripComponents": 0,
+    "homepage": "https://getcomposer.org/download/"
+  },
+  {
+    "os": "windows",
+    "arch": "amd64",
+    "id": "python-3.13.18-windows-amd64",
+    "kind": "python",
+    "version": "3.13.18",
+    "name": "Python 3.13.18",
+    "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261026/cpython-3.13.18%2B20261026-x86_64-pc-windows-msvc-install_only.tar.gz",
+    "checksum": {
+      "type": "sha256",
+      "value": "ebe90cc1dce2dd2d7afa1f0aa9b6c269c7c0174aeabdc6a801381602b7283424"
+    },
+    "binaryRelPath": "python.exe",
+    "stripComponents": 1,
+    "homepage": "https://github.com/astral-sh/python-build-standalone/releases/tag/20261026",
+    "line": "3.13"
+  },
+  {
+    "os": "windows",
+    "arch": "arm64",
+    "id": "python-3.13.18-windows-arm64",
+    "kind": "python",
+    "version": "3.13.18",
+    "name": "Python 3.13.18",
+    "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261026/cpython-3.13.18%2B20261026-aarch64-pc-windows-msvc-install_only.tar.gz",
+    "checksum": {
+      "type": "sha256",
+      "value": "13f8bb6ff296a826dd903ea732255ca02fc3a4db4287c2b0ebe0781360b6028d"
+    },
+    "binaryRelPath": "python.exe",
+    "stripComponents": 1,
+    "homepage": "https://github.com/astral-sh/python-build-standalone/releases/tag/20261026",
+    "line": "3.13"
+  },
+  {
+    "os": "windows",
+    "arch": "amd64",
+    "id": "python-3.12.16-windows-amd64",
+    "kind": "python",
+    "version": "3.12.16",
+    "name": "Python 3.12.16",
+    "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261026/cpython-3.12.16%2B20261026-x86_64-pc-windows-msvc-install_only.tar.gz",
+    "checksum": {
+      "type": "sha256",
+      "value": "590dfcbe3a34c07301e6332e13e2188b98655cd072b08afa45a7998dc4c22bc5"
+    },
+    "binaryRelPath": "python.exe",
+    "stripComponents": 1,
+    "homepage": "https://github.com/astral-sh/python-build-standalone/releases/tag/20261026",
+    "line": "3.12"
+  },
+  {
+    "os": "windows",
+    "arch": "arm64",
+    "id": "python-3.12.16-windows-arm64",
+    "kind": "python",
+    "version": "3.12.16",
+    "name": "Python 3.12.16",
+    "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261026/cpython-3.12.16%2B20261026-aarch64-pc-windows-msvc-install_only.tar.gz",
+    "checksum": {
+      "type": "sha256",
+      "value": "ad585318bfe47980cbaa90be12a65319c5b4eec7472655428528068e710a6c9a"
+    },
+    "binaryRelPath": "python.exe",
+    "stripComponents": 1,
+    "homepage": "https://github.com/astral-sh/python-build-standalone/releases/tag/20261026",
+    "line": "3.12"
+  },
+  {
+    "os": "windows",
+    "arch": "amd64",
+    "id": "rust-1.100.0-windows-amd64",
+    "kind": "rust",
+    "version": "1.100.0",
+    "name": "Rust 1.100.0 (stable, GNU)",
+    "url": "https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-gnu/rustup-init.exe",
+    "checksum": {
+      "type": "shasums",
+      "url": "https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-gnu/rustup-init.exe.sha256"
+    },
+    "binaryRelPath": "cargo/bin/cargo.exe",
+    "stripComponents": 0,
+    "homepage": "https://rust-lang.github.io/rustup/installation/windows.html"
   }
 ]

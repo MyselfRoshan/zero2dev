@@ -2,7 +2,6 @@ package snapshot
 
 import (
 	"fmt"
-	"net"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -13,6 +12,7 @@ import (
 	"zero2dev/internal/apperr"
 	"zero2dev/internal/jobs"
 	"zero2dev/internal/model"
+	"zero2dev/internal/netutil"
 	"zero2dev/internal/store"
 )
 
@@ -180,32 +180,11 @@ func (m *Manager) addClone(d *store.Data, mf Manifest, name, suffix, projectID s
 // nextPort is the first port after from (wrapping round to 1024) that no
 // service uses and that can be listened on now.
 func (m *Manager) nextPort(from int, used map[int]bool) (int, error) {
-	free := m.portFree
-	if free == nil {
-		free = portFree
+	p, ok := netutil.NextFreePort(from, func(p int) bool { return used[p] }, m.portFree)
+	if !ok {
+		return 0, fmt.Errorf("no free port")
 	}
-	for i := 1; i <= 65535; i++ {
-		p := from + i
-		if p > 65535 {
-			p = 1024 + (p-65536)%(65536-1024)
-		}
-		if p == from {
-			break
-		}
-		if !used[p] && free(p) {
-			return p, nil
-		}
-	}
-	return 0, fmt.Errorf("no free port")
-}
-
-func portFree(p int) bool {
-	l, err := net.Listen("tcp", "127.0.0.1:"+strconv.Itoa(p))
-	if err != nil {
-		return false
-	}
-	_ = l.Close()
-	return true
+	return p, nil
 }
 
 // uniqueDomain adds suffix to the first label of domain (shop.localhost ->

@@ -120,6 +120,7 @@ func (s *Store) normalize(d *Data) {
 		// runtime fields are never persisted meaningfully
 		sv.State, sv.Pid, sv.StartedAt, sv.LastError = model.StateStopped, 0, nil, ""
 		sv.Restarts = 0
+		sv.CPU, sv.MemBytes = 0, 0
 		if sv.RestartLimit < 1 {
 			sv.RestartLimit = model.DefaultRestartLimit
 		}

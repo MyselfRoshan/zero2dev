@@ -79,7 +79,7 @@
     </div>
     {#if o.type === "select"}
       <select {id} bind:value {disabled} aria-describedby="{id}-h" aria-invalid={!!error} onchange={() => onchange?.()}>
-        {#each o.choices ?? [] as c (c.value)}<option value={c.value}>{c.label}</option>{/each}
+        {#each o.choices ?? [] as c (c.value)}<option value={c.value} disabled={!!c.disabled} title={c.disabled}>{c.label}{c.disabled ? " (not available yet)" : ""}</option>{/each}
       </select>
     {:else if o.type === "lines"}
       <textarea {id} class="mono" rows="3" bind:value {disabled} placeholder={o.placeholder ?? ""} spellcheck="false"

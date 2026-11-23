@@ -21,9 +21,16 @@ import (
 func Start(bin string, args []string, dir string, env []string) error {
 	cmd := exec.Command(bin, args...) // never a shell
 	cmd.Dir = dir
-	if len(env) > 0 {
-		cmd.Env = append(os.Environ(), env...)
+	// ELECTRON_RUN_AS_NODE (set when the daemon was started from VS Code's
+	// terminal) turns every Electron program (VS Code, VSCodium, Bruno) into a
+	// plain Node that rejects its options and shows no window.
+	var kept []string
+	for _, e := range os.Environ() {
+		if !strings.HasPrefix(strings.ToUpper(e), "ELECTRON_RUN_AS_NODE=") {
+			kept = append(kept, e)
+		}
 	}
+	cmd.Env = append(kept, env...)
 	detach(cmd)
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("cannot start %s: %w", filepath.Base(bin), err)
@@ -90,4 +97,72 @@ func ConnectArgs(tool string, svc model.Service) ([]string, error) {
 		return []string{"-con", con}, nil
 	}
 	return nil, ErrNoConnection
+}
+
+// ToolDataArgs keeps the settings, extensions and workspaces of a tool that
+// Zero2Dev installed in <home>/<name> (data\code, data\codium, ...), so the
+// bin folder only holds programs. Each tool has its own switch for it. Tools
+// registered by path are the user's own installs and keep their usual
+// settings, so they get nothing.
+func ToolDataArgs(rt model.Runtime, home string) (args, env []string, err error) {
+	name := model.DataDirName(rt.Kind)
+	if rt.Source != "installed" || name == "" {
+		return nil, nil, nil
+	}
+	dir := filepath.Join(home, name)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, nil, err
+	}
+	switch rt.Kind {
+	case "vscode", "vscodium":
+		// Portable mode with the data outside the program folder: VS Code and
+		// VSCodium keep user-data and extensions in $VSCODE_PORTABLE.
+		return nil, []string{"VSCODE_PORTABLE=" + dir}, nil
+	case "notepadpp":
+		return []string{"-settingsDir=" + dir}, nil, nil
+	case "heidisql":
+		// The portable build writes portable_settings.txt next to heidisql.exe
+		// unless told otherwise; the file is created so the setting is used.
+		// O_EXCL: two launches at once must never truncate settings the
+		// other (or HeidiSQL itself) already wrote.
+		f := filepath.Join(dir, "portable_settings.txt")
+		fh, err := os.OpenFile(f, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+		if err == nil {
+			err = fh.Close()
+		} else if errors.Is(err, os.ErrExist) {
+			err = nil
+		}
+		if err != nil {
+			return nil, nil, err
+		}
+		return []string{"--psettings=" + f}, nil, nil
+	case "dbeaver":
+		ws := filepath.Join(dir, "workspace")
+		if err := os.MkdirAll(ws, 0o755); err != nil {
+			return nil, nil, err
+		}
+		return []string{"-data", ws}, nil, nil
+	case "bruno":
+		// Electron's switch: preferences, the workspace list and the Chromium
+		// profile go to <home>\bruno instead of %APPDATA%\bruno.
+		return []string{"--user-data-dir=" + dir}, nil, nil
+	case "hoppscotch":
+		// Collections and history live in the WebView2 profile, which Tauri
+		// puts in %LOCALAPPDATA%\io.hoppscotch.desktop unless told otherwise.
+		// The rest (hoppscotch-desktop-data, logs) follows the working
+		// directory, see ToolWorkDir. Only the window size stays in %APPDATA%.
+		return nil, []string{"WEBVIEW2_USER_DATA_FOLDER=" + filepath.Join(dir, "webview2")}, nil
+	}
+	return nil, nil, nil
+}
+
+// ToolWorkDir is the working directory a tool needs to keep its data in
+// <home>\<name>: Hoppscotch Desktop's portable build writes hoppscotch-desktop-data
+// and logs into its working directory. "" for every other tool (the caller's
+// choice applies). ToolDataArgs creates the folder.
+func ToolWorkDir(rt model.Runtime, home string) string {
+	if rt.Source != "installed" || rt.Kind != "hoppscotch" {
+		return ""
+	}
+	return filepath.Join(home, model.DataDirName(rt.Kind))
 }

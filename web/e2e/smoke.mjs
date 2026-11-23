@@ -101,12 +101,14 @@ await step("runtimes: a card per kind, first check, version list per kind", asyn
   const kinds = await page.locator("article[data-kind]").evaluateAll((els) => els.map((e) => e.dataset.kind));
   // prettier-ignore
   assert.deepEqual(kinds, [
-    "node", "php", "go", "java", // languages
+    "node", "php", "go", "java", "python", "rust", // languages
+    "composer", "viteplus", // tools
     "caddy", "nginx", // web servers
     "mariadb", "mysql", "postgres", "redis", // databases
     "mailpit", // mail
     "vscode", "vscodium", "notepadpp", // code editors
     "heidisql", "dbeaver", // database tools
+    "bruno", "hoppscotch", // API clients
   ]);
   for (const k of kinds) await card(k).getByTestId(`count-${k}`).getByText("Not installed").waitFor();
   await expand("php");
@@ -734,7 +736,7 @@ await step("reconnect: daemon outage shows banner, recovers with fresh ticket", 
 await step("dashboard with data + dark mode + narrow width", async () => {
   await page.goto(BASE + "/#/dashboard");
   await page.locator(".svc").first().waitFor();
-  await page.getByText("v0.0.5").waitFor();
+  await page.getByText("v0.0.6").waitFor();
   await shot(page, "01-dashboard");
   await page.emulateMedia({ colorScheme: "dark" });
   await shot(page, "09-dashboard-dark");
@@ -1493,7 +1495,22 @@ await step(
 // ---- 0.0.5: each feature's steps live in e2e/steps/*.mjs ----
 {
   const t = { page, BASE, step, apiCall, shot, assert, customService, serviceRow, pickType };
-  for (const f of ["mail", "databases", "snapshots", "migrate"]) {
+  for (const f of [
+    "mail",
+    "databases",
+    "snapshots",
+    "migrate",
+    "python",
+    "composer",
+    "tasks",
+    "detect",
+    "newproject",
+    "rust",
+    "apiclients",
+    "viteplus",
+    "usage",
+    "projectfile",
+  ]) {
     const { default: steps } = await import(`./steps/${f}.mjs`);
     await steps(t);
   }
