@@ -107,9 +107,10 @@ func TestProjectAndSettingsJSON(t *testing.T) {
 
 func TestDefaultGoBin(t *testing.T) {
 	sep := string(os.PathListSeparator)
+	// No drive letters here: on Linux the list separator is ":" and "D:" would be split in two.
 	for _, c := range []struct{ gopath, home, want string }{
-		{"", filepath.Join("C:", "Users", "me"), filepath.Join("C:", "Users", "me", "go", "bin")},
-		{filepath.Join("D:", "gp") + sep + filepath.Join("E:", "other"), "C:", filepath.Join("D:", "gp", "bin")},
+		{"", filepath.Join("home", "me"), filepath.Join("home", "me", "go", "bin")},
+		{filepath.Join("gp1", "x") + sep + filepath.Join("gp2", "other"), "home", filepath.Join("gp1", "x", "bin")},
 		{"  ", "", ""},
 		{"", "", ""},
 	} {

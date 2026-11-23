@@ -337,6 +337,28 @@ func TestInstallViteplusRunsTheLauncherWithVPHome(t *testing.T) {
 	if !found {
 		t.Fatalf("VP_HOME=%s missing from %v", vpHome, fake.env)
 	}
+	// The launcher must not touch the user's PATH or find (and remove) a Vite+ of the user's own.
+	want := map[string]bool{"VP_SELF_SETUP_NO_MODIFY_PATH=1": false, "CI=true": false}
+	for _, kv := range fake.env {
+		if _, ok := want[kv]; ok {
+			want[kv] = true
+		}
+		if strings.HasPrefix(kv, "PATH=") && !strings.Contains(strings.ToLower(kv), "system32") {
+			t.Errorf("PATH must be the system folders only, got %s", kv)
+		}
+	}
+	for kv, ok := range want {
+		if !ok {
+			t.Errorf("%s missing from %v", kv, fake.env)
+		}
+	}
+	hasPath := false
+	for _, kv := range fake.env {
+		hasPath = hasPath || strings.HasPrefix(kv, "PATH=")
+	}
+	if !hasPath {
+		t.Errorf("PATH is not set for the launcher: %v", fake.env)
+	}
 	if rs := e.rts.List(); len(rs) != 1 || rs[0].Kind != "viteplus" || rs[0].Binary != filepath.Join(final, "vp.exe") || rs[0].Version != "1.7.0" {
 		t.Fatalf("runtime %+v", rs)
 	}
