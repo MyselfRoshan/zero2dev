@@ -2,6 +2,7 @@ package model
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -101,5 +102,48 @@ func TestProjectAndSettingsJSON(t *testing.T) {
 	b, _ = json.Marshal(EnvConfig{Path: []EnvPath{{ID: "envp_1", Source: EnvCustom, Dir: `C:\t`, Enabled: true}}, Vars: []EnvVar{}})
 	if string(b) != `{"seeded":false,"path":[{"id":"envp_1","source":"custom","dir":"C:\\t","enabled":true}],"vars":[]}` {
 		t.Fatal(string(b))
+	}
+}
+
+func TestDefaultGoBin(t *testing.T) {
+	sep := string(os.PathListSeparator)
+	// No drive letters here: on Linux the list separator is ":" and "D:" would be split in two.
+	for _, c := range []struct{ gopath, home, want string }{
+		{"", filepath.Join("home", "me"), filepath.Join("home", "me", "go", "bin")},
+		{filepath.Join("gp1", "x") + sep + filepath.Join("gp2", "other"), "home", filepath.Join("gp1", "x", "bin")},
+		{"  ", "", ""},
+		{"", "", ""},
+	} {
+		if got := DefaultGoBin(c.gopath, c.home); got != c.want {
+			t.Errorf("DefaultGoBin(%q, %q) = %q, want %q", c.gopath, c.home, got, c.want)
+		}
+	}
+	home := filepath.Join("D:", "z")
+	if GoPath(home) != filepath.Join(home, "go", "path") || GoToolsDir(home) != filepath.Join(home, "go", "path", "bin") {
+		t.Fatal("GoPath / GoToolsDir")
+	}
+}
+
+func TestRustHomesAndRuntimeVars(t *testing.T) {
+	install := filepath.Join("data", "bin", "rust-1.100.0")
+	rt := Runtime{Kind: "rust", Binary: filepath.Join(install, "cargo", "bin", "cargo.exe")}
+	c, r, ok := RustHomes(rt.Binary)
+	if !ok || c != filepath.Join(install, "cargo") || r != filepath.Join(install, "rustup") {
+		t.Fatalf("%q %q %v", c, r, ok)
+	}
+	vars := RuntimeVars(rt)
+	if len(vars) != 2 || vars[0] != "RUSTUP_HOME="+r || vars[1] != "CARGO_HOME="+c {
+		t.Fatalf("%q", vars)
+	}
+	for _, b := range []string{"", filepath.Join("u", ".cargo", "bin", "cargo.exe"), filepath.Join("x", "cargo.exe")} {
+		if _, _, ok := RustHomes(b); ok {
+			t.Errorf("%q is not a Zero2Dev layout", b)
+		}
+	}
+	if v := RuntimeVars(Runtime{Kind: "go", Binary: filepath.Join("g", "go", "bin", "go.exe")}); len(v) != 1 || v[0] != "GOROOT="+filepath.Join("g", "go") {
+		t.Fatalf("%q", v)
+	}
+	if v := RuntimeVars(Runtime{Kind: "node", Binary: "n.exe"}); v != nil {
+		t.Fatalf("%q", v)
 	}
 }

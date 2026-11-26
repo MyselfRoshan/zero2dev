@@ -26,11 +26,14 @@ import (
 	"zero2dev/internal/jobs"
 	"zero2dev/internal/migrate"
 	"zero2dev/internal/model"
+	"zero2dev/internal/newproject"
+	"zero2dev/internal/projectfile"
 	"zero2dev/internal/runtimes"
 	"zero2dev/internal/sites"
 	"zero2dev/internal/snapshot"
 	"zero2dev/internal/store"
 	"zero2dev/internal/supervisor"
+	"zero2dev/internal/tasks"
 	"zero2dev/internal/winpick"
 )
 
@@ -73,6 +76,11 @@ type Deps struct {
 	DB        *dbtools.Manager
 	Snapshots *snapshot.Manager
 	Migrate   *migrate.Manager
+	// 0.0.6. Tasks and NewProject may be nil: their routes then answer 501.
+	Tasks      *tasks.Manager
+	NewProject *newproject.Manager
+	// 0.0.6, part 2: ProjectFile may be nil (its routes then answer 501).
+	ProjectFile *projectfile.Manager
 	// PickFile shows the native Open / Save as dialog (winpick.File); nil
 	// means not available. Replaced in tests.
 	PickFile func(o winpick.FileOptions) (path string, ok bool, err error)
@@ -171,6 +179,9 @@ func (s *Server) routes() {
 	s.snapshotRoutes()   // snapshots.go
 	s.migrationRoutes()  // migrations.go
 	s.fileDialogRoutes() // dialog_file.go
+	// 0.0.6
+	s.languageRoutes()    // languages.go
+	s.projectFileRoutes() // projectfile.go
 	s.handle("/api/", func(http.ResponseWriter, *http.Request) error {
 		return apperr.NotFound("no such endpoint")
 	})

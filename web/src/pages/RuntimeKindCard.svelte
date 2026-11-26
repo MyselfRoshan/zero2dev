@@ -8,6 +8,7 @@
     defaultSelection,
     isEntryInstalled,
     kindLabel,
+    KIND_NOTE,
     KIND_SUMMARY,
     noDownloadText,
     optionGroups,
@@ -219,6 +220,7 @@
 
       <div class="col">
         <h4>{installed.length ? "Install another version" : "Install"}</h4>
+        {#if KIND_NOTE[kind]}<p class="hint" data-testid="note-{kind}">{KIND_NOTE[kind]}</p>{/if}
         {#if avail === "check"}
           <p class="muted small">{CHECK_TEXT}</p>
         {:else if avail === "unsupported"}

@@ -15,6 +15,7 @@ import type {
   Service,
   ServiceCrashedEvent,
   ServiceStatusEvent,
+  ServiceUsage,
   Settings,
   Site,
   Status,
@@ -382,6 +383,16 @@ let conn: EventConnection | null = null;
 
 function onEvent(type: EventType, d: unknown) {
   switch (type) {
+    case "service.usage": {
+      // One batch for every running service; a service that is not in it has stopped (0).
+      const batch = d as ServiceUsage[];
+      for (const s of lists.services) {
+        const u = batch.find((x) => x.id === s.id);
+        s.cpu = u ? u.cpu : 0;
+        s.memBytes = u ? u.memBytes : 0;
+      }
+      break;
+    }
     case "service.status": {
       const e = d as ServiceStatusEvent;
       const s = lists.services.find((x) => x.id === e.id);

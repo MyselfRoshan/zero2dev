@@ -32,7 +32,31 @@ type Plan struct {
 	Env      []string // KEY=VALUE, added after the user's variables (Zero2Dev's win)
 	Files    []File
 	Dirs     []string // folders to create before the start
+	Pre      []PreStep
 	Warnings []string
+	// NotFound, when set, is the message for a Program (an absolute path) that does not exist, instead
+	// of the general "command ... not found" (Vite+: "vp is not installed in this project ...").
+	NotFound string
+}
+
+// PreStep is a program that runs before the service's own program, to make something it needs
+// (a Python service's virtual environment, the Corepack folder of a pnpm project). The supervisor
+// runs the steps in order after the folders and files of the plan exist, with the service's
+// environment, and a failing step stops the start. A task of the service (internal/tasks) runs
+// them too, so it finds the same tools.
+type PreStep struct {
+	// Label is logged: "Creating the virtual environment".
+	Label string
+	// Program is an absolute path, or a name found on the service's PATH (supervisor.FindProgram).
+	Program string
+	Args    []string
+	// Skip is a file whose existence means the step is done (venv\Scripts\python.exe); empty runs
+	// the step every time.
+	Skip string
+	// Dir is the folder it runs in; "" is the service's folder.
+	Dir string
+	// Timeout in seconds; 0 is 5 minutes.
+	Timeout int
 }
 
 var settingRef = regexp.MustCompile(`\{s\.([A-Za-z0-9_]+)\}`)
@@ -119,9 +143,13 @@ func Build(kind string, settings map[string]string, extra []string, c Ctx) *Plan
 		}
 	}
 	pl.Args = append(pl.Args, tail...)
+	if kind == "node" {
+		nodePackageManager(pl, eff, c)
+		nodeVitePlus(pl, eff, c)
+	}
 	if len(extra) > 0 {
-		if pl.Program == "npm" {
-			pl.Args = append(pl.Args, "--") // npm passes what follows to the script
+		if pl.Program == "npm" || kind == "rust" {
+			pl.Args = append(pl.Args, "--") // npm passes what follows to the script, cargo to your program
 		}
 		pl.Args = append(pl.Args, c.ExpandPlain(extra)...)
 	}
@@ -133,6 +161,12 @@ func Build(kind string, settings map[string]string, extra []string, c Ctx) *Plan
 	}
 	if kind == "go" && eff["isolate"] == "true" {
 		pl.Dirs = append(pl.Dirs, filepath.Join(c.Home, "go"))
+	}
+	if kind == "python" && c.Home != "" && c.ServiceID != "" {
+		pythonPlan(pl, c) // the virtual environment of the service
+	}
+	if kind == "rust" && c.Home != "" && c.ServiceID != "" {
+		rustPlan(pl, c) // CARGO_TARGET_DIR of the service
 	}
 	if kind == "mailpit" && c.Data != "" {
 		pl.Dirs = append(pl.Dirs, c.Data) // Mailpit creates its database file, not the folder
@@ -189,6 +223,9 @@ func BuildCustom(kind string, args []string, c Ctx) *Plan {
 		for _, e := range p.Env {
 			pl.Env = append(pl.Env, e.Name+"="+c.expand(e.Value, "", eff, nil))
 		}
+	}
+	if kind == "rust" && c.Home != "" && c.ServiceID != "" {
+		rustPlan(pl, c)
 	}
 	return pl
 }

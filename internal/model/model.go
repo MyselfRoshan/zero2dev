@@ -5,7 +5,9 @@ package model
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -67,6 +69,19 @@ type Service struct {
 	Pid       int        `json:"pid"`
 	StartedAt *time.Time `json:"startedAt"`
 	LastError string     `json:"lastError"`
+	// CPU and MemBytes are the last sample of a running service, summed over its whole process
+	// tree (0.0.6, internal/supervisor sampler): CPU is the percent of the whole machine (0-100),
+	// MemBytes the working set. Both are 0 while the service is stopped or before the first sample;
+	// never stored or accepted as input.
+	CPU      float64 `json:"cpu"`
+	MemBytes uint64  `json:"memBytes"`
+}
+
+// Usage is one entry of the service.usage event (events carry a batch of them).
+type Usage struct {
+	ID       string  `json:"id"`
+	CPU      float64 `json:"cpu"`
+	MemBytes uint64  `json:"memBytes"`
 }
 
 // Restart-on-crash limits.
@@ -89,6 +104,29 @@ func Deps(sv Service) []string {
 	return out
 }
 
+// GoPath is Zero2Dev's GOPATH: <home>/go/path. A Go service that keeps Go's
+// downloads in the data folder (the default setting) uses it, so the Go tools
+// installed with `go install` (air, dlv, gopls) and the module cache live there
+// and move with the data folder.
+func GoPath(home string) string { return filepath.Join(home, "go", "path") }
+
+// GoToolsDir is where `go install` puts programs under Zero2Dev's GOPATH: <GOPATH>/bin.
+func GoToolsDir(home string) string { return filepath.Join(GoPath(home), "bin") }
+
+// DefaultGoBin is where `go install` puts programs when GOPATH is not Zero2Dev's:
+// the bin folder of the first GOPATH entry (gopath, the GOPATH variable) or, when
+// it is empty, Go's own default %USERPROFILE%\go (userHome). "" when neither is known.
+func DefaultGoBin(gopath, userHome string) string {
+	first := strings.TrimSpace(strings.SplitN(gopath, string(os.PathListSeparator), 2)[0])
+	switch {
+	case first != "":
+		return filepath.Join(first, "bin")
+	case userHome != "":
+		return filepath.Join(userHome, "go", "bin")
+	}
+	return ""
+}
+
 // RuntimeHome is the environment variable that points at a runtime's install
 // folder (JAVA_HOME for java, GOROOT for go) and its value: the folder two
 // levels above the binary (<home>/bin/java -> <home>). name is "" for every
@@ -106,6 +144,37 @@ func RuntimeHome(rt Runtime) (name, dir string) {
 		return "", ""
 	}
 	return name, filepath.Dir(filepath.Dir(rt.Binary))
+}
+
+// RustHomes finds the two folders of a Zero2Dev-installed Rust runtime from its cargo.exe:
+// <install>\cargo\bin\cargo.exe gives CARGO_HOME=<install>\cargo and RUSTUP_HOME=<install>\rustup
+// (the installer runs rustup-init with both, see internal/installer). ok is false for any other
+// layout (a cargo the user registered from ~\.cargo\bin): that one keeps the user's own variables.
+func RustHomes(binary string) (cargoHome, rustupHome string, ok bool) {
+	if binary == "" {
+		return "", "", false
+	}
+	bin := filepath.Dir(binary)
+	cargoHome = filepath.Dir(bin)
+	if !strings.EqualFold(filepath.Base(bin), "bin") || cargoHome == bin || filepath.Base(cargoHome) != "cargo" {
+		return "", "", false
+	}
+	return cargoHome, filepath.Join(filepath.Dir(cargoHome), "rustup"), true
+}
+
+// RuntimeVars are the variables of a runtime a service or a shim runs with, in order: GOROOT and
+// JAVA_HOME (RuntimeHome), and for Rust RUSTUP_HOME and CARGO_HOME.
+func RuntimeVars(rt Runtime) []string {
+	if rt.Kind == "rust" {
+		if c, r, ok := RustHomes(rt.Binary); ok {
+			return []string{"RUSTUP_HOME=" + r, "CARGO_HOME=" + c}
+		}
+		return nil
+	}
+	if name, dir := RuntimeHome(rt); name != "" {
+		return []string{name + "=" + dir}
+	}
+	return nil
 }
 
 // ServiceInput is the body of create/update.
@@ -254,6 +323,9 @@ const (
 	JobMigrate         = "migrate"
 	JobMigrateRevert   = "migrate-revert"
 	JobMigrateCleanup  = "migrate-cleanup"
+	JobTask            = "task"           // 0.0.6: a one-off task of a service (npm install ...)
+	JobNewProject      = "new-project"    // 0.0.6: New project from a framework
+	JobProjectImport   = "project-import" // 0.0.6: Import project from a project file
 )
 
 // Portable says which user-level caches and global package folders of the
@@ -341,14 +413,14 @@ type LogLine struct {
 
 // ServiceKinds and RuntimeKinds are the accepted enums.
 var (
-	ServiceKinds = []string{"custom", "node", "php", "go", "java", "caddy", "nginx", "mariadb", "mysql", "postgres", "redis", "mailpit"}
-	RuntimeKinds = []string{"node", "php", "go", "java", "caddy", "nginx",
+	ServiceKinds = []string{"custom", "node", "php", "go", "java", "python", "rust", "caddy", "nginx", "mariadb", "mysql", "postgres", "redis", "mailpit"}
+	RuntimeKinds = []string{"node", "php", "go", "java", "python", "rust", "composer", "viteplus", "caddy", "nginx",
 		"mariadb", "mysql", "postgres", "redis", "mailpit",
 		"vscode", "vscodium", "notepadpp",
-		"heidisql", "dbeaver", "other"}
+		"heidisql", "dbeaver", "bruno", "hoppscotch", "other"}
 	// RemoteKinds can have their version lists fetched from the publishers.
-	RemoteKinds = []string{"node", "go", "caddy", "php", "java", "nginx",
-		"mariadb", "mysql", "postgres", "redis", "mailpit", "vscode", "vscodium", "notepadpp", "heidisql", "dbeaver"}
+	RemoteKinds = []string{"node", "go", "caddy", "php", "java", "python", "rust", "composer", "viteplus", "nginx",
+		"mariadb", "mysql", "postgres", "redis", "mailpit", "vscode", "vscodium", "notepadpp", "heidisql", "dbeaver", "bruno", "hoppscotch"}
 )
 
 // Kind categories, as grouped on the Runtimes page.
@@ -359,11 +431,15 @@ const (
 	CatEditor   = "editor"
 	CatDBTool   = "dbtool"
 	CatMail     = "mail"
+	CatTool     = "tool"      // a program other programs run (Composer, the Vite+ CLI)
+	CatAPI      = "apiclient" // a desktop program to try an API (Bruno, Hoppscotch)
 )
 
 // KindCategory maps every runtime kind (except "other") to its category.
 var KindCategory = map[string]string{
-	"node": CatLanguage, "php": CatLanguage, "go": CatLanguage, "java": CatLanguage,
+	"node": CatLanguage, "php": CatLanguage, "go": CatLanguage, "java": CatLanguage, "python": CatLanguage, "rust": CatLanguage,
+	"composer": CatTool, "viteplus": CatTool,
+	"bruno": CatAPI, "hoppscotch": CatAPI,
 	"caddy": CatServer, "nginx": CatServer,
 	"mariadb": CatDatabase, "mysql": CatDatabase, "postgres": CatDatabase, "redis": CatDatabase,
 	"mailpit": CatMail,
@@ -374,7 +450,7 @@ var KindCategory = map[string]string{
 // Launchable kinds are desktop programs that are opened, not supervised as services.
 func Launchable(kind string) bool {
 	c := KindCategory[kind]
-	return c == CatEditor || c == CatDBTool
+	return c == CatEditor || c == CatDBTool || c == CatAPI
 }
 
 // dataDirNames are the per-tool folders inside the data folder. Settings,
@@ -383,7 +459,8 @@ func Launchable(kind string) bool {
 var dataDirNames = map[string]string{
 	"vscode": "code", "vscodium": "codium", "notepadpp": "notepadpp", "heidisql": "heidisql", "dbeaver": "dbeaver",
 	"mariadb": "mariadb", "mysql": "mysql", "postgres": "postgres", "redis": "redis", "mailpit": "mailpit",
-	"php": "php", "node": "node", "go": "go",
+	"php": "php", "node": "node", "go": "go", "python": "python", "composer": "composer", "rust": "rust", "viteplus": "vite-plus",
+	"bruno": "bruno", "hoppscotch": "hoppscotch",
 }
 
 // DataDirName is the folder name of a kind's data inside the data folder

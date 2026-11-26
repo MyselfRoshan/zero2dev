@@ -13,6 +13,8 @@
     { icon: "sites", title: "Site", href: "#/sites", text: "A local address like shop.localhost that leads to a service, a port or a folder. Caddy or nginx serves it." },
     { icon: "folder", title: "Data folder", href: "#/settings", text: "Everything Zero2Dev keeps (settings, logs, databases, editor settings) sits next to zero2dev.exe. Move the folder to move it all." },
     { icon: "history", title: "Snapshot", href: "#/projects", text: "A saved copy of a project's services, runtime versions, sites and database data. Restore it to undo a risky change, or clone it into a second project." },
+    { icon: "rocket", title: "Create a project", href: "#/create", text: "Pick a language and a framework (Laravel, Next.js, Django, Spring Boot and more), a name and a folder. Zero2Dev installs what is missing, runs the framework's own generator and sets up the services, the site and a project for you." },
+    { icon: "upload", title: "Share a project", href: "#/projects", text: "Export writes a small zero2dev.json next to a project's code: its services, sites and the runtimes it needs, never passwords, secrets or paths from your PC. Whoever clones the repository uses Import project to set it up, and sets any secret again." },
     { icon: "download", title: "Import from this PC", href: "#/migrate", text: "Copy or move the settings of your installed VS Code, Notepad++, HeidiSQL or DBeaver, a runtime or a database into Zero2Dev. Every step can be reverted." },
   ];
 
@@ -21,6 +23,7 @@
     { q: "Downloads fail on a company network", a: "Set the download proxy under Settings > Downloads. Zero2Dev does not read the Windows proxy setting. Or download the file in your browser and use Import it on the runtime's row." },
     { q: "The browser warns about an HTTPS site", a: "The local certificate is not trusted yet. Switch on trust under Settings > HTTPS, or import the certificate shown there into Windows yourself." },
     { q: "An import or a change broke the database", a: "If you took a snapshot first (Zero2Dev offers one before an import or a reset), restore it from the service's Snapshots box or the project's Snapshots page." },
+    { q: "I cloned a project that has a zero2dev.json", a: "Open Projects, press Import project and choose the cloned folder, then press Check. It shows what would be installed and created. Press Import when the list looks right. Ports and domains may change if yours are taken, and secrets have to be set again." },
     { q: "PHP will not start", a: "PHP for Windows needs the Microsoft Visual C++ Redistributable (x64). Install it from Microsoft, then start the service again." },
     { q: "Where did Zero2Dev go? I closed the browser", a: "It keeps running in the notification area (the Zero2Dev icon next to the clock). Click it to open the dashboard again, or right-click it to quit." },
   ];

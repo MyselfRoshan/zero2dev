@@ -14,6 +14,8 @@
   import Projects from "./pages/Projects.svelte";
   import ProjectForm from "./pages/ProjectForm.svelte";
   import ProjectSnapshots from "./pages/ProjectSnapshots.svelte";
+  import CreateProject from "./pages/CreateProject.svelte";
+  import ImportProject from "./pages/ImportProject.svelte";
   import Migrate from "./pages/Migrate.svelte";
   import Runtimes from "./pages/Runtimes.svelte";
   import Sites from "./pages/Sites.svelte";
@@ -50,7 +52,11 @@
   ];
 
   const section = $derived(
-    router.route.name.startsWith("service") ? "services" : router.route.name.startsWith("project") ? "projects" : router.route.name,
+    router.route.name.startsWith("service")
+      ? "services"
+      : router.route.name.startsWith("project") || router.route.name === "create"
+        ? "projects"
+        : router.route.name,
   );
   const title = $derived.by(() => {
     const r = router.route;
@@ -58,6 +64,8 @@
     if (r.name === "serviceNew") return "New service";
     if (r.name === "serviceEdit") return `Edit ${lists.services.find((s) => s.id === r.id)?.name ?? "service"}`;
     if (r.name === "projectNew") return "New project";
+    if (r.name === "projectImport") return "Import project";
+    if (r.name === "create") return "Create a project";
     if (r.name === "projectEdit") return `Edit ${lists.projects.find((p) => p.id === r.id)?.name ?? "project"}`;
     if (r.name === "projectSnapshots") return `Snapshots of ${lists.projects.find((p) => p.id === r.id)?.name ?? "project"}`;
     return nav.find((n) => n.name === r.name)?.label ?? "";
@@ -152,10 +160,14 @@
             <Projects />
           {:else if router.route.name === "projectNew"}
             <ProjectForm />
+          {:else if router.route.name === "projectImport"}
+            <ImportProject />
           {:else if router.route.name === "projectEdit"}
             <ProjectForm id={router.route.id} />
           {:else if router.route.name === "projectSnapshots"}
             <ProjectSnapshots id={router.route.id} />
+          {:else if router.route.name === "create"}
+            <CreateProject />
           {:else if router.route.name === "migrate"}
             <Migrate />
           {:else if router.route.name === "runtimes"}

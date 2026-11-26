@@ -56,7 +56,7 @@ func fileExists(path string) bool {
 // default, and items of a removed runtime leave. A failure there is returned but
 // the shims are written first.
 func Refresh(home string, d store.Data) error {
-	if err := writeShims(ShimsDir(home), Files(d, fileExists)); err != nil {
+	if err := writeShims(ShimsDir(home), FilesAt(home, d, fileExists, os.ReadDir)); err != nil {
 		return err
 	}
 	if anyEnabled(d.Env) || fileExists(BackupFile(home)) {
@@ -74,7 +74,7 @@ func Refresh(home string, d store.Data) error {
 // themselves is never touched. New terminals see the change. It returns
 // ErrUnsupported off Windows when something is switched on.
 func Apply(home string, d store.Data) error {
-	if err := writeShims(ShimsDir(home), Files(d, fileExists)); err != nil {
+	if err := writeShims(ShimsDir(home), FilesAt(home, d, fileExists, os.ReadDir)); err != nil {
 		return err
 	}
 	reg := openReg()

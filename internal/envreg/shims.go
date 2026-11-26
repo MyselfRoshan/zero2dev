@@ -1,7 +1,9 @@
 package envreg
 
 import (
+	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -21,7 +23,7 @@ type File struct {
 
 // kindOrder is the order of the kinds in the shims and on the activated PATH
 // (first listed wins when two kinds offer the same command, e.g. mysql).
-var kindOrder = []string{"node", "php", "java", "go", "mysql", "mariadb", "postgres", "redis"}
+var kindOrder = []string{"node", "php", "java", "go", "python", "rust", "composer", "mysql", "mariadb", "postgres", "redis"}
 
 // shimmed lists, per kind, the commands that get a shim. The first command of
 // the node, php, java and go kinds is the runtime's own binary; the others are
@@ -34,17 +36,29 @@ var shimmed = map[string][]string{
 	"php":      {"php"},
 	"java":     {"java", "javac", "jar"},
 	"go":       {"go", "gofmt"},
+	"rust":     {"cargo", "rustc", "rustup"}, // 0.0.6: rustc and rustup are found next to cargo.exe (agent rust)
+	"python":   {"python", "pip"},            // pip.exe is in the Scripts folder below python.exe
+	"composer": {"composer"},                 // 0.0.6: composer.bat next to composer.phar (agent composer)
 	"mysql":    {"mysql", "mysqldump"},
 	"mariadb":  {"mariadb", "mysql", "mariadb-dump"},
 	"postgres": {"psql", "pg_dump", "pg_restore"},
 	"redis":    {"redis-cli"},
 }
 
+// toolDirs are the folders a runtime's other commands are looked for in, in order: next to the
+// binary and, for Python, in its Scripts folder.
+func toolDirs(kind, dir string) []string {
+	if kind == "python" {
+		return []string{dir, filepath.Join(dir, "Scripts")}
+	}
+	return []string{dir}
+}
+
 // ownBinary reports whether the first command of the kind is the runtime's
 // binary itself (and so needs no existence check).
 func ownBinary(kind string) bool {
 	switch kind {
-	case "node", "php", "java", "go":
+	case "node", "php", "java", "go", "python", "rust":
 		return true
 	}
 	return false
@@ -69,10 +83,16 @@ func defaultOf(d store.Data, kind string) (model.Runtime, bool) {
 // shimEnv are the variables a shim sets for its command: JAVA_HOME for the
 // java tools, GOROOT for go.
 func shimEnv(rt model.Runtime) map[string]string {
-	if name, dir := model.RuntimeHome(rt); name != "" {
-		return map[string]string{name: dir}
+	vars := model.RuntimeVars(rt)
+	if len(vars) == 0 {
+		return nil
 	}
-	return nil
+	env := map[string]string{}
+	for _, kv := range vars {
+		k, v, _ := strings.Cut(kv, "=")
+		env[k] = v
+	}
+	return env
 }
 
 // Files returns every file of the shims folder for the data: one .cmd per
@@ -80,20 +100,62 @@ func shimEnv(rt model.Runtime) map[string]string {
 // and activate.sh. exists tells whether a tool next to a runtime's binary is
 // there (os.Stat in production). It is pure: nothing is written here.
 func Files(d store.Data, exists func(path string) bool) []File {
+	return FilesAt("", d, exists, nil)
+}
+
+// FilesAt is Files for the data folder home. With a home, Go's own tools are
+// included, as next to GOROOT:
+//   - go and gofmt run with GOPATH=<home>\go\path, so `go install` puts air, dlv
+//     or gopls in <home>\go\path\bin whichever terminal it runs in;
+//   - every program in that folder gets a shim of its own (air.cmd ...), and the
+//     activate scripts put the folder on PATH, so a tool installed after the last
+//     refresh works there at once;
+//
+// readDir lists a folder (os.ReadDir in production; nil lists nothing).
+func FilesAt(home string, d store.Data, exists func(path string) bool, readDir func(string) ([]os.DirEntry, error)) []File {
 	var out []File
 	seen := map[string]bool{}
 	var dirs []string
 	activateEnv := map[string]string{}
+	goSeen := false
 	for _, kind := range kindOrder {
 		rt, ok := defaultOf(d, kind)
 		if !ok {
 			continue
 		}
 		dir := filepath.Dir(rt.Binary)
+		php, hasPHP := defaultOf(d, "php")
+		if kind == "composer" && !hasPHP {
+			continue // Composer is run by PHP: without one there is nothing to shim or put on PATH
+		}
 		if !containsFold(dirs, dir) {
 			dirs = append(dirs, dir)
 		}
 		env := shimEnv(rt)
+		if kind == "composer" {
+			// Composer runs with the default PHP whatever the user's PATH says: the shim calls
+			// php.exe with composer.phar itself (composer.bat would take the first php on PATH).
+			phar := model.ComposerPhar(rt)
+			if !exists(phar) || seen["composer"] {
+				continue
+			}
+			if home != "" {
+				env = map[string]string{"COMPOSER_HOME": model.ComposerHome(home), "COMPOSER_CACHE_DIR": model.ComposerCache(home)}
+			}
+			for name, v := range env {
+				activateEnv[name] = v
+			}
+			seen["composer"] = true
+			out = append(out, File{Name: "composer.cmd", Content: ShimCmdArgs(php.Binary, []string{phar}, env)})
+			continue
+		}
+		if home != "" && kind == "go" {
+			if env == nil {
+				env = map[string]string{}
+			}
+			env["GOPATH"] = model.GoPath(home)
+			goSeen = true
+		}
 		for name, v := range env {
 			activateEnv[name] = v
 		}
@@ -106,11 +168,18 @@ func Files(d store.Data, exists func(path string) bool) []File {
 			if i == 0 && ownBinary(kind) {
 				target = rt.Binary
 			} else {
-				// The tool may be an .exe or (npm) a .cmd next to the binary.
-				for _, e := range []string{ext, ".cmd", ".bat"} {
-					if p := filepath.Join(dir, cmd+e); exists(p) {
-						target = p
-						break
+				// The tool may be an .exe or (npm) a .cmd next to the binary; Python keeps pip.exe in
+				// the Scripts folder below it.
+			find:
+				for _, tdir := range toolDirs(kind, dir) {
+					for _, e := range []string{ext, ".cmd", ".bat"} {
+						if p := filepath.Join(tdir, cmd+e); exists(p) {
+							target = p
+							if tdir != dir && !containsFold(dirs, tdir) {
+								dirs = append(dirs, tdir) // the tools its packages install are on the activated PATH too
+							}
+							break find
+						}
 					}
 				}
 			}
@@ -121,11 +190,79 @@ func Files(d store.Data, exists func(path string) bool) []File {
 			out = append(out, File{Name: cmd + ".cmd", Content: ShimCmd(target, env)})
 		}
 	}
+	if home != "" {
+		// Zero2Dev's own tools folder first, then Go's default one (tools installed before
+		// Zero2Dev, or by a service that keeps Go's downloads in the user profile).
+		var toolDirs []string
+		for _, t := range []string{model.GoToolsDir(home), userGoBin()} {
+			if t != "" && !containsFold(toolDirs, t) {
+				toolDirs = append(toolDirs, t)
+			}
+		}
+		for _, t := range toolDirs {
+			shims := toolShims(t, seen, readDir)
+			out = append(out, shims...)
+			// The activate scripts get Zero2Dev's folder always (a tool installed after the
+			// last refresh works there at once) and Go's default folder when it exists.
+			own := strings.EqualFold(t, model.GoToolsDir(home))
+			if _, err := readDirOr(readDir, t); goSeen && (own || err == nil) && !containsFold(dirs, t) {
+				dirs = append(dirs, t)
+			}
+		}
+		if goSeen {
+			// Zero2Dev's folder before the runtimes', Go's default folder after them.
+			if t := model.GoToolsDir(home); containsFold(dirs, t) {
+				dirs = slices.DeleteFunc(dirs, func(x string) bool { return strings.EqualFold(x, t) })
+				dirs = append([]string{t}, dirs...)
+			}
+		}
+	}
 	out = append(out,
 		File{Name: "activate.cmd", Content: ActivateCmd(dirs, activateEnv)},
 		File{Name: "activate.ps1", Content: ActivatePS1(dirs, activateEnv)},
 		File{Name: "activate.sh", Content: ActivateSH(dirs, activateEnv)},
 	)
+	return out
+}
+
+// userGoBin is Go's default tools folder (%GOPATH%\bin, else %USERPROFILE%\go\bin).
+// A variable so that tests never look at the real user folder.
+var userGoBin = func() string {
+	home, _ := os.UserHomeDir()
+	return model.DefaultGoBin(os.Getenv("GOPATH"), home)
+}
+
+func readDirOr(readDir func(string) ([]os.DirEntry, error), dir string) ([]os.DirEntry, error) {
+	if readDir == nil {
+		return nil, os.ErrNotExist
+	}
+	return readDir(dir)
+}
+
+// toolShims makes a shim for every program in dir (the .exe files: air, dlv,
+// gopls ...), except a name a runtime's shim has already. A program that is
+// not an .exe (a script) is left alone.
+func toolShims(dir string, seen map[string]bool, readDir func(string) ([]os.DirEntry, error)) []File {
+	if readDir == nil {
+		return nil
+	}
+	entries, err := readDir(dir)
+	if err != nil {
+		return nil
+	}
+	var out []File
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.EqualFold(filepath.Ext(name), ".exe") {
+			continue
+		}
+		cmd := strings.TrimSuffix(name, filepath.Ext(name))
+		if cmd == "" || seen[strings.ToLower(cmd)] || strings.HasPrefix(strings.ToLower(cmd), "activate") {
+			continue
+		}
+		seen[strings.ToLower(cmd)] = true
+		out = append(out, File{Name: cmd + ".cmd", Content: ShimCmd(filepath.Join(dir, name), nil)})
+	}
 	return out
 }
 
@@ -163,7 +300,11 @@ func cmdSet(name, value string) string {
 // ShimCmd is the content of a shim: it runs target with the arguments it got.
 // env (JAVA_HOME / GOROOT) is set for that run only (setlocal), so the shim does
 // not leak anything into the calling terminal.
-func ShimCmd(target string, env map[string]string) string {
+func ShimCmd(target string, env map[string]string) string { return ShimCmdArgs(target, nil, env) }
+
+// ShimCmdArgs is ShimCmd for a program that always gets the same first arguments (php.exe and
+// the composer.phar it runs).
+func ShimCmdArgs(target string, args []string, env map[string]string) string {
 	lines := []string{"@echo off", "rem " + marker + ". Do not edit: it is rewritten when the runtimes change."}
 	if len(env) > 0 {
 		lines = append(lines, "setlocal")
@@ -171,7 +312,11 @@ func ShimCmd(target string, env map[string]string) string {
 			lines = append(lines, cmdSet(k, env[k]))
 		}
 	}
-	lines = append(lines, cmdQuote(target)+" %*")
+	cmd := cmdQuote(target)
+	for _, a := range args {
+		cmd += " " + cmdQuote(a)
+	}
+	lines = append(lines, cmd+" %*")
 	return crlf(lines)
 }
 

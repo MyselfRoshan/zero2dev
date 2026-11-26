@@ -17,6 +17,12 @@ export const KIND_LABEL: Record<string, string> = {
   java: "Java",
   node: "Node.js",
   go: "Go",
+  python: "Python",
+  rust: "Rust",
+  viteplus: "Vite+",
+  bruno: "Bruno",
+  hoppscotch: "Hoppscotch",
+  composer: "Composer",
   caddy: "Caddy",
   other: "Other",
 };
@@ -24,7 +30,7 @@ export const kindLabel = (k: string): string => KIND_LABEL[k] ?? k;
 
 /** A category of the Runtimes page. Web servers serve sites; they are not what services run on. */
 export interface RuntimeGroup {
-  id: "languages" | "servers" | "databases" | "mail" | "editors" | "dbtools";
+  id: "languages" | "tools" | "servers" | "databases" | "mail" | "editors" | "dbtools" | "apiclients";
   title: string;
   text: string;
   kinds: RuntimeKind[];
@@ -32,7 +38,18 @@ export interface RuntimeGroup {
 
 /** Runtime cards by category, in display order. */
 export const RUNTIME_GROUPS: RuntimeGroup[] = [
-  { id: "languages", title: "Languages", text: "What your services run on.", kinds: ["node", "php", "go", "java"] },
+  {
+    id: "languages",
+    title: "Languages",
+    text: "What your services run on.",
+    kinds: ["node", "php", "go", "java", "python", "rust"],
+  },
+  {
+    id: "tools",
+    title: "Tools",
+    text: "Programs your languages use, run with the version a service uses.",
+    kinds: ["composer", "viteplus"],
+  },
   {
     id: "servers",
     title: "Web servers",
@@ -63,6 +80,12 @@ export const RUNTIME_GROUPS: RuntimeGroup[] = [
     text: "Open a database service with the connection filled in.",
     kinds: ["heidisql", "dbeaver"],
   },
+  {
+    id: "apiclients",
+    title: "API clients",
+    text: "Try the API a service offers. Their settings are kept in the data folder, not in bin.",
+    kinds: ["bruno", "hoppscotch"],
+  },
 ];
 
 /** Groups whose kinds can be services (editors and database tools are opened, not run as services). */
@@ -71,7 +94,7 @@ export const SERVICE_GROUP_IDS: RuntimeGroup["id"][] = ["languages", "servers", 
 /** Desktop programs that are opened (launched), not supervised. */
 export function isLaunchable(kind: string): boolean {
   return RUNTIME_GROUPS.some(
-    (g) => (g.id === "editors" || g.id === "dbtools") && g.kinds.includes(kind as RuntimeKind),
+    (g) => (g.id === "editors" || g.id === "dbtools" || g.id === "apiclients") && g.kinds.includes(kind as RuntimeKind),
   );
 }
 
@@ -255,6 +278,12 @@ export const KIND_SUMMARY: Record<string, string> = {
   php: "PHP and its built-in web server",
   go: "The Go compiler and tools",
   java: "Eclipse Temurin JDK",
+  python: "Python, with pip and virtual environments",
+  rust: "Rust and Cargo, installed with rustup. The GNU toolchain needs no administrator install; a crate that needs a C compiler needs MinGW",
+  viteplus: "The Vite+ command line, which can pick a project's Node version",
+  bruno: "API client whose collections are plain files in your project",
+  hoppscotch: "Light API client",
+  composer: "PHP's package manager. It runs with the PHP of the service that uses it, so install a PHP too",
   caddy: "Web server with automatic local HTTPS",
   nginx: "Fast web server and reverse proxy",
   mariadb: "MySQL-compatible database server",
@@ -268,6 +297,14 @@ export const KIND_SUMMARY: Record<string, string> = {
   heidisql: "Client for MariaDB, MySQL and PostgreSQL",
   dbeaver: "Client for almost any database",
   other: "Programs you registered by path",
+};
+
+/** A line of advice shown inside a kind's card, for what its summary cannot say. */
+export const KIND_NOTE: Record<string, string> = {
+  bruno: "Collections are plain files in your project folder, so they go into Git.",
+  hoppscotch: "Collections stay in the app or an account, not in your project. Needs WebView2 (built into Windows 11).",
+  viteplus:
+    "Install sets Vite+ up in data\\vite-plus: it downloads its own Node and pnpm, about 270 MB, so the first install takes a few minutes. Your PATH and any Vite+ you already have are not touched. Used by services set to Node from: Vite+.",
 };
 
 /** The Runtimes page filters: everything, what is installed, or one group. */

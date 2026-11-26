@@ -1,6 +1,9 @@
 package runtimes
 
 import (
+	"bytes"
+	"encoding/binary"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -152,5 +155,55 @@ func TestInstallDirKeepsOtherAdoptedRuntimes(t *testing.T) {
 		if got := m.installDir(binary); got != want {
 			t.Errorf("installDir(%s) = %q, want %q", binary, got, want)
 		}
+	}
+}
+
+// fakeAsar writes an Electron asar with a package.json like Bruno's: an index
+// (pickle prefix plus JSON) followed by the file data.
+func fakeAsar(t *testing.T, path, pkg string) {
+	t.Helper()
+	idx := fmt.Sprintf(`{"files":{"readme.md":{"size":3,"offset":"0"},"package.json":{"size":%d,"offset":"3"}}}`, len(pkg))
+	var b bytes.Buffer
+	pre := make([]byte, 16)
+	binary.LittleEndian.PutUint32(pre[0:], 4)
+	binary.LittleEndian.PutUint32(pre[4:], uint32(len(idx)+8))
+	binary.LittleEndian.PutUint32(pre[8:], uint32(len(idx)+4))
+	binary.LittleEndian.PutUint32(pre[12:], uint32(len(idx)))
+	b.Write(pre)
+	b.WriteString(idx)
+	b.WriteString("abc" + pkg)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, b.Bytes(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestAPIClientVersionWithoutRunning(t *testing.T) {
+	root := t.TempDir()
+	bruno := filepath.Join(root, "Bruno.exe")
+	os.WriteFile(bruno, []byte("not a program"), 0o755)
+	fakeAsar(t, filepath.Join(root, "resources", "app.asar"), `{"name":"bruno","version":"4.3.0"}`)
+	if v := apiClientVersion("bruno", bruno); v != "4.3.0" {
+		t.Errorf("bruno: %q", v)
+	}
+	// No archive: nothing to read, and a folder name without a version gives none.
+	if v := apiClientVersion("bruno", filepath.Join(t.TempDir(), "Bruno.exe")); v != "" {
+		t.Errorf("bruno without asar: %q", v)
+	}
+	hopp := filepath.Join(root, "hoppscotch-26.10.1-windows-amd64", "hoppscotch-desktop.exe")
+	if v := apiClientVersion("hoppscotch", hopp); v != "26.10.1" {
+		t.Errorf("hoppscotch: %q", v)
+	}
+	// Register reads the version and runs nothing (a "program" that is not one).
+	st, err := store.Open(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := New(t.TempDir(), st, nopEmitter{})
+	rt, err := m.Register("bruno", bruno, "")
+	if err != nil || rt.Version != "4.3.0" {
+		t.Fatalf("register: %+v %v", rt, err)
 	}
 }

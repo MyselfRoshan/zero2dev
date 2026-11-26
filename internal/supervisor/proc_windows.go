@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"sync"
 	"syscall"
+	"time"
 	"unsafe"
 )
 
@@ -16,14 +17,19 @@ const (
 	jobObjectLimitKillOnJobClose    = 0x00002000
 	processSetQuota                 = 0x0100
 	processTerminate                = 0x0001
+	processQueryLimitedInformation  = 0x1000
+	jobBasicAccountingClass         = 1
+	jobBasicProcessIDListClass      = 3
 )
 
 var (
-	kernel32               = syscall.NewLazyDLL("kernel32.dll")
-	procCreateJobObject    = kernel32.NewProc("CreateJobObjectW")
-	procSetInformationJob  = kernel32.NewProc("SetInformationJobObject")
-	procAssignProcessToJob = kernel32.NewProc("AssignProcessToJobObject")
-	procTerminateJobObject = kernel32.NewProc("TerminateJobObject")
+	kernel32                = syscall.NewLazyDLL("kernel32.dll")
+	procCreateJobObject     = kernel32.NewProc("CreateJobObjectW")
+	procSetInformationJob   = kernel32.NewProc("SetInformationJobObject")
+	procAssignProcessToJob  = kernel32.NewProc("AssignProcessToJobObject")
+	procTerminateJobObject  = kernel32.NewProc("TerminateJobObject")
+	procQueryInformationJob = kernel32.NewProc("QueryInformationJobObject")
+	procGetProcessMemory    = kernel32.NewProc("K32GetProcessMemoryInfo")
 )
 
 // Layouts follow the Win32 JOBOBJECT_EXTENDED_LIMIT_INFORMATION structs.
@@ -127,4 +133,67 @@ func (t *tree) close() {
 		syscall.CloseHandle(t.job)
 		t.job = 0
 	}
+}
+
+// JOBOBJECT_BASIC_ACCOUNTING_INFORMATION (class 1): times are in 100 ns units.
+type jobAccounting struct {
+	TotalUserTime, TotalKernelTime                 int64
+	ThisPeriodTotalUserTime, ThisPeriodTotalKernel int64
+	TotalPageFaultCount, TotalProcesses            uint32
+	ActiveProcesses, TotalTerminatedProcesses      uint32
+}
+
+// JOBOBJECT_BASIC_PROCESS_ID_LIST (class 3), with room for 512 processes (a service tree is far smaller).
+type jobPIDList struct {
+	Assigned, InList uint32
+	IDs              [512]uintptr
+}
+
+// PROCESS_MEMORY_COUNTERS (K32GetProcessMemoryInfo).
+type processMemoryCounters struct {
+	Cb                         uint32
+	PageFaultCount             uint32
+	PeakWorkingSetSize         uintptr
+	WorkingSetSize             uintptr
+	QuotaPeakPagedPoolUsage    uintptr
+	QuotaPagedPoolUsage        uintptr
+	QuotaPeakNonPagedPoolUsage uintptr
+	QuotaNonPagedPoolUsage     uintptr
+	PagefileUsage              uintptr
+	PeakPagefileUsage          uintptr
+}
+
+// usage reads the job's accounting: the CPU time (user plus kernel) of every process that ever ran
+// in it, exited ones included (so it only grows), and the working set summed over the processes in
+// it now. ok is false when there is no job (the taskkill fallback) or the tree is closed.
+func (t *tree) usage() (cpuTime time.Duration, memBytes uint64, ok bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.closed || t.job == 0 {
+		return 0, 0, false
+	}
+	var acc jobAccounting
+	if r, _, _ := procQueryInformationJob.Call(uintptr(t.job), jobBasicAccountingClass,
+		uintptr(unsafe.Pointer(&acc)), unsafe.Sizeof(acc), 0); r == 0 {
+		return 0, 0, false
+	}
+	cpuTime = time.Duration(acc.TotalUserTime+acc.TotalKernelTime) * 100 // 100 ns units
+	var list jobPIDList
+	// ERROR_MORE_DATA (more than 512 processes) still fills the buffer: use what is there.
+	procQueryInformationJob.Call(uintptr(t.job), jobBasicProcessIDListClass,
+		uintptr(unsafe.Pointer(&list)), unsafe.Sizeof(list), 0)
+	n := min(int(list.InList), len(list.IDs))
+	for _, pid := range list.IDs[:n] {
+		h, err := syscall.OpenProcess(processQueryLimitedInformation, false, uint32(pid))
+		if err != nil {
+			continue // exited in the meantime
+		}
+		var pmc processMemoryCounters
+		pmc.Cb = uint32(unsafe.Sizeof(pmc))
+		if r, _, _ := procGetProcessMemory.Call(uintptr(h), uintptr(unsafe.Pointer(&pmc)), uintptr(pmc.Cb)); r != 0 {
+			memBytes += uint64(pmc.WorkingSetSize)
+		}
+		syscall.CloseHandle(h)
+	}
+	return cpuTime, memBytes, true
 }
