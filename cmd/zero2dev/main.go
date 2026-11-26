@@ -31,18 +31,21 @@ import (
 	"zero2dev/internal/launch"
 	"zero2dev/internal/migrate"
 	"zero2dev/internal/model"
+	"zero2dev/internal/newproject"
+	"zero2dev/internal/projectfile"
 	"zero2dev/internal/runtimes"
 	"zero2dev/internal/sites"
 	"zero2dev/internal/snapshot"
 	"zero2dev/internal/store"
 	"zero2dev/internal/supervisor"
+	"zero2dev/internal/tasks"
 	"zero2dev/internal/tray"
 	"zero2dev/internal/webui"
 	"zero2dev/internal/winpick"
 )
 
 // version is overridden with -ldflags "-X main.version=...".
-var version = "0.0.5"
+var version = "0.0.6"
 
 func main() {
 	setupOutput()
@@ -178,6 +181,12 @@ func run() error {
 	dbm := dbtools.New(st, sup, jobReg, cfg.Home)
 	snaps := snapshot.New(cfg.Home, version, st, sup, jobReg, site, hub.Publish, loadCatalog)
 	migr := migrate.New(cfg.Home, cfg.BinDir, st, jobReg, dbm, hub.Publish)
+	// 0.0.6: one-off tasks and New project.
+	taskMgr := tasks.New(cfg.Home, st, sup, jobReg)
+	newProj := newproject.New(cfg.Home, st, sup, inst, rt, site, dbm, jobReg, hub.Publish)
+	newProj.Launch = launch.Start
+	newProj.Catalog = loadCatalog
+	projFile := projectfile.New(cfg.Home, st, sup, inst, rt, site, jobReg, hub.Publish)
 	srv := api.New(api.Deps{
 		Cfg: cfg, Store: st, Hub: hub, Sup: sup, Runtimes: rt, Installer: inst, Sites: site,
 		Catalog: loadCatalog, Remote: remote,
@@ -190,6 +199,7 @@ func run() error {
 		EnvReport:  func(d store.Data) envreg.Report { return envreg.Inspect(cfg.Home, d) },
 		Quit:       quit,
 		Jobs:       jobReg, DB: dbm, Snapshots: snaps, Migrate: migr,
+		Tasks: taskMgr, NewProject: newProj, ProjectFile: projFile,
 	})
 
 	httpSrv := &http.Server{Handler: srv, ReadHeaderTimeout: 10 * time.Second}
@@ -232,6 +242,7 @@ func run() error {
 	if openOnStart {
 		openBrowser(url)
 	}
+	sup.StartUsage() // CPU and memory per service, every 2 seconds; ends with StopAll
 	go sup.AutostartAll()
 
 	select {

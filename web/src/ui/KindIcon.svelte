@@ -7,6 +7,11 @@
   import php from "@iconify-icons/logos/php";
   import go from "@iconify-icons/logos/go";
   import java from "@iconify-icons/logos/java";
+  import python from "@iconify-icons/logos/python";
+  import rust from "@iconify-icons/logos/rust";
+  import viteplus from "@iconify-icons/logos/vitejs";
+  import apiclient from "@iconify-icons/lucide/send";
+  import composer from "@iconify-icons/logos/composer";
   import nginx from "@iconify-icons/logos/nginx";
   import caddy from "@iconify-icons/simple-icons/caddy";
   import mariadb from "@iconify-icons/logos/mariadb-icon";
@@ -27,7 +32,7 @@
   let { kind, size = 18, label }: Props = $props();
 
   const icons: Record<string, IconifyIcon> = {
-    node, php, go, java, nginx, caddy, custom,
+    node, php, go, java, python, rust, composer, viteplus, bruno: apiclient, hoppscotch: apiclient, nginx, caddy, custom,
     mariadb, mysql, postgres, redis, mailpit, vscode, vscodium, notepadpp, heidisql, dbeaver,
   };
   // Monochrome marks get their brand colour (chosen to stay readable on light and dark backgrounds).

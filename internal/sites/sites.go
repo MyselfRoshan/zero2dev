@@ -338,6 +338,36 @@ func unsafeForCaddy(p string) bool {
 	return strings.ContainsAny(p, "\"{}'`\r\n\x00") || strings.ContainsFunc(p, func(r rune) bool { return r < 0x20 })
 }
 
+// CheckDomain checks a (lower case) site domain: a valid host name that ends with the configured
+// suffix, .localhost or .test, and that no other site than selfID uses.
+func CheckDomain(domain, selfID string, d store.Data) error {
+	if len(domain) > 253 || !domainRE.MatchString(domain) {
+		return apperr.BadRequest("domain %q is not a valid hostname", domain)
+	}
+	ok := false
+	for _, suf := range []string{d.Settings.DomainSuffix, "localhost", "test"} {
+		if suf != "" && strings.HasSuffix(domain, "."+suf) {
+			ok = true
+		}
+	}
+	if !ok {
+		return apperr.BadRequest("domain must end with .%s (or .localhost / .test)", d.Settings.DomainSuffix)
+	}
+	for _, o := range d.Sites {
+		if o.Domain == domain && o.ID != selfID {
+			return apperr.Conflict("domain %s is already used by site %q", domain, o.Name)
+		}
+	}
+	return nil
+}
+
+// Validate checks and normalises a SiteInput against d, like Create does, without storing it
+// (selfID is the site being updated, "" for a new one). New project validates its site inside
+// the same store update as its services and project.
+func Validate(in model.SiteInput, selfID string, d store.Data) (model.Site, error) {
+	return validate(in, selfID, d)
+}
+
 // validate checks a SiteInput against the current state. selfID is the site
 // being updated (excluded from the uniqueness check).
 func validate(in model.SiteInput, selfID string, d store.Data) (model.Site, error) {
@@ -348,22 +378,8 @@ func validate(in model.SiteInput, selfID string, d store.Data) (model.Site, erro
 	if n := len([]rune(s.Name)); n < 1 || n > 64 {
 		return s, apperr.BadRequest("name must be 1-64 characters")
 	}
-	if len(s.Domain) > 253 || !domainRE.MatchString(s.Domain) {
-		return s, apperr.BadRequest("domain %q is not a valid hostname", in.Domain)
-	}
-	ok := false
-	for _, suf := range []string{d.Settings.DomainSuffix, "localhost", "test"} {
-		if suf != "" && strings.HasSuffix(s.Domain, "."+suf) {
-			ok = true
-		}
-	}
-	if !ok {
-		return s, apperr.BadRequest("domain must end with .%s (or .localhost / .test)", d.Settings.DomainSuffix)
-	}
-	for _, o := range d.Sites {
-		if o.Domain == s.Domain && o.ID != selfID {
-			return s, apperr.Conflict("domain %s is already used by site %q", s.Domain, o.Name)
-		}
+	if err := CheckDomain(s.Domain, selfID, d); err != nil {
+		return s, err
 	}
 	svcByID := func(id string) *model.Service {
 		for i := range d.Services {

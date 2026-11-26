@@ -3,6 +3,7 @@
 
 export const EVENT_TYPES = [
   "service.status",
+  "service.usage",
   "log.line",
   "job.progress",
   "job.done",

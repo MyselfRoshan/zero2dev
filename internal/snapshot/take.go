@@ -222,6 +222,8 @@ func (m *Manager) write(h *jobs.Handle, o owner, id, name string) error {
 				e.PHPIni = true
 			}
 		}
+		// A Python service virtual environment (python/venvs in the data folder) is never copied: it holds absolute paths.
+		// The first start after a restore or a clone makes an empty one (the Install requirements task fills it).
 		mf.Services = append(mf.Services, e)
 	}
 	if err := m.copyAll(h, StepCopying, copies); err != nil {

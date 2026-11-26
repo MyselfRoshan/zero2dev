@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -36,7 +37,9 @@ func (s *Supervisor) Environ(svc model.Service) ([]string, error) {
 //  1. the runtime home: JAVA_HOME (java) or GOROOT (go), only when the service
 //     uses a Zero2Dev runtime (rt != nil)
 //  2. the kind's own variables from its settings (plan, e.g. NODE_ENV)
-//     2b. the portable folders switched on in Settings.Portable (see portableVars)
+//     2b. the portable folders: the ones switched on in Settings.Portable, the ones a kind always
+//     has (Composer's home for PHP) and the ones a service setting asks for (Corepack for
+//     pnpm and Yarn); see portableVars
 //  3. the database variables of Service.DatabaseID
 //  4. the .env file (Service.EnvFile, relative to the folder)
 //  5. the user's own Env ({port} is replaced)
@@ -66,15 +69,15 @@ func (s *Supervisor) serviceVarsWithHome(svc model.Service, d store.Data, rt *mo
 func serviceVarsHome(home string, svc model.Service, d store.Data, rt *model.Runtime, planEnv []string, lenient bool) (added, shown, warnings, info []string, err error) {
 	add := func(kv string) { added, shown = append(added, kv), append(shown, kv) }
 	if rt != nil {
-		if name, dir := model.RuntimeHome(*rt); name != "" {
-			add(name + "=" + dir)
+		for _, kv := range model.RuntimeVars(*rt) { // JAVA_HOME, GOROOT, RUSTUP_HOME and CARGO_HOME
+			add(kv)
 		}
 	}
 	for _, e := range planEnv {
 		add(e)
 	}
 	if home != "" {
-		pAdded, pShown := portableVars(home, svc.Kind, d.Settings.Portable, rt, os.Environ())
+		pAdded, pShown := portableVarsSvc(home, svc.Kind, d.Settings.Portable, rt, os.Environ(), goIsolated(svc), ruleSettings(svc))
 		added, shown = append(added, pAdded...), append(shown, pShown...)
 	}
 	dbVars, w := databaseEnv(svc, d)
@@ -143,10 +146,30 @@ func displayValue(key, value string) string {
 // what a service of that kind gets while Settings.Portable.<setting> is on
 // (Import switches it on, its revert off). {home} is the data folder.
 type portableRule struct {
-	Setting string           `json:"setting"` // npmGlobal | composer | goCache
-	Env     []kinds.FixedEnv `json:"env"`
-	Path    string           `json:"path,omitempty"` // a folder put first on PATH
-	Help    string           `json:"help"`
+	Setting string `json:"setting"` // npmGlobal | composer | goCache
+	// Always: the rule is on for every service of the kind (Composer's home and cache for PHP).
+	Always bool `json:"always,omitempty"`
+	// When: the rule is on while the service's setting is not Not (Corepack while the package
+	// manager of a Node service is not npm).
+	When *ruleWhen        `json:"when,omitempty"`
+	Env  []kinds.FixedEnv `json:"env"`
+	Path string           `json:"path,omitempty"` // a folder put first on PATH
+	Help string           `json:"help"`
+}
+
+// ruleWhen is a condition on one setting of the service.
+type ruleWhen struct {
+	Setting string `json:"setting"`
+	Not     string `json:"not"`
+}
+
+// ruleSettings are the settings a service's portable rules look at: its own, none for a service
+// whose arguments the user wrote (so it has none of the rules that depend on a setting).
+func ruleSettings(svc model.Service) map[string]string {
+	if svc.CustomArgs {
+		return nil
+	}
+	return svc.Settings
 }
 
 // portableRules maps a kind to its rules, read once from profiles.json.
@@ -167,6 +190,18 @@ var portableRules = func() map[string][]portableRule {
 	return out
 }()
 
+// on tells whether the rule applies: its Settings.Portable switch is on, it is always on, or the
+// service's setting differs from the one the rule is not for.
+func (r portableRule) on(kind string, p model.Portable, settings map[string]string) bool {
+	switch {
+	case r.Always, portableOn(p, r.Setting):
+		return true
+	case r.When != nil:
+		return kinds.Effective(kind, settings)[r.When.Setting] != r.When.Not
+	}
+	return false
+}
+
 func portableOn(p model.Portable, setting string) bool {
 	switch setting {
 	case "npmGlobal":
@@ -185,12 +220,39 @@ func portableOn(p model.Portable, setting string) bool {
 // resolve puts first, then the daemon's PATH from environ) because the last
 // value of a name wins; the preview shows it as "<folders>;%PATH%".
 func portableVars(home, kind string, p model.Portable, rt *model.Runtime, environ []string) (added, shown []string) {
+	return portableVarsGo(home, kind, p, rt, environ, true)
+}
+
+// goIsolated tells whether a Go service keeps Go's downloads in the data folder:
+// the "isolate" setting, on unless it says false.
+func goIsolated(svc model.Service) bool { return svc.Settings["isolate"] != "false" }
+
+// defaultGoBin is where `go install` puts programs when GOPATH is not Zero2Dev's: the
+// bin folder of Go's own default GOPATH (the GOPATH variable of environ, else %USERPROFILE%\go).
+func defaultGoBin(environ []string) string {
+	gopath := ""
+	for _, kv := range environ {
+		if k, v, ok := strings.Cut(kv, "="); ok && strings.EqualFold(k, "GOPATH") {
+			gopath = v
+		}
+	}
+	userHome, _ := os.UserHomeDir()
+	return model.DefaultGoBin(gopath, userHome)
+}
+
+// portableVarsGo is portableVars; isolated is the Go service's setting (see goIsolated).
+func portableVarsGo(home, kind string, p model.Portable, rt *model.Runtime, environ []string, isolated bool) (added, shown []string) {
+	return portableVarsSvc(home, kind, p, rt, environ, isolated, nil)
+}
+
+// portableVarsSvc is portableVarsGo for a service with settings (see ruleSettings).
+func portableVarsSvc(home, kind string, p model.Portable, rt *model.Runtime, environ []string, isolated bool, settings map[string]string) (added, shown []string) {
 	expand := func(v string) string {
 		return filepath.FromSlash(strings.ReplaceAll(v, "{home}", filepath.ToSlash(home)))
 	}
 	var dirs []string
 	for _, r := range portableRules[kind] {
-		if !portableOn(p, r.Setting) {
+		if !r.on(kind, p, settings) {
 			continue
 		}
 		for _, e := range r.Env {
@@ -199,6 +261,27 @@ func portableVars(home, kind string, p model.Portable, rt *model.Runtime, enviro
 		}
 		if r.Path != "" {
 			dirs = append(dirs, expand(r.Path))
+		}
+	}
+	// Go's own tools (air, dlv, gopls: what `go install` puts in <GOPATH>/bin) are on
+	// PATH next to GOROOT's. A Go service that keeps Go's downloads in the data folder
+	// (the default) gets GOPATH=<home>/go/path and that bin folder; with the setting off
+	// GOPATH stays Go's own and its default bin folder (%USERPROFILE%\go\bin) is used.
+	// A custom service (air run as a command) gets each of the two folders that exist.
+	switch kind {
+	case "go":
+		if isolated {
+			kv := "GOPATH=" + model.GoPath(home)
+			added, shown = append(added, kv), append(shown, kv)
+			dirs = append(dirs, model.GoToolsDir(home))
+		} else if d := defaultGoBin(environ); d != "" {
+			dirs = append(dirs, d)
+		}
+	case "custom":
+		for _, d := range []string{model.GoToolsDir(home), defaultGoBin(environ)} {
+			if st, err := os.Stat(d); d != "" && err == nil && st.IsDir() && !slices.Contains(dirs, d) {
+				dirs = append(dirs, d)
+			}
 		}
 	}
 	if len(dirs) == 0 {

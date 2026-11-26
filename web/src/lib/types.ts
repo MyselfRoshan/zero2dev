@@ -4,13 +4,26 @@ export type DatabaseKind = "mariadb" | "mysql" | "postgres" | "redis";
 export const DATABASE_KINDS: DatabaseKind[] = ["mariadb", "mysql", "postgres", "redis"];
 export type MailKind = "mailpit";
 export const MAIL_KINDS: MailKind[] = ["mailpit"];
-export type ServiceKind = "custom" | "node" | "php" | "go" | "java" | "caddy" | "nginx" | DatabaseKind | MailKind;
+export type ServiceKind =
+  | "custom"
+  | "node"
+  | "php"
+  | "go"
+  | "java"
+  | "python"
+  | "rust"
+  | "caddy"
+  | "nginx"
+  | DatabaseKind
+  | MailKind;
 export const SERVICE_KINDS: ServiceKind[] = [
   "custom",
   "node",
   "php",
   "go",
   "java",
+  "python",
+  "rust",
   "caddy",
   "nginx",
   ...DATABASE_KINDS,
@@ -69,6 +82,9 @@ export interface Service {
   pid: number;
   startedAt: string | null;
   lastError: string;
+  /** The last sample of a running service, summed over its process tree (0.0.6): percent of the whole machine, and the working set in bytes. 0 when stopped. */
+  cpu: number;
+  memBytes: number;
 }
 
 export interface ServiceInput {
@@ -135,23 +151,33 @@ export interface PHPExtensions {
 
 export type EditorKind = "vscode" | "vscodium" | "notepadpp";
 export type DBToolKind = "heidisql" | "dbeaver";
+export type APIClientKind = "bruno" | "hoppscotch";
 export type RuntimeKind =
   | "node"
   | "php"
   | "go"
   | "java"
+  | "python"
+  | "rust"
+  | "composer"
+  | "viteplus"
   | "caddy"
   | "nginx"
   | DatabaseKind
   | MailKind
   | EditorKind
   | DBToolKind
+  | APIClientKind
   | "other";
 export const RUNTIME_KINDS: RuntimeKind[] = [
   "node",
   "php",
   "go",
   "java",
+  "python",
+  "rust",
+  "composer",
+  "viteplus",
   "caddy",
   "nginx",
   ...DATABASE_KINDS,
@@ -161,6 +187,8 @@ export const RUNTIME_KINDS: RuntimeKind[] = [
   "notepadpp",
   "heidisql",
   "dbeaver",
+  "bruno",
+  "hoppscotch",
   "other",
 ];
 
@@ -391,7 +419,7 @@ export interface FolderPick {
   cancelled: boolean;
 }
 
-export type LogStream = "stdout" | "stderr" | "system";
+export type LogStream = "stdout" | "stderr" | "system" | "task";
 export interface LogLine {
   ts: string;
   stream: LogStream;
@@ -674,4 +702,153 @@ export interface Migration {
   canCleanup: boolean;
   /** What removing the originals frees. */
   originalsBytes: number;
+}
+
+// ---------------------------------------------------------------------------
+// 0.0.6: languages, one-off tasks, project detection and New project. Mirrors docs/API.md
+// "Amendment: languages, tasks and new projects (0.0.6)".
+// ---------------------------------------------------------------------------
+
+/** A ready-made task of a service kind (the `tasks` of a kind profile). */
+export interface KindTask {
+  id: string;
+  label: string;
+  program: string;
+  args: string[];
+  help?: string;
+  /** Asked in a confirm dialog before the task runs. */
+  confirm?: string;
+  /** A file or folder that must exist in the service's folder. */
+  when?: string;
+  timeout?: number;
+}
+
+/** A script of the project's package.json. */
+export interface TaskScript {
+  name: string;
+  command: string;
+}
+
+/** GET /api/services/{id}/tasks. */
+export interface TaskList {
+  presets: KindTask[];
+  scripts: TaskScript[];
+  /** The id of the task job running for the service now, "" when none. */
+  running: string;
+}
+
+/** POST /api/services/{id}/tasks: a preset id, or a program with its arguments. */
+export interface TaskRequest {
+  preset?: string;
+  program?: string;
+  args?: string[];
+}
+
+/** GET /api/project/detect?dir=. kind "" means the folder says nothing. */
+export interface DetectResult {
+  kind: ServiceKind | "";
+  framework: string;
+  name: string;
+  confidence: "high" | "medium" | "";
+  settings: Record<string, string>;
+  envFile: string;
+  port: number;
+  markers: string[];
+}
+
+export type FrameworkLanguage = "php" | "javascript" | "python" | "go" | "java" | "rust" | "static";
+
+/** One framework of the shipped list (GET /api/frameworks). */
+export interface Framework {
+  id: string;
+  label: string;
+  language: FrameworkLanguage;
+  summary: string;
+  homepage?: string;
+  runtime: { kind: RuntimeKind | ""; min?: string; max?: string };
+  composer?: boolean;
+  database?: { kinds: ("mariadb" | "mysql" | "postgres")[]; default: string; optional: boolean };
+  steps: { type: "run" | "download" | "files"; label: string; program?: string }[];
+  services: { name: string; kind: ServiceKind; port?: number; usesDatabase?: boolean }[];
+  site?: { type: "proxy" | "php" | "static"; root?: string; https: boolean };
+}
+
+/** The body of POST /api/new-project/plan and POST /api/new-project. */
+export interface NewProjectRequest {
+  framework: string;
+  name: string;
+  /** The folder that will hold the project: the project folder is <parent>\<slug>. */
+  parent: string;
+  databaseKind: "" | "mariadb" | "mysql" | "postgres";
+  domain: string;
+  port: number;
+  openEditor: boolean;
+}
+
+export interface NewProjectInstall {
+  kind: RuntimeKind;
+  version: string;
+  catalogId: string;
+  name: string;
+  reason: string;
+}
+
+/** POST /api/new-project/plan: what the job would do. Problems stop it, warnings do not. */
+export interface NewProjectPlan {
+  dir: string;
+  slug: string;
+  domain: string;
+  port: number;
+  installs: NewProjectInstall[];
+  database: { kind: string; name: string; user: string; serviceId: string } | null;
+  steps: string[];
+  creates: string[];
+  problems: string[];
+  warnings: string[];
+}
+
+// ---------------------------------------------------------------------------
+// 0.0.6, part 2: CPU and memory per service, project files. Mirrors docs/API.md
+// "Amendment: 0.0.6, part 2".
+// ---------------------------------------------------------------------------
+
+/** One entry of the service.usage event (the event carries an array of them). */
+export interface ServiceUsage {
+  id: string;
+  cpu: number;
+  memBytes: number;
+}
+
+/** POST /api/projects/{id}/export. */
+export interface ProjectExportRequest {
+  /** The file to write (a folder means <folder>\zero2dev.json). */
+  path: string;
+  overwrite?: boolean;
+}
+export interface ProjectExportResult {
+  path: string;
+  /** What was left out or could not be written, in words. */
+  warnings: string[];
+}
+
+/** The body of POST /api/projects/import/plan and POST /api/projects/import. */
+export interface ProjectImportRequest {
+  /** A zero2dev.json, or a folder that holds one. */
+  path: string;
+  /** Replaces the project's name; empty keeps the file's. */
+  name?: string;
+}
+
+/** POST /api/projects/import/plan: what the import would do. Problems stop it, warnings do not. */
+export interface ProjectImportPlan {
+  path: string;
+  dir: string;
+  name: string;
+  services: string[];
+  sites: string[];
+  installs: NewProjectInstall[];
+  /** What differs from the file because this PC needs it (a port or a domain that was taken). */
+  changes: string[];
+  problems: string[];
+  warnings: string[];
 }

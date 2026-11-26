@@ -897,6 +897,7 @@ The environment of the child process, **later entries win**:
 
 1. The daemon's own environment, with the runtime's folder put first on `PATH` (as before).
 2. `JAVA_HOME` (Java) or `GOROOT` (Go), when the service runs on a runtime Zero2Dev installed or registered: the folder two levels above the binary (`<home>\bin\java.exe` gives `<home>`). Other kinds get nothing.
+   **Go tools (0.0.5):** a `go` service with `isolate` on (the default) gets `GOPATH=<home>\go\path` and `<home>\go\path\bin` first on `PATH`, before the runtime's folder, so what `go install` puts there (`air`, `dlv`, `gopls`) is found. With `isolate` off GOPATH is left alone and Go's default bin folder (the first entry of the daemon's `GOPATH`, else `%USERPROFILE%\go\bin`) is put on `PATH` instead. A `custom` service gets each of the two folders that exists. The command preview and Open terminal show the same.
 3. The kind's own variables from its settings (`NODE_ENV`, `npm_config_cache` ...).
 4. The database variables of `databaseId`.
 5. The variables of the `.env` file.
@@ -956,8 +957,9 @@ The runtimes Zero2Dev installed are not on your Windows `PATH`. Zero2Dev offers 
 
 - Each command is a `<name>.cmd` that runs the tool of the default runtime with the arguments it gets. For `node`, `php`, `java` and `go` the tool is the runtime's own binary; the other commands are looked for next to it and only get a shim when the file exists. Databases get their client tools only, never the server.
 - Where two kinds offer the same command (`mysql`), the first in the order Node, PHP, Java, Go, MySQL, MariaDB, PostgreSQL, Redis wins.
-- Java and Go shims set `JAVA_HOME` / `GOROOT` for that one run only.
-- `activate.cmd`, `activate.ps1` and `activate.sh` put the runtimes' folders first on `PATH` and set `JAVA_HOME` / `GOROOT` **for the terminal they run in**. Use `call "<home>\shims\activate.cmd"` in Command Prompt, `. '<home>\shims\activate.ps1'` in PowerShell and `. <home>/shims/activate.sh` in Git Bash.
+- Java and Go shims set `JAVA_HOME` / `GOROOT` for that one run only; the Go shims also set `GOPATH=<home>\go\path`.
+- Every `.exe` in `<home>\go\path\bin` and in Go's default bin folder (what `go install` built: `air`, `dlv`, `gopls`) gets a shim `<name>.cmd` that runs it, unless a runtime's shim or Zero2Dev's own folder has the name. They are written by the same refresh as the others, and by **Apply** on the Environment page.
+- `activate.cmd`, `activate.ps1` and `activate.sh` put the runtimes' folders first on `PATH` and set `JAVA_HOME` / `GOROOT` **for the terminal they run in**. With a Go runtime they also set `GOPATH` and put `<home>\go\path\bin` (and Go's default bin folder when it exists) on `PATH`, so a tool installed after the last refresh works there at once. Use `call "<home>\shims\activate.cmd"` in Command Prompt, `. '<home>\shims\activate.ps1'` in PowerShell and `. <home>/shims/activate.sh` in Git Bash.
 
 ### The Environment (folders and variables, one by one)
 
@@ -1513,3 +1515,357 @@ Only keys below `HKCU\Software\` are ever opened. The registry is reached throug
 | `goCache` | `GOMODCACHE=<data>\go\path\pkg\mod`, `GOCACHE=<data>\go\cache` | - |
 
 The preview shows the `PATH` entry as `<folders>;%PATH%`.
+
+## Amendment: languages, tasks and new projects (0.0.6)
+
+New kinds, one-off tasks of a service, project detection, the shipped frameworks list and New project. Everything here is `501 not_supported` until its work is in (Wave 0 left only the shapes).
+
+### Kinds
+
+- **`python`** is a service kind and a runtime kind (category `language`, data folder `<home>\python`). Python is installed from python-build-standalone (`install_only` `.tar.gz`, `stripComponents` 1, binary `python.exe`; it has `venv` and `pip`). A service of this kind runs in a virtual environment of its own at `<home>\python\venvs\<serviceId>`, made before the first start (and again, with a log line, when the runtime changed) and removed with the service.
+- **`composer`** is a runtime kind only (category `tool`, data folder `<home>\composer`). It is one downloaded file, `composer.phar`, put in as it is with a `composer.bat` next to it that runs `php "%~dp0composer.phar" %*`. The runtime's binary is `composer.bat`. A task runs Composer with the service's PHP: the program `composer` of a task is resolved to `php <composer.phar>`.
+- **Catalog:** a download whose file name ends in `.phar` is a single file, not an archive (the installer's `file` format). Its checksum works as for archives.
+- **Job types** `task` and `new-project`. `job.done` carries `serviceId` for a task and `projectId` and `path` (the project folder) for a new project, like the other jobs.
+- **Kind profiles** (`GET /api/kinds`, `internal/kinds/profiles.json`) gain `tasks`: `[ { id, label, program, args, help?, confirm?, when?, timeout? } ]`. `program` is run without a shell, first next to the service's runtime (`npm.cmd` beside `node.exe`, `pip.exe` in the virtual environment's `Scripts`), else on the service's `PATH`. `args` may use `{s.<setting>}` and `{port}`. `confirm` is a text the dashboard asks first. `when` is a file or folder that must exist in the service's folder for the task to be offered. `timeout` is in seconds (default 600).
+
+### One-off tasks
+
+| Method | Path | Body | Response |
+| --- | --- | --- | --- |
+| GET | `/api/services/{id}/tasks` | none | `TaskList` |
+| POST | `/api/services/{id}/tasks` | `{ "preset": "npm-install" }` or `{ "program": "npm", "args": ["run", "build"] }` | `202 Job` (`task`) |
+
+`TaskList` is `{ "presets": [kind task ...], "scripts": [ { "name", "command" } ], "running": "job_..." }`. `presets` are the tasks of the service's kind whose `when` exists; `scripts` are the `scripts` of a Node service's `package.json` (run with the service's package manager); `running` is the id of the task job running for the service, `""` when none.
+
+- A task runs in the service's folder with the environment the service starts with (`Supervisor.Environ`: the runtime on `PATH`, `JAVA_HOME`/`GOROOT`, the database variables, the `.env` file, the user's variables). A service that is running may have a task; nothing is stopped.
+- **No shell.** The program and each argument are passed as they are. A program is a name without a path or a file below the service's runtime folders; arguments are text without a NUL or a line break.
+- Every output line (stdout and stderr, in the order they came) is written to the service's log with the stream `task` and published as `log.line`; the first line is `$ program args`. The job's `step` is the label of the task, its percent stays at 0 until it ends. A non-zero exit fails the job with `<program> exited with code N` and the last output lines.
+- **Errors:** `404` unknown service or preset; `400` both or neither of `preset` and `program`, a bad program or argument; `409` a task of the service runs (`details.jobId`), the service is busy (another operation holds it), or a needed program is missing (`composer` is not installed: the message says to install it from Runtimes).
+- Timeout: the preset's `timeout`, else 10 minutes; the process tree is ended and the job fails with `timed out after ...`.
+
+### Project detection
+
+`GET /api/project/detect?dir=<folder>` returns
+
+```json
+{ "kind": "node", "framework": "nextjs", "name": "my-shop", "confidence": "high",
+  "settings": { "package": "..." }, "envFile": ".env", "port": 3000,
+  "markers": ["package.json", "next.config.js"] }
+```
+
+`kind` is `""` (and the rest empty) when the folder says nothing. The markers are, in order: `composer.json` (`laravel/framework`, `symfony/*`, WordPress files), `package.json` (`next`, `vite`, `@nestjs/core`, `astro`, `express` and its `scripts`), `go.mod` (`gin-gonic/gin`, `gofiber/fiber`), `pom.xml` or `build.gradle` (Spring Boot), `manage.py` / `requirements.txt` / `pyproject.toml` (Django, FastAPI, Flask), `index.html`. `400` for a folder that does not exist. It only reads the folder.
+
+### Frameworks
+
+`GET /api/frameworks` returns `{ "frameworks": [Framework ...] }`, the list shipped with Zero2Dev (`internal/frameworks/frameworks.json`) or `<data>\frameworks.json` when that exists (`409` when it is damaged). Shape (`format: 1`):
+
+```json
+{ "id": "laravel", "label": "Laravel", "language": "php", "summary": "...", "homepage": "https://laravel.com",
+  "runtime": { "kind": "php", "min": "8.2" }, "composer": true,
+  "database": { "kinds": ["mariadb", "mysql", "postgres"], "default": "mariadb", "optional": true },
+  "steps": [ { "type": "run", "label": "Creating the Laravel project", "program": "composer", "args": ["create-project", "laravel/laravel", "{slug}"], "in": "parent" } ],
+  "services": [ { "name": "{name}", "kind": "php", "port": 8000, "usesDatabase": true } ],
+  "site": { "type": "php", "root": "public", "https": true },
+  "env": [ { "key": "DB_DATABASE", "value": "{db}" } ], "envFile": ".env" }
+```
+
+- `language`: `php`, `javascript`, `python`, `go`, `java`, `static`. `runtime.kind` is a runtime kind or `""`; `min`/`max` are inclusive version bounds.
+- Step `type`: `run` (a program with `args`, run in `in` = `parent` (default) or `project`, with the runtime of the framework; `composer`, `npm`, `npx`, `pip` ... are the runtime's own tools), `download` (`url` https, `checksum` `sha256:<hex>`, `sha1:<hex>` or a https URL of a file holding it, `strip`) or `files` (`files`: relative path with `/` to content).
+- Placeholders in strings: `{name}` `{slug}` `{dir}` `{parent}` `{port}` `{domain}` `{db}` `{dbUser}` `{dbPassword}` `{dbHost}` `{dbPort}` `{dbUrl}` `{appKey}` `{random}`. Values are checked before use (a name becomes a slug of letters, digits and `-`); arguments are never joined into a shell line.
+- `env` lines go to `envFile` (default `.env`); `ifMissing` writes a line only when the key is not there.
+- Validation on load: unique ids, known languages and kinds, a `run` step names a program, a `download` step has https and a checksum, `files` paths are relative without `..`, a service that `usesDatabase` needs a `database`, and a framework has a service or a site.
+
+### New project
+
+| Method | Path | Body | Response |
+| --- | --- | --- | --- |
+| POST | `/api/new-project/plan` | `NewProjectRequest` | `Plan` |
+| POST | `/api/new-project` | `NewProjectRequest` | `202 Job` (`new-project`) |
+
+`NewProjectRequest`: `{ "framework": "laravel", "name": "My Shop", "parent": "D:\\www", "databaseKind": "mariadb", "domain": "", "port": 0, "openEditor": true }`. The project folder is `<parent>\<slug>`; `domain` defaults to `<slug>.localhost`; `port` 0 picks a free one.
+
+`Plan` is `{ "dir", "slug", "domain", "port", "installs": [ { "kind", "version", "catalogId", "name", "reason" } ], "database": { "kind", "name", "user", "serviceId" } | null, "steps": ["Installing PHP 8.4.1", ...], "creates": ["Service My Shop (PHP, port 8000)", ...], "problems": [...], "warnings": [...] }`. Nothing is changed. A plan with `problems` cannot be started (`409` with the first problem as the message): the folder exists and is not empty, the parent does not exist, the domain or port is taken, no runtime version fits the framework, a database kind is not offered.
+
+**The job** (`new-project`) does, in this order, and reports each as its `step` with a percent:
+1. Checks the plan again.
+2. Installs what is missing (each runtime and Composer through the installer, one after another).
+3. Starts the database service (created first when none exists) and creates the database and a user with all privileges on it only (a random password, stored only in the `.env`).
+4. Runs the steps of the framework in order (their output goes to the log of the new project's first service once it exists, before that to the job's log).
+5. Writes the `.env`, keeping lines the generator wrote.
+6. Creates the services, the site (the site server is set up when needed) and the project; the services use the database.
+7. Opens the folder in the first installed editor when `openEditor`.
+
+On success `job.done` has `projectId` and `path`. A failure stops the job, removes what it created (services, site, project, database and user), keeps the generated folder, and says so in the error (`The folder D:\www\my-shop was kept.`). Events: `services.changed`, `sites.changed`, `projects.changed`.
+
+### Pre-steps and finding programs (internal contract)
+
+- `kinds.Plan.Pre` is a list of `PreStep { Label, Program, Args, Skip, Dir, Timeout }`: programs that run before the service's own program (a Python service's virtual environment, the Corepack folder of a pnpm project). The supervisor runs them in order after the folders and files of the plan exist, with the service's environment, skipping a step whose `Skip` file exists; each step and its output go to the service's log, and a failing step stops the start (`409`). `Supervisor.PrepareService(svc)` runs the same steps without starting the service: a one-off task calls it first.
+- `supervisor.FindProgram(name, env)` finds a program the way the service would: a plain name is looked up in the `PATH` of `env` (as `Supervisor.Environ` builds it, so a virtual environment's `Scripts` folder wins) with the extensions of `PATHEXT`. A name with a path separator is refused; an absolute path must exist.
+
+#### Composer and package manager details
+
+- **Catalog.** Built-in entries `composer-<version>-windows-amd64` and `composer-<version>-windows-arm64` (Composer does not depend on the CPU, so each release has one entry per Windows architecture; the catalog only offers the one that matches the machine). URL `https://getcomposer.org/download/<version>/composer.phar`, `binaryRelPath` `composer.bat`, checksum `sha256` (built in) or `shasums` with the publisher's `composer.phar.sha256sum` (remote). The version source of kind `composer` is `https://getcomposer.org/versions` (its `stable` list: the current release with line `2` and channel `stable`, the long-term-support one with line `2.2` and channel `lts`; only paths `/download/<version>/composer.phar` on getcomposer.org are taken). It appears in `GET /api/catalog/status` like the other sources.
+- **`composer.cmd` shim and activate scripts.** With a default PHP and a Composer runtime whose `composer.phar` exists, the shims folder gets `composer.cmd`: `"<default php binary>" "<composer.phar>" %*`, run with `COMPOSER_HOME` and `COMPOSER_CACHE_DIR` set (the activate scripts set these two as well). Without a PHP there is no shim and Composer's folder is not put on PATH.
+- **Environment.** Every service of kind `php` (and Open terminal on it) gets `COMPOSER_HOME=<home>\composer` and `COMPOSER_CACHE_DIR=<home>\composer\cache`, always (a profile `portable` rule with `"always": true`). The `composer` switch of `Settings.Portable` stays and only adds `<home>\composer\vendor\bin` to PATH. A `portable` rule may also have `"when": { "setting": "packageManager", "not": "npm" }`: it applies while that setting of the service (its effective value, default included) differs from `not`; a service with `customArgs` has no setting, so no such rule applies.
+- **`Supervisor.ComposerCommand(svc) (bin string, args []string, err error)`** is what a task whose program is `composer` runs: `bin` is the PHP of the service (the default PHP for a service that is not a PHP one) and `args` is `[<composer.phar>]` of the default Composer runtime (the first one when none is the default; a runtime whose `composer.phar` is gone does not count). The caller appends the task's own arguments and runs it with the service's environment. `409 conflict` "Composer is not installed: install it on the Runtimes page" when none is installed; the error of the PHP lookup when there is no PHP.
+- **Node option `packageManager`** (`select`: `npm` default, `pnpm`, `yarn`; group Run). It emits no argument. For `pnpm` and `yarn` the plan gets: the folder `<home>\node\corepack\bin`; `Plan.Pre` step 1 "Installing Corepack": `npm install --prefix <home>\node\corepack corepack` (skipped when `<home>\node\corepack\node_modules\corepack\dist\corepack.js` exists; `npm` is the one next to the service's node); step 2 "Making the pnpm and yarn commands": `<home>\node\corepack\node_modules\.bin\corepack.cmd enable --install-directory <home>\node\corepack\bin pnpm yarn` (skipped when `bin\pnpm.cmd` exists); and for `run = npm` the program is `<home>\node\corepack\bin\<pm>.cmd` instead of `npm`, without npm's `--` before the user's arguments. That program may not exist yet at the start: the check that a program exists is left to the pre-steps when the plan has any. A task program `{s.packageManager}` (`npm`, `pnpm`, `yarn`) is found on the service's PATH, where Corepack's `bin` folder comes first.
+- **Node environment** while the package manager is not npm: `COREPACK_HOME=<home>\node\corepack-home`, `COREPACK_ENABLE_DOWNLOAD_PROMPT=0`, `npm_config_store_dir=<home>\node\pnpm-store`, `YARN_CACHE_FOLDER=<home>\node\yarn-cache`, and `<home>\node\corepack\bin` first on PATH (before the runtime's folder).
+- The `corepack` package comes from npm: the first start needs an internet connection, and the pnpm or Yarn version is downloaded by Corepack on first use (the one the project's `packageManager` field names, else the latest).
+
+#### Tasks and detection details
+
+**How a task finds its program.**
+
+1. A preset's `program` and `args` are expanded: `{s.<setting>}` is the service's setting (an unknown one is empty; `packageManager` is `npm` when not set), `{port}` the service's port (empty without one).
+2. The program must be a plain name: no path separator (`/` or backslash), NUL or line break (400). Each argument has no NUL or line break, and there are at most 200 (400). A preset takes no extra `args`.
+3. `composer` is run as the service's PHP with `composer.phar` in front of the arguments (`Manager.Composer`, to be connected to `supervisor.ComposerCommand`); without an installed Composer the request is `409` ("Composer is not installed: install it on the Runtimes page"). Every other name is looked up with `supervisor.FindProgram` on the `PATH` of `Supervisor.Environ(service)`, after `Supervisor.PrepareService(service)` ran. A name that is not found fails the job (not the request), because the pre-steps (a virtual environment's `pip`) may be what makes it.
+4. The process runs in the service's folder with that environment, no shell, no console window. When the timeout runs out (the preset's `timeout`, else 10 minutes) the whole process tree is ended.
+
+**Log format.** Lines go to `Supervisor.Log(serviceId, "task", text)`, so they are stored and published as `log.line` with `stream: "task"`. The first is `$ <program> <args>`; then each output line of stdout and stderr in the order it came (a trailing carriage return is dropped, a progress line that redraws itself keeps its last state); when the task fails one more line says why (`npm exited with code 1`, `npm timed out after 10m0s`). The program's own output is never reworded. The service's preparation (virtual environment, Corepack) logs its own lines after the first one.
+
+**Errors.**
+
+| Status | When |
+| --- | --- |
+| 400 | neither or both of `preset` and `program`; `args` with a preset; a program name with a path separator, NUL or line break; an argument with a NUL or line break; on detect: no `dir`, a `dir` that is not an absolute path or not a folder |
+| 404 | unknown service; the service's kind has no such preset |
+| 409 | a task of the service runs (`details.jobId`); the service is held by another operation (snapshot, restore, reset, migration); the preset's `when` file is missing; the service has no project folder or it does not exist; Composer is not installed |
+| job failed | `<program> exited with code N: <last lines>`; `<program> timed out after <t>`; `<program>: <error>` when it could not start; the service's preparation failed; `<program>: <program> was not found on the service's PATH` |
+
+A failed job is `state: "failed"` with the message in `error`; its `step` is the preset's label, or `program args` for your own program.
+
+**Detection rules.** The strongest evidence wins (a framework dependency is `high`, only the marker file `medium`); on a tie the earlier row. Settings are kept only when the kind's profile has that option and accepts the value.
+
+| Marker (in the folder) | Kind | Framework | Notes |
+| --- | --- | --- | --- |
+| `composer.json` requires `laravel/framework` | php | `laravel` | port 8000, `docroot` `public`, marker `artisan` |
+| `composer.json` requires `symfony/framework-bundle`, `symfony/symfony` or `symfony/http-kernel` | php | `symfony` | port 8000, `docroot` `public` |
+| `wp-config.php`, `wp-load.php` or `wp-content` | php | `wordpress` | high, no port |
+| other `composer.json` | php | | medium, port 8000, name from the package (`vendor/name`) |
+| `package.json` with `next` | node | `nextjs` | port 3000 |
+| `@nestjs/core` | node | `nestjs` | port 3000 |
+| `astro` | node | `astro` | port 4321 |
+| `vite` (with `react`, `vue` or `svelte`) | node | `vite-react`, `vite-vue`, `vite-svelte`, else `vite` | port 5173 |
+| `express` | node | `express` | port 3000 |
+| other `package.json` | node | | medium; name from `name` (scope dropped) |
+| `go.mod` with `gin-gonic/gin` | go | `gin` | port 8080 |
+| `go.mod` with `gofiber/fiber` | go | `fiber` | port 3000 |
+| other `go.mod` | go | `go-nethttp` | medium, port 8080, name is the last element of the module path (not `v2`); `package` is `./cmd/<x>` when that is the only `cmd/*/main.go` and there is no `main.go` |
+| `pom.xml`, `build.gradle(.kts)` mentioning Spring Boot | java | `springboot` | high, port 8080; name from `artifactId` (not the parent's) or `rootProject.name` |
+| other `pom.xml` / `build.gradle` | java | | medium |
+| `manage.py`, or `django` in `requirements.txt` / `pyproject.toml` | python | `django` | port 8000 |
+| `fastapi` | python | `fastapi` | port 8000 |
+| `flask` | python | `flask` | port 5000 |
+| other `requirements.txt` / `pyproject.toml` | python | | medium; name from `pyproject.toml` |
+| only `index.html` | `""` | | `markers: ["index.html"]`, nothing else filled in |
+
+Node settings: `run`=`npm` and `npmScript`=`dev` (else `start`) when `package.json` has such a script; otherwise `run`=`script` and `script`=`main` or the first of `server.js`, `index.js`, `app.js`, `main.js`; `packageManager`=`pnpm` or `yarn` from `pnpm-lock.yaml` or `yarn.lock` once the kind has that option. `name` falls back to the folder's name; `envFile` is `.env` when that file exists. Framework ids other than `go-nethttp` and `html` must match `frameworks.json` as it grows.
+
+#### Python details
+
+- **Catalog.** Python comes from python-build-standalone, `https://github.com/astral-sh/python-build-standalone`. The built-in entries are pinned to the release `20261026`: `python-3.13.18-windows-amd64`, `python-3.13.18-windows-arm64`, `python-3.12.16-windows-amd64` and `python-3.12.16-windows-arm64` (version line `3.13` / `3.12`). Each is the plain `install_only` archive `cpython-<version>+<build>-<x86_64|aarch64>-pc-windows-msvc-install_only.tar.gz` (not free-threaded, not `_stripped`), `checksum.type` `sha256` with the value from the release's `SHA256SUMS`, `stripComponents` 1 (the root folder is `python`), `binaryRelPath` `python.exe`. `pip` is `Scripts\pip.exe` below the runtime folder.
+- **Remote discovery.** `POST /api/catalog/refresh` has a source `python` (`github.com/astral-sh/python-build-standalone`). It reads the newest 3 releases (`.../releases?per_page=3`; one release holds every Python and about 2 MB of asset list), and for each of the newest four minor lines (`3.14`, `3.13`, `3.12`, `3.11`) keeps the newest patch with its Windows `amd64` and `arm64` builds. Pre-releases (`3.16.0a1`), free-threaded and `_stripped` builds and other platforms are ignored. The checksum is the SHA-256 digest GitHub shows for the asset; an asset without one becomes an unverified entry. Ids are `python-<version>-windows-<arch>`; the same id in the built-in manifest wins.
+- **Run modes** (setting `run`, `GET /api/kinds`). The arguments after the program are:
+
+  | `run` | Arguments | Settings used |
+  | --- | --- | --- |
+  | `script` (default) | `<script>` | `script` (`main.py`) |
+  | `module` | `-m <module>` | `module` |
+  | `uvicorn` | `-m uvicorn --host <host> --port {port} <app>` | `app` (`main:app`), `host` |
+  | `flask` | `-m flask run --host <host> --port {port}` | `flaskApp` (set as `FLASK_APP`, optional), `host` |
+  | `django` | `<manage> runserver <host>:{port}` | `manage` (`manage.py`), `host` |
+
+  The user's own arguments come last. `host` (default `127.0.0.1`) is also set as `HOST` in every mode. Every Python service gets `PYTHONUNBUFFERED=1` and the usual `PORT`.
+- **Virtual environment.** A service of kind `python` that does not use `customArgs` (and has no `command`) runs `<home>\python\venvs\<serviceId>\Scripts\python.exe` (`kinds.VenvDir`, `VenvPython`, `VenvScripts`), with `VIRTUAL_ENV=<home>\python\venvs\<serviceId>` and that `Scripts` folder first on `PATH` (before the runtime's folder). So `pip` and `python` in a task, `Environ` and the terminal are the environment's. `GET /api/services/{id}/command` and the preview show that program even before the environment exists (no "not found" warning).
+  - *Creation.* `Plan.Pre` has one step, "Creating the virtual environment": the runtime's `python.exe -m venv <dir>` with `Skip` = the environment's `python.exe`, so it runs once. A start (or `PrepareService`, so a task too) runs it.
+  - *Runtime changed.* If `<dir>\pyvenv.cfg` has a `home` that is not the folder of the service's current runtime (compared as paths, ignoring case), the step becomes `-m venv --clear <dir>` and is not skipped, and the plan has a warning (logged as a `note:` at the start, shown in the preview): the environment is made again and its packages are gone.
+  - *Removal.* `Supervisor.Remove` (service delete) removes `<home>\python\venvs\<serviceId>` after the process stopped. A failure to delete (a locked file) is ignored.
+  - *Snapshots.* A snapshot, a restore and a clone never copy a virtual environment (`internal/snapshot` copies only database data folders and `php.ini`): it holds absolute paths. After a restore or a clone the first start makes an empty one.
+  - A service that uses `customArgs`, or that has its own `command`, has no pre-step and runs as it was written.
+- **Tasks** of the kind (`GET /api/kinds`, `tasks`): `pip-install` (`pip install -r requirements.txt`, `when` `requirements.txt`), `pip-list` (`pip list`), `django-migrate` (`python manage.py migrate`, with a `confirm`) and `django-collectstatic` (`python manage.py collectstatic --noinput`), both `when` `manage.py`. Their programs `pip` and `python` must be found on the service's `PATH` first (the environment's `Scripts` folder), not next to the runtime: the runtime's own `python.exe` has no Django.
+- **Shims.** `python` and `pip` get shims for the default Python runtime; `pip` is looked for next to `python.exe` and in `Scripts\` below it. When `pip` is in `Scripts\`, the activate scripts put that folder on `PATH` after the runtime's folder.
+
+#### New project details
+
+**Schema additions** (`format` stays 1; all validated by `frameworks.Parse`):
+
+- A `run` step may have `env` (name to value, placeholders allowed): variables added to the runtime's environment for that program (`CI=1`, `npm_config_yes=true`, `MAVEN_USER_HOME`).
+- A `download` step has either `checksum` or `unverified: true` with a `reason`, never both. An unverified download (start.spring.io builds the project on request and publishes no checksum) is a warning in the plan: `<step label>: <reason>.`
+- A `run` program is a plain name, or `./name` for a file in the folder the step runs in (`./mvnw.cmd`). No path separators, no `..`, no spaces.
+- Placeholders: `{venv}` (Python frameworks only: `<home>\python\venvs\<serviceId>`) and `{home}` (the data folder) are added. A placeholder that is not on the list is refused when the list is loaded, and the database placeholders need a `database`. `{appKey}` and `{random}` give a new value at every use. Without a database the database placeholders are empty and an `env` line that uses one is left out.
+- A `php` or `proxy` site needs a service with a port (a `php` site a `php` service); `cwd`, site `root`, `envFile` and file paths are relative without `..`.
+- The project name is limited to letters, digits, spaces and `. _ - ( )` (at most 64, starting with a letter or digit): it is put into page titles and source files as it is. The slug is the name in lower case ASCII, words joined with `-`, at most 40 characters; Windows device names (`con`, `nul`, `com1` ...) are a problem. The database and its user are the slug with `_` (the user at most 32 characters; `mysql`, `postgres`, `root` and the like are a problem).
+
+**Plan.** A request error (`400`: unknown framework, body not JSON; `409`: the frameworks list is damaged) is an error; everything about the request itself is a `problems` entry of a `200` plan. Runtime choice: an installed runtime of the kind inside `runtime.min`/`max` is used (the default of the kind when it fits, else the newest); otherwise the newest catalog entry that this machine can run and that fits is installed (entries of the `mainline` channel only when nothing else fits). A bound with fewer parts than the version compares those parts (`max: "8.4"` takes 8.4.9). Composer and the database server are installed the same way when missing. An installed database service of the kind is reused (a running one first); otherwise a service is created on the next free port from 3306 (PostgreSQL 5432). `Plan.steps` are the job's steps in words and `Plan.creates` what exists afterwards.
+
+**The job** (key `newproject:<folder>`, one job per folder). Percent: checking 0-5, installs 5-35, database 35-45, generator 45-80, `.env` 80, creating 85, editor 95. `step` is the text of `Plan.steps`.
+
+- *Installs*: `Installer.Start(catalogId)` and wait for its job. An entry that is already installed is skipped.
+- *Database*: create the server service when needed (validated like the API), start it with its dependencies and wait up to 2 minutes for `running`, then create the database and the user (a password of 24 random letters and digits). A database or user that exists already fails the job (nothing of the other is dropped).
+- *Generator steps*, in the folder their `in` says (`parent` or `project`; the project folder is made first for `project`):
+  - `run`: the program is `composer` (the framework's PHP plus `composer.phar`, as `supervisor.ComposerCommand`), `./name` (a file of the step's folder), or a name found on the PATH of a service of the runtime's kind that is not stored: the runtime's folder first, `JAVA_HOME`/`GOROOT`/Composer folders as for a real service, a Python framework's virtual environment `Scripts` first (the environment is made first by `Supervisor.PrepareService`, for the service id that the Python service will get). No shell and no console window; timeout 15 minutes (or `timeout`); a non-zero exit fails the step with the last output lines. Output lines are kept and written to the log of the new project's first service (stream `task`, first line `$ program args`, the database password replaced by `********`); when the job fails before that, to `<home>\logs\newproject-<slug>.log`.
+  - `download`: HTTPS to `<home>\tmp`, the checksum checked while it is written (`sha256:<hex>`, `sha1:<hex>` or a HTTPS URL of a file whose first word is the digest), then unpacked with the installer's zip extractor (entries that leave the folder are refused, links ignored) and `strip`; the file in `tmp` is always removed.
+  - `files`: relative paths only, parents are made, a file that exists is **never overwritten** (the step logs `Kept the existing ...`).
+- *.env*: `env` lines are set, `ifMissing` lines only when the key is not there; every other line, the comments and the line ending stay. Services with the project folder as `cwd` get `envFile`.
+- *Creating*: the services (validated by `internal/validate`, the same code as `POST /api/services`; `usesDatabase` sets `databaseId` and `dependsOn`), the site (`sites.Validate`, then `EnsureServers` and a regenerate) and the project (the new services and the site) are added in **one** state update. The first service with a port gets the planned port, the next ones the next free port.
+- *Editor*: the first installed VS Code, else VSCodium, through `launch` with the same data arguments as `POST /api/runtimes/{id}/launch`. A failure to open it is logged, not a failure of the job.
+- `job.done`: `projectId` and `path`.
+
+**Failure.** The job stops at the first failing step (a crash too). Removed, in reverse order: the project, the site and the services (stopped, their logs and virtual environment removed), the database, its user, and the database service when this job made it. Kept: the generated folder (an empty folder that this job made is removed; no file is ever deleted) and the installed runtimes. The error says what failed, then `The folder D:\www\my-shop was kept.`, the generator output file when there is one, and what could not be cleaned up.
+
+**Python frameworks.** Django: `requirements.txt` (`Django`), `pip install -r`, `django-admin startproject config .`, `python manage.py migrate`, all in the service's virtual environment. FastAPI and Flask: a starter and `requirements.txt`, then `pip install -r requirements.txt` in the environment, so the service runs at once.
+
+**Frameworks:**
+
+| Id | Language | Runtime | Database | Generator | Service |
+| --- | --- | --- | --- | --- | --- |
+| `laravel` | php | php 8.2+, Composer | MariaDB or MySQL, optional | `composer create-project laravel/laravel` | php, port 8000, docroot `public`; `.env` DB_*, APP_URL, file sessions and cache |
+| `symfony` | php | php 8.2+, Composer | MariaDB or MySQL, optional | `composer create-project symfony/skeleton` | php, 8000, `public`; `DATABASE_URL` |
+| `wordpress` | php | php 7.4+ | MariaDB or MySQL, required | `latest.zip` with the SHA-1 of `latest.zip.sha1`, strip 1, `wp-config.php` | php, 8000, php site |
+| `php` | php | php 8.1+ | none | `index.php` | php, 8000 |
+| `express` | javascript | node 20+ | none | `package.json`, `server.js`, `npm install` | node `npm run dev`, 3000 |
+| `nestjs` | javascript | node 20+ | none | `npx --yes @nestjs/cli@latest new --package-manager npm --skip-git` | `npm run start:dev`, 3000 |
+| `nextjs` | javascript | node 20.9+ | none | `npx --yes create-next-app@latest --yes --use-npm --disable-git` | `npm run dev`, 3000 |
+| `vite-react`, `vite-vue`, `vite-svelte` | javascript | node 20.19+ | none | `npm create vite@latest -- --template <t>-ts --no-interactive`, `npm install` | `npm run dev -- --host 127.0.0.1 --port <port> --strictPort`, 5173 |
+| `astro` | javascript | node 22.12+ | none | `npm create astro@latest -- --template minimal --install --no-git --skip-houston --yes` | `npm run dev`, 4321 |
+| `django`, `fastapi`, `flask` | python | python 3.10+ | none | see above | python `django` / `uvicorn` / `flask`, 8000 / 8000 / 5000 |
+| `go-nethttp` | go | go 1.21+ | none | `go mod init`, `main.go` | go, 8080 |
+| `gin` | go | go 1.24+ | none | `go mod init`, `main.go`, `go mod tidy` | go, 8080 |
+| `fiber` | go | go 1.26+ | none | the same with Fiber v3 | go, 3000 |
+| `springboot` | java | java 17+ | none | start.spring.io `starter.zip` (Maven, Spring Web, unverified), `./mvnw.cmd -q -DskipTests package` | java `run: jar`, `springPort`, 8080 |
+| `html` | static | none | none | `index.html`, `style.css` | static site of the folder |
+
+PHP projects offer MariaDB and MySQL only: the default extension list has `pdo_mysql` and `mysqli`, not `pdo_pgsql`. Vite and Astro are started with `--host 127.0.0.1`, because the site server proxies to `127.0.0.1` and their default host is `localhost`.
+
+**Internal contract.** `newproject.Manager` takes its collaborators as interfaces (`InstallerAPI`, `DatabaseAPI`, `SupervisorAPI`, `SitesAPI`) and the hooks `Run`, `Launch`, `Catalog`, `PortFree`, `HTTP`, `Rand`, so tests use fakes. `dbtools.Manager.DropUser(ctx, serviceID, user)` is new (used by the clean-up). Shared pieces: `sites.CheckDomain` and `sites.Validate`, `installer.ExtractZip`, `launch.ToolDataArgs`, `validate.Service/Links/Project`, `netutil.PortFree/NextFreePort`, `envfile.Apply`.
+
+## Amendment: 0.0.6, part 2 (Vite+, Rust, API clients, project files, CPU and memory)
+
+Everything here is the contract of the second half of 0.0.6, and it is implemented, except where a section says otherwise (Vite+ `nodeFrom=viteplus`).
+
+### Kinds
+
+- **`rust`** is a service kind and a runtime kind (category `language`, data folder `<home>\rust`). The toolchain is installed with **rustup** from a catalog entry whose `url` is `rustup-init.exe` (the installer's `.exe` type, below): the **GNU** toolchain (`x86_64-pc-windows-gnu`), so no administrator install is needed. The runtime's binary is `<bin>\<id>\cargo\bin\cargo.exe`; `rustc` and `rustup` are next to it. A service of this kind runs `cargo`; env `RUSTUP_HOME`, `CARGO_HOME` (both inside the runtime's folder) and `CARGO_TARGET_DIR=<home>\rust\target\<serviceId>`; `<CARGO_HOME>\bin` is on `PATH`.
+- **Installer `.exe` type.** A catalog download whose file name ends in `.exe` is a program to run, not an archive. It is verified like any download, copied into the install folder and **run** (no window, a timeout, its process tree ended on a timeout) with the arguments and environment of the kind (rustup: `RUSTUP_HOME`, `CARGO_HOME`, `--default-host x86_64-pc-windows-gnu --default-toolchain stable --profile minimal --no-modify-path -y`); its output lines become the job's step and percent. The runtime is registered only when the file named by `binaryRelPath` exists afterwards. A failing install removes the folder.
+- **`viteplus`** is a runtime kind (category `tool`, data folder `<home>\vite-plus`): the Vite+ command line (`vp`). The catalog entry is Vite+'s release zip, which holds only a launcher; the installer runs it once with `VP_HOME=<home>\vite-plus` and it sets itself up there (the npm package, its own Node and pnpm, about 270 MB). The run is guarded so that it does not change your PATH or touch a Vite+ you already have (see "Vite+ details").
+- **`bruno`** and **`hoppscotch`** are runtime kinds of a new category **`apiclient`** (Launchable like the editors: opened, not supervised; `GET /api/runtimes` and the Runtimes page group "API clients"). Each is a portable zip from GitHub (the asset's `digest` is its sha256). Their data is moved into `<home>\bruno` and `<home>\hoppscotch` by `launch.ToolDataArgs` (Bruno `--user-data-dir=<dir>`; Hoppscotch Desktop's portable build keeps its data next to the program's working directory, which is `<home>\hoppscotch`). A tool that cannot be moved into the data folder is not offered. `POST /api/runtimes/{id}/launch` works for them with no folder argument (Bruno has none).
+
+### Node: Vite+
+
+The Node profile gains, in the **Run** group:
+- run mode `vp` (with the settings `vpCommand` = `dev` | `build` | `test` | `run`, and `vpScript` for `run`): the service runs `<project>\node_modules\.bin\vp.cmd <command>`; port 5173 by default.
+- setting **`nodeFrom`** = `zero2dev` (default) | `viteplus`: where Node comes from. `zero2dev` runs on a Zero2Dev Node runtime. `viteplus` runs through Vite+'s own program (`<home>\vite-plus\bin\vp.exe`) with `VP_HOME=<home>\vite-plus`, so Vite+ selects (and installs) the Node the project pins (`.node-version`, `devEngines.runtime`, `engines.node`, `.nvmrc`). The service's command preview and its page say in words which of the two the service uses. Choosing `viteplus` without the Vite+ program installed is a `409` on start with the message "Vite+ is not installed: install it on the Runtimes page (the Vite+ card)".
+- **Pin warning:** a Node service whose folder pins a Node version that the service's Node runtime does not satisfy gets a warning in its command preview and start log, and the form offers the installed version that does, or a link to install one.
+- `GET /api/project/detect` recognises Vite+ (a `vite-plus` dependency, a `vite.config` that imports `vite-plus`, or a `vp` script) and sets `run=vp` and `vpCommand=dev`.
+
+### CPU and memory per service
+
+- `model.Service` (so `GET /api/services` and `GET /api/services/{id}`) gains `cpu` (percent of the whole machine, 0-100, one decimal) and `memBytes` (the working set summed over the service's whole process tree). Both are `0` while the service is stopped or before the first sample, and are never stored or accepted as input.
+- The supervisor samples every running service every 2 seconds. On Windows the numbers come from the service's job object (every service already runs in one): CPU from the job's accounting (user plus kernel time since the last sample, divided by the wall time and the number of processors), memory from the processes in the job. Off Windows there is no job: both stay `0`.
+- **Event `service.usage`:** one batch for all running services, `[ { "id", "cpu", "memBytes" } ]`, published after each sample; a service missing from the batch has stopped (the dashboard sets its numbers to `0`).
+
+### Project file
+
+`zero2dev.json` (`format: 1`) describes a project without anything that belongs to one PC:
+
+```json
+{ "format": 1, "name": "My Shop",
+  "runtimes": [ { "kind": "php", "min": "8.2" } ],
+  "services": [
+    { "ref": "app", "name": "My Shop", "kind": "php", "cwd": ".", "port": 8000, "settings": { "docroot": "public" },
+      "env": { "APP_ENV": "local" }, "envFile": ".env", "dependsOn": [], "database": "db", "runtime": { "kind": "php", "min": "8.2" } },
+    { "ref": "db", "name": "MariaDB", "kind": "mariadb", "cwd": "", "port": 3306 } ],
+  "sites": [ { "name": "My Shop", "domain": "my-shop", "type": "php", "root": "public", "service": "app", "https": true, "enabled": true } ] }
+```
+
+- **Paths** are relative to the folder of the file, with `/` (`.` is that folder). A service folder outside it is skipped on export with a warning (an absolute path is never written). **Runtimes** are a kind and a version range, never a path, an id or a catalog id. **Services refer to each other by `ref`** (`dependsOn`, `database`, a site's `service`); no Zero2Dev id is in the file. A **domain** is the label before the suffix.
+- **Never written:** ids, runtime binaries, absolute paths, a database service's administrator password, the contents of `.env`, data folders, and every `env` variable whose key looks like a secret (contains `PASSWORD`, `SECRET`, `TOKEN`, `KEY`, `CREDENTIAL`, `AUTH`, `PRIVATE`, `SIGNATURE`, `COOKIE` or `SESSION`, case-insensitive): each one is named in the export's `warnings`.
+- A file with another `format`, an unknown service kind or runtime kind, a `ref` used twice, a `dependsOn`/`database`/`service` that names nothing, or a dependency loop is refused (a plan `problem`).
+
+| Method | Path | Body | Response |
+| --- | --- | --- | --- |
+| POST | `/api/projects/{id}/export` | `{ "path": "D:\\work\\shop\\zero2dev.json", "overwrite": false }` | `{ "path", "warnings": [] }` |
+| POST | `/api/projects/import/plan` | `{ "path": "D:\\work\\shop", "name": "" }` | `ProjectImportPlan` |
+| POST | `/api/projects/import` | the same | `202 Job` (`project-import`) |
+
+- **Export:** `path` is a file, or a folder (then `<folder>\zero2dev.json`). `404` unknown project; `409` the file exists and `overwrite` is not set (`<file> exists`). The folder of the file becomes the base of every relative path, so export next to the project's code.
+- **Import plan:** `path` is a `zero2dev.json` or a folder that holds one (a cloned repository). `{ "path", "dir", "name", "services": ["Shop API (PHP, port 8000)"], "sites": ["https://shop.localhost -> Shop API"], "installs": [ { "kind", "version", "catalogId", "name", "reason" } ], "changes": ["Port 8000 is taken: Shop API uses 8001"], "problems": [], "warnings": [] }`. Nothing is changed. Problems stop the import (`409` on start with the first one as the message).
+- **Import job** (`project-import`, `job.done` carries `projectId` and `path`): checks the plan again; installs the missing runtimes (the same installer and selection as New project); creates the services, the sites and the project in **one** change, with new ids, free ports (the file's port when free), unique domains, and runtimes matched by kind and range (a service that followed the default follows it); a failure leaves nothing created. No file in the project's folder is written. Events: `services.changed`, `sites.changed`, `projects.changed`.
+- The dashboard: **Export** on a project's row (the Save as dialog) and **Import project** on the Projects page (`#/projects/import`: the file or folder picker, the plan, the progress, the result).
+
+#### API client details
+
+- **Bruno 4.3.0** (`usebruno/bruno`): asset `bruno_<version>_x64_win.zip` (about 177 MiB; the Electron files are at the top level: `Bruno.exe`, `resources\portable.json`), so `stripComponents` is 0 and `binaryRelPath` is `Bruno.exe`. The release has no checksum file; GitHub's asset `digest` is the SHA-256 (catalog id `bruno-4.3.0-windows-amd64`). The ARM, `.exe` and `.msi` assets are not used.
+- **Hoppscotch Desktop 26.10.1** (`hoppscotch/releases`, tag `v26.10.1-0`): asset `Hoppscotch_Cloud_win_x64_portable.zip` (about 45 MiB, the same name in every release, so the version is the tag without the `-0`; the tag pattern is `^v(\d+\.\d+\.\d+)(?:-\d+)?$`). One file at the top level, `hoppscotch-desktop.exe` (`stripComponents` 0). SHA-256 from GitHub's `digest`. The `SelfHost` build is not used.
+- **Remote versions** come from the GitHub releases API through the same fetcher as the other tools (the newest two stable releases that carry the asset). No version is probed by running the program: a registered Bruno's version is read from `resources\app.asar` (its `package.json`), a Hoppscotch's from its folder name, and otherwise it is `unknown`.
+- **Data folder, Bruno:** `--user-data-dir=<home>\bruno` (Electron's switch). Bruno also honours the environment variable `ELECTRON_USER_DATA_PATH`; the switch is used. Nothing is created in `%APPDATA%\bruno`.
+- **Data folder, Hoppscotch:** the portable build keeps `hoppscotch-desktop-data` and `logs` in its working directory, which is `<home>\hoppscotch`. Its WebView2 profile (the web app's local storage and IndexedDB, so its local data) would be `%LOCALAPPDATA%\io.hoppscotch.desktop\EBWebView`, so the process also gets `WEBVIEW2_USER_DATA_FOLDER=<home>\hoppscotch\webview2`. Only the window size (`.window-state.json`, `hoppscotch-unified.store`) stays in `%APPDATA%\io.hoppscotch.desktop`.
+- **`POST /api/runtimes/{id}/launch`** for category `apiclient`: the body is ignored (`path` and `serviceId` do not apply); the program is started in its own folder (Bruno) or in `<home>\hoppscotch` (Hoppscotch). Only a runtime with `source: installed` gets the data arguments; a tool registered by path is started as it is. `ELECTRON_RUN_AS_NODE` is removed from the environment of every program the daemon opens (a daemon started from VS Code's terminal carries it, and every Electron program then ignores its options and opens no window).
+- **Verified** (Windows 11, the real zips): both digests match the downloaded files; Bruno started with `--user-data-dir` wrote `preferences.json`, `bruno.db`, `default-workspace` and its Chromium profile into that folder and nothing to `%APPDATA%`; Hoppscotch started in a throwaway working directory created `hoppscotch-desktop-data` and `logs` there and, with `WEBVIEW2_USER_DATA_FOLDER`, its `EBWebView` profile in that folder instead of `%LOCALAPPDATA%`. **Not verified:** a Windows 10 PC without WebView2, collections surviving a move of the data folder, and the ZIPs of other releases.
+
+#### Rust details
+
+- **Catalog.** One built-in entry, `rust-1.100.0-windows-amd64` (windows/amd64 only: there is no GNU `rustup-init.exe` for arm64), `url` `https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-gnu/rustup-init.exe`, `checksum` `{ "type": "shasums", "url": "<url>.sha256" }` (that file holds one bare SHA-256, which `ParseShasums` accepts; it is fetched at install time and never pinned) and `binaryRelPath` `cargo/bin/cargo.exe`. The version label is the stable Rust when the entry was written; it is refreshed with Zero2Dev releases (there is no remote fetcher). `catalog` validation accepts a `.exe` URL besides `.zip`, `.tar.gz` and `.phar`. The runtime's `version` is the entry's: rustup installs the current `stable`, so a later `cargo --version` probe (the one `POST /api/runtimes` does for a registered binary) can refine it; it is not run after an install.
+- **Installer `.exe` type** (`internal/installer/exerun.go`). `process` copies the verified program into the stage folder, moves the folder to `<bin>\<catalogId>` and runs the program there, in that folder, through the injectable `Installer.Run` (`ExeRunner`; tests pass a fake that creates `cargo\bin\cargo.exe` or fails). What is run per kind is the table `exeKinds` (arguments, environment function, timeout, whether the downloaded program is deleted afterwards); a `.exe` of a kind without an entry fails with "not an archive". The environment is the daemon's plus `RUSTUP_HOME=<final>\rustup`, `CARGO_HOME=<final>\cargo` and, when `downloadProxy` is set, `HTTPS_PROXY` and `HTTP_PROXY`. The run has no window (`CREATE_NO_WINDOW`), a 20 minute limit, and its process tree is ended (`taskkill /T /F`; a process group kill off Windows) when the limit or the job ends. Output lines (split on `\n` and on the `\r` of rustup's progress bars) set the job's step (`Installing: downloading component 'cargo'`) and a percent that rises one point per line inside 85-94; `Registering` is 95. The runtime is registered only when `binaryRelPath` exists; any failure (exit code, timeout, missing file) removes `<bin>\<catalogId>` and the job's `error` ends with the last six output lines.
+- **Runtime variables.** `model.RustHomes(binary)` and `model.RuntimeVars(rt)`: for `<install>\cargo\bin\cargo.exe`, `CARGO_HOME=<install>\cargo` and `RUSTUP_HOME=<install>\rustup`. A cargo registered from another layout (`~\.cargo\bin`) gets none, so the user's own variables apply. Services (`internal/supervisor/env.go`), shims and activate scripts (`internal/envreg`) use `RuntimeVars`; `model.RuntimeHome` is unchanged (JAVA_HOME and GOROOT). `<CARGO_HOME>\bin` is the folder of the runtime's binary, so it is on `PATH` like every runtime's folder; `rustc` and `rustup` are the proxies next to `cargo.exe`. `cargo` on `PATH` is also in the `GET /api/runtimes/detect` probe list.
+- **Service profile** (`rust` in `internal/kinds/profiles.json`): `run` (`debug` = `cargo run`, `release` = `cargo run --release`), `package` (`-p`), `bin` (`--bin`), `features` (`--features`), extra arguments after `--`; env `CARGO_TARGET_DIR=<home>\rust\target\<serviceId>` (the folder is in `Plan.Dirs`) and `PORT`; tasks `cargo-build`, `cargo-test`, `cargo-fetch`, `cargo-clippy` (when `Cargo.toml` exists) and `rustup-clippy` (`rustup component add clippy`, because the profile is `minimal`). A line of a Rust service's stderr that says a linker or C compiler is missing (``linker `gcc` not found``, ``linker `link.exe` not found``, `Failed to find tool`, ``Is `gcc` installed?``, `error calling dlltool`) adds one `system` log line, once per start (`kinds.MinGWHint`).
+- **Detection.** `Cargo.toml`: kind `rust`, name from `[package] name` (else the folder), framework `axum` (confidence high, port 3000) when `axum` is a key of a `[dependencies]`, `[dev-dependencies]`, `[build-dependencies]`, `[workspace.dependencies]` or target dependency table, or a `[dependencies.axum]` table; otherwise medium, port 8080. `default-run` becomes the `bin` setting.
+- **Axum starter.** Language `rust` (added to `frameworks.Languages`), runtime `rust` `min` 1.75. The contract asked for `cargo new` and a files step with `Cargo.toml`; a files step never overwrites an existing file, so the steps are: files `src/main.rs` (binds `127.0.0.1:$PORT`), `cargo init --vcs none --name {slug}`, `cargo add axum@0.8`, `cargo add tokio@1 --features macros,rt-multi-thread,net` (all in the project folder), service kind `rust` port 3000, proxy site. The New project plan installs the Rust runtime first when none fits (the same selection as the other kinds).
+
+**To be verified on a real Windows desktop** (nothing was downloaded or run while this was written):
+
+- The rustup-init command line is the constant `rustupArgs` in `internal/installer/exerun.go`: `--default-host x86_64-pc-windows-gnu --default-toolchain stable --profile minimal --no-modify-path -y`. Each flag is confirmed by rustup's source (`src/cli/setup_mode.rs`: `-y/--yes`, `--default-host`, `--default-toolchain`, `--profile`, `--no-modify-path`) and its documentation (`--profile minimal`, `--no-modify-path`, `--default-host`); the **combination**, that `minimal` is a valid profile name of the current rustup, and that rustup-init asks nothing on the console with `-y` are not verified.
+- `RUSTUP_HOME` and `CARGO_HOME` are honoured by rustup-init as the install location (documented for rustup in general, not on the pages read for this work), and nothing is written to `%USERPROFILE%\.cargo` or `.rustup`.
+- rustup-init puts `cargo.exe`, `rustc.exe` and `rustup.exe` (proxies) into `cargo\bin`; a hidden, piped rustup-init may print less than in a console (its progress bars), so the percent may stay at 85 for long.
+- The GNU toolchain on the minimal profile links a plain program without MinGW installed (the `rust-mingw` component carries the linker tools for the GNU host; crates with C code still need MinGW), and the exact wording of the missing-compiler messages that `kinds.RustHint` matches.
+- `cargo init` in a folder that already has `src/main.rs` keeps that file (documented: "typically-named Rust source files already in the directory ... will be used"); `cargo add axum@0.8` and `cargo add tokio@1 --features ...` need the crates.io index and are not tested here.
+
+#### CPU and memory details
+
+- **Sampler:** one goroutine of the supervisor, started by the daemon (`Supervisor.StartUsage`) and ended with `StopAll`. Every 2 seconds it takes a sample of each service in the state `running` (a service that is still `starting` or already `stopping` has no numbers). The tick, the reader and the processor count are fields of the supervisor, so the tests feed fake samples.
+- **CPU:** `(CPU time now - CPU time at the last sample) / (wall time between the two samples x number of logical processors) x 100`, clamped to 0-100 and rounded to one decimal. The first sample of a run has nothing to compare with and gives `0`.
+- **Windows:** the CPU time is `QueryInformationJobObject` with `JobObjectBasicAccountingInformation` (user plus kernel time in 100 ns units; it includes processes that already exited, so it only grows). The memory is `JobObjectBasicProcessIdList` for the processes in the job, then for each `OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION)` and `K32GetProcessMemoryInfo`, summing `WorkingSetSize`; the handles are closed again. A service whose job could not be created (the `taskkill` fallback) or whose tree is closed has no numbers (`0`).
+- **Other systems:** there is no job object, so both numbers stay `0` and no event is published.
+- **Events:** `service.usage` is published once per tick when at least one service reported numbers, and once more as an **empty array** when the last service stops (so the dashboard clears the numbers); with nothing running nothing is published. `GET /api/services` and `GET /api/services/{id}` carry the last sample (`0` for a service that is not running); `cpu` and `memBytes` are never stored in `state.json` and ignored in a request body.
+
+#### Vite+ details
+
+- **Settings (Node profile, group Run):** run mode `vp`; `vpCommand` = `dev` (default) | `build` | `test` | `run`, arguments `dev --port {port} --strictPort`, `build`, `test`, `run`; `vpScript` (default `dev`, only for `run`, added last, `vp run <script>`); `nodeFrom` = `zero2dev` (default) | `viteplus`. `vpCommand`, `vpScript` and `nodeFrom` are shown only in the `vp` mode. The program is `<cwd>\node_modules\.bin\vp.cmd` (`vp` off Windows), an absolute path, so no Node runtime sits between; the Node runtime's folder is first on `PATH` as for every Node service. A start whose `vp.cmd` is missing is `409` with "vp is not installed in this project: run npm install (or a task) first"; the preview carries the same sentence as a warning.
+- **`GET /api/kinds`:** a choice may have `disabled`: the reason it cannot be chosen (no choice has one now; the field stays for later).
+- **Pin warning:** for a Node service on a Zero2Dev Node runtime, the folder's pin is read in the order Vite+ uses (`.node-version`, `package.json` `devEngines.runtime` (the entry named `node`), `engines.node`, `.nvmrc`). Understood: exact (`22.18.0`, `v22`), partial (`22`, `22.x`, `22.1`), comparators (`>=22`, `>=20 <25`), `^`, `~` and `||` alternatives. Not understood (`lts/*`, hyphen ranges, tags): no warning. One line in `warnings` of the preview and `note: ...` in the start log: "This folder pins Node <spec> (<file>) but the Node of this service is <version>: Node <other> is installed, select it as this service's runtime" (or "install a matching Node on the Runtimes page ..."). It never stops a start.
+- **Detection:** `vite-plus` in `dependencies`/`devDependencies`, a `vite.config.*` that imports `vite-plus`, or a script that runs `vp`/`vpr`: `framework` `vite-plus`, `port` 5173, settings `run=vp`, `vpCommand=dev`. Plain Vite stays `vite`, `vite-react`, ...
+- **Install and `nodeFrom=viteplus` (added after the first 0.0.6 build).** Vite+'s release zip (`vp-x86_64-pc-windows-msvc.zip`, `vp.exe` and `vp-shim.exe`) is only a **launcher**: started with `VP_HOME`, it sets itself up there. Checked on Windows 11 with Vite+ 1.7.0: the first `vp --version` printed "installing vite-plus@1.7.0 ... Preparing Node.js and pnpm ... Installing dependencies", then made `<VP_HOME>\1.7.0` (the `vite-plus` package from the npm registry), `<VP_HOME>\bin\vp.exe` (the shim), `current`, `js_runtime` (its Node), `package_manager` (pnpm), `cache`, `fallback-bin` and `config.json`, about 270 MB in all. The launcher can be anywhere.
+  - **Its first run is not harmless, and an earlier version of this text said it was.** Started plainly, the first run **(1) writes your user PATH in the registry** (it puts `<VP_HOME>\bin` first and `<VP_HOME>\fallback-bin` last and drops the PATH entries of an older Vite+), and **(2) looks for a previous Vite+ on `PATH` and removes that install** when nobody can answer its "Remove the previous install directory?" question. On a real PC this removed the user's own Vite+ in `%LOCALAPPDATA%\vite-plus` (about 1.2 GB, its Node versions included) and replaced its PATH entries. The first check that said "PATH unchanged" was broken (the `reg` command failed the same way before and after, so the comparison matched).
+  - **The guard (`vitePlusSetupEnv`).** The launcher is started with `VP_SELF_SETUP_NO_MODIFY_PATH=1`, `CI=true` (no questions) and a `PATH` of the Windows system folders only (so no `vp` of yours can be found and taken for a previous install), plus `VP_HOME`. Checked on Windows 11 with the launcher run in a clean environment while a decoy "previous install" (a `vp.exe` and a `current` folder) was first on its `PATH`: the setup finished inside `VP_HOME`, the decoy was left alone, and the user PATH in the registry (compared with a working `reg query`) and the shell profiles (`.bashrc`, `.profile`, PowerShell profiles) were byte-for-byte unchanged. The three settings were checked together; which one prevents the removal was not separated.
+  - **Catalog:** one `ghSpecs` entry (`voidzero-dev/vite-plus`, tag `v<version>`, asset `vp-x86_64-pc-windows-msvc.zip`, `keep: 1`, because every version shares one `VP_HOME`) and one built-in entry (`viteplus-1.7.0-windows-amd64`, SHA-256 `9c142f380b91069dc20b493d1b2cc1fcedb31b06a909ce2cbc353182ad616f98`, the same in the asset's `digest` and in `vp-checksums.txt`). The runtime's binary is `<bin>\viteplus-<version>-windows-amd64\vp.exe`.
+  - **Installer (`postKinds` in `internal/installer/exerun.go`):** after the zip is unpacked and moved to its final place, the launcher is run once as `vp.exe --version` with `VP_HOME=<home>\vite-plus` (hidden, 20 minute limit, its tree ended on a timeout; its output lines are the job's steps). The runtime is registered only when `<home>\vite-plus\bin\vp.exe` exists afterwards; a failure removes the folder. The download checksum covers the launcher; what the launcher fetches afterwards (the npm package, Node, pnpm) is checked by Vite+ and pnpm themselves (npm integrity), not by Zero2Dev.
+  - **No version probe:** the launcher is never run to read a version (`noProbe`): started without `VP_HOME` it would set itself up in `%LOCALAPPDATA%\vite-plus`. A Vite+ registered by path therefore shows "unknown".
+  - **Uninstall** removes the launcher folder; `<home>\vite-plus` (about 270 MB, with the Node and pnpm Vite+ downloaded) stays until you delete it.
+  - **`nodeFrom=viteplus`:** with the run mode `vp`, the service runs `<home>\vite-plus\bin\vp.exe <vpCommand> ...` in its folder with `VP_HOME=<home>\vite-plus`. The global `vp` hands over to the project's own `vite-plus` and picks (downloading into `VP_HOME`) the Node the project pins. Without the program, a start is a `409` with "Vite+ is not installed: install it on the Runtimes page (the Vite+ card)". The pin warning is not shown for it (Vite+ chooses the Node).
+  - **Not verified (a real desktop):** a service started through the global `vp` with a project that pins a Node (the first start downloads that Node); that `vp dev --port N --strictPort` is accepted; installing from the catalog entry itself (the launcher was checked from an installed copy).
+
+#### Project file details
+
+What `internal/projectfile` does where the contract above leaves it open.
+
+- **Export**
+  - **Path.** `path` must be absolute (`400` otherwise, and `400` when its folder does not exist). An existing folder means `<folder>\zero2dev.json`. The file is written atomically (a temp file in the same folder, then a rename) as indented JSON with a final newline, and `409` `<file> exists` is checked before anything is written. The same project exports to the same bytes.
+  - **Refs.** A service's `ref` is its name in lower case with every run of characters other than `a-z` and `0-9` turned into `-` (`My Shop` becomes `my-shop`); a name with no letters uses the kind; a repeat gets `-2`, `-3`. Services are written in the project's order. A link to a service that is not written (outside the project, or left out) is dropped with a warning.
+  - **Left out, with a warning.** A service whose folder is outside the file's folder; a service whose `command` or any `args` entry is an absolute Windows path (`C:\...`, `\\server\...`); a site whose static root is outside the folder, or whose service is not written. An `env` variable or a `settings` entry whose key looks like a secret (the list above), or whose value is an absolute Windows path, is not written and is named (`Variable DB_PASSWORD of Shop API was not written`). An argument `--name=value` whose name looks like a secret is dropped. A database service's administrator password is never written; the export names it in a warning. A value that starts with `/` (`/api`) is not a Windows path and stays.
+  - **Runtimes.** A service that named a runtime gets `runtime: { kind, min }` with `min` the runtime's major.minor (`8.3.1` becomes `8.3`), no `max`. Top level `runtimes` has one entry per runtime kind the written services run on (a service of kind `php` runs on the runtime `php`; `custom` has none): the lowest `min` a service named, otherwise the kind alone. A service that follows the default has no `runtime`.
+  - **Defaults not written:** `restartLimit` when it is the default (5); empty `env`, `settings`, `args`, `dependsOn`.
+- **Import plan**
+  - **Problems and errors.** Everything wrong with the file is a plan `problem` (`200`): a missing file or folder, a folder without `zero2dev.json`, invalid JSON, a file over 4 MiB, the checks of the contract, plus: an empty `ref`, a name over 64 characters, an invalid version in a runtime (`8.2`, `20.0.0`: one to three numbers), an absolute `cwd`/`root`/`envFile`, a `cwd` or `root` that leaves the file's folder with `..`, a folder that does not exist, a service of a kind that needs a folder but has an empty `cwd`, a port over 65535, a site that is not `static`, `proxy` or `php`, a php site whose service is not a `php` service, a site with neither service nor `upstreamPort`, and whatever the service, site and project checks of the API refuse (an unknown setting, a domain that is not a host name ...). Only an empty or relative `path` is a `400`.
+  - **Order.** The checks of the file come first; when one fails the plan has only those problems (and empty `services`, `sites`, `installs`, `changes`). Otherwise the runtimes, the ports, the domains and the checks of the API follow, and stop at the first service or site the API would refuse.
+  - **Domains.** The file's `domain` is lower-cased and the PC's suffix is added (`shop` becomes `shop.localhost`); a value that already ends in `.<suffix>` is used as it is. A domain that a site of this PC (or an earlier site of the file) holds becomes `<label>-2`, `<label>-3` ...
+  - **Ports.** The file's port is used when no service or site of this PC and no program uses it; otherwise the next free port above it (the same search as New project). A proxy site that has no service and points at a port that was moved follows it. The `services` lines show the port that will be used.
+  - **Runtimes.** A service's range is its own `runtime`, else the file's top-level entry for its kind, else the kind with no bounds. The selection and the downloads are New project's (`newproject.SelectRuntime`, `PickEntry`): the installed runtime inside the range (the kind's default when it fits, else the newest), else the newest catalog entry inside it, else a problem (`No PHP version 99 or newer is available to install on this PC.`). Two services with the same range share one install.
+  - **`changes`** lists a moved port, a renamed domain and, for a database server in the file, `This PC already has a MariaDB service: a separate one is created for the project` (a database service of the file is always created as a new service with a new data folder; no database or user is created inside a server).
+  - **`warnings`** says `<service> reads .env, which does not exist yet: create it with the variables the project needs` when a service's `envFile` is missing in its folder, and `the runtime X does not run a Y service and is ignored`. The file has no field for the variables a user must supply, so nothing else is listed.
+- **Import job**
+  - `Start` plans again and answers `409` with the first problem; it also answers `409` when runtimes must be installed but the daemon has no installer. The job key is the file path, so the same file cannot be imported twice at once.
+  - Steps: `Checking the plan` (2%), `Installing <runtime>` (5-85%, one stretch per install), `Creating the project` (90%). Ports, domains and runtimes are decided again inside the one state change, so a plan that is out of date at that moment is still safe. Services are created dependencies first; the project lists them in the file's order.
+  - A service gets `runtimeId` set when the file named a runtime for it, or when the runtime that fits is not the kind's default; a service that follows the default keeps an empty `runtimeId`. `autostart`, `restartOnCrash`, `restartLimit`, `healthPath`, `envFile`, `settings`, `env` and `customArgs` come from the file; `adminPassword` is empty.
+  - `job.done` carries `projectId` and `path`, the project's folder (the folder of the file), as New project does.
+  - A failure (a failed install, a folder that disappeared, a port search that found nothing) leaves no service, site or project; the job's `error` ends with `Nothing was created.`. A runtime that was installed stays installed. Each created service gets the system log line `created from <file>`.
+- **Not verified here:** all of this ran against temp folders and fakes. Not tried: the real installer, the Save as and Open dialogs, a real site server regenerate, and an import of a file written on another PC.

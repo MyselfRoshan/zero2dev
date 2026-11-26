@@ -72,6 +72,7 @@ var tools = []struct {
 	{"node", "node", []string{"--version"}},
 	{"php", "php", []string{"--version"}},
 	{"go", "go", []string{"version"}},
+	{"cargo", "rust", []string{"--version"}},
 	{"java", "java", []string{"-version"}},
 	{"caddy", "caddy", []string{"version"}},
 	{"nginx", "nginx", []string{"-v"}},
@@ -88,10 +89,11 @@ var tools = []struct {
 
 // noProbe reports whether running the binary to read its version must be
 // avoided: desktop programs would open a window. That covers the editors too,
-// whose version is read from their files instead (editors.go).
+// whose version is read from their files instead (editors.go). Vite+'s launcher is never run
+// to read a version either: started without VP_HOME it would set itself up in %LOCALAPPDATA%.
 func noProbe(kind, binary string) bool {
 	switch kind {
-	case "notepadpp", "heidisql", "dbeaver", "vscode", "vscodium":
+	case "notepadpp", "heidisql", "dbeaver", "vscode", "vscodium", "bruno", "hoppscotch", "viteplus":
 		return true
 	}
 	return false
@@ -167,7 +169,7 @@ func (m *Manager) Detect() []Detected {
 }
 
 var display = map[string]string{
-	"node": "Node.js", "php": "PHP", "go": "Go", "java": "Java", "caddy": "Caddy", "nginx": "nginx",
+	"node": "Node.js", "php": "PHP", "go": "Go", "java": "Java", "python": "Python", "rust": "Rust", "composer": "Composer", "viteplus": "Vite+", "bruno": "Bruno", "hoppscotch": "Hoppscotch", "caddy": "Caddy", "nginx": "nginx",
 	"mariadb": "MariaDB", "mysql": "MySQL", "postgres": "PostgreSQL", "redis": "Redis", "mailpit": "Mailpit",
 	"vscode": "VS Code", "vscodium": "VSCodium", "notepadpp": "Notepad++", "heidisql": "HeidiSQL", "dbeaver": "DBeaver",
 }
@@ -211,6 +213,9 @@ func (m *Manager) Register(kind, binary, version string) (model.Runtime, error) 
 	}
 	if version == "" && isEditor(kind) {
 		version = editorVersion(binary)
+	}
+	if version == "" && isAPIClient(kind) {
+		version = apiClientVersion(kind, binary)
 	}
 	if version == "" {
 		if args := argsFor(kind, binary); args != nil {

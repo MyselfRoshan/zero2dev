@@ -1,3 +1,4 @@
+import type { KindTask } from "./types";
 // The per-kind service profiles (internal/kinds/profiles.json, served at GET /api/kinds)
 // and pure helpers the service form uses. The daemon builds the real command line;
 // these helpers only decide what the form shows.
@@ -9,6 +10,8 @@ export interface Choice {
   value: string;
   label: string;
   args?: string[];
+  /** Why this value cannot be chosen yet (the form shows it greyed out, with the reason). */
+  disabled?: string;
 }
 
 export interface KindOption {
@@ -59,6 +62,8 @@ export interface KindProfile {
   fixed?: { args: string[]; help: string; windows?: boolean }[];
   env?: { name: string; value: string; help: string }[];
   options: KindOption[];
+  /** Ready-made one-off tasks of the kind (0.0.6). */
+  tasks?: KindTask[];
 }
 
 export type Settings = Record<string, string>;
@@ -216,7 +221,8 @@ export function checkOption(o: KindOption, v: string): string {
       return "";
     }
     case "select":
-      return o.choices?.some((c) => c.value === v) ? "" : "pick one of the choices";
+      if (!o.choices?.some((c) => c.value === v)) return "pick one of the choices";
+      return o.choices.find((c) => c.value === v)?.disabled ?? "";
     case "multi":
     case "lines":
       return "";
@@ -331,6 +337,21 @@ export function panelNotes(warnings: string[], labelOf: (kind: string) => string
       };
     const nf = /^runtime (\S+) not found$/.exec(w);
     if (nf) return { level: "warn", text: "The chosen version was removed. Pick another version." };
-    return { level: "warn", text: w.charAt(0).toUpperCase() + w.slice(1) };
+    // "vp is not installed ..." names a command: its first letter stays as it is
+    return { level: "warn", text: w.startsWith("vp ") ? w : w.charAt(0).toUpperCase() + w.slice(1) };
   });
+}
+
+/** The usual port of a run mode: Vite+ (vp) serves on 5173, every other mode on the kind's default. */
+export function modePort(kind: string, run: string, kindDefault: number): number {
+  return kind === "node" && run === "vp" ? 5173 : kindDefault;
+}
+
+/**
+ * Which Node a Node service uses, in words (the service page). Only "zero2dev" can be chosen today;
+ * a stored "viteplus" is described as what it asks for.
+ */
+export function nodeFromText(p: KindProfile | undefined, s: Settings | undefined, runtimeLabel: string): string {
+  if (effective(p, s).nodeFrom === "viteplus") return "Vite+'s Node: Vite+ picks the version the project pins.";
+  return `Zero2Dev's Node: ${runtimeLabel || "the default Node runtime"}, downloaded and kept by Zero2Dev.`;
 }

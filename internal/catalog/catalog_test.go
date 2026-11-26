@@ -14,8 +14,8 @@ func TestEmbeddedManifestValid(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(es) != 19 {
-		t.Fatalf("want 19 entries, got %d", len(es))
+	if len(es) != 31 {
+		t.Fatalf("want 31 entries, got %d", len(es))
 	}
 	for _, e := range es {
 		if e.Homepage == "" || !strings.HasPrefix(e.Homepage, "https://") {

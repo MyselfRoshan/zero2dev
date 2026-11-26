@@ -10,10 +10,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"zero2dev/internal/apperr"
+	"zero2dev/internal/kinds"
 	"zero2dev/internal/model"
 	"zero2dev/internal/store"
 )
@@ -31,6 +33,8 @@ type Supervisor struct {
 	HealthTimeout time.Duration
 	KillGrace     time.Duration
 	DBGrace       time.Duration // databases get longer to shut down cleanly
+	// PreRun runs the pre-steps of a service (see runPre); nil is the real runner. Tests replace it.
+	PreRun PreRunner
 
 	// Restart on crash (restart.go): the first delay (doubled for every
 	// further attempt), the longest delay, and how long a service has to stay
@@ -44,6 +48,13 @@ type Supervisor struct {
 	// the first Start.
 	OnCrash func(Crash)
 
+	// CPU and memory sampling (usage.go): the time between samples (0 = DefaultUsageInterval), the
+	// reader (nil = the real one, the job object on Windows) and the processor count (0 = this
+	// machine's). Tests replace them. Set them before StartUsage.
+	UsageInterval time.Duration
+	Sample        Sampler
+	NumCPU        int
+
 	mu      sync.Mutex
 	procs   map[string]*proc
 	logs    map[string]*svcLog
@@ -54,6 +65,10 @@ type Supervisor struct {
 	// reserved: services that an operation on their files holds (a snapshot,
 	// a restore, a reset, a migration), with what it is doing; see Reserve.
 	reserved map[string]string
+	// The usage sampler (usage.go): stop/done channels of its goroutine, and whether the last
+	// published batch was not empty.
+	usageStop, usageDone chan struct{}
+	usageSent            bool
 }
 
 // proc is one run of a service. All fields are guarded by Supervisor.mu.
@@ -74,6 +89,7 @@ type proc struct {
 	stopDesc string
 	env      []string
 	grace    time.Duration
+	usage    usageState // CPU and memory, see usage.go
 }
 
 func active(state string) bool {
@@ -145,6 +161,10 @@ func (s *Supervisor) Apply(svc model.Service) model.Service {
 	defer s.mu.Unlock()
 	svc.State, svc.Pid, svc.StartedAt, svc.LastError = s.statusLocked(svc.ID)
 	svc.Restarts = s.restartsLocked(svc.ID)
+	svc.CPU, svc.MemBytes = 0, 0
+	if p := s.procs[svc.ID]; p != nil && p.state == model.StateRunning {
+		svc.CPU, svc.MemBytes = p.usage.cpu, p.usage.mem
+	}
 	return svc
 }
 
@@ -233,6 +253,11 @@ func (s *Supervisor) start(id string, auto *crashState) error {
 		revert()
 		return apperr.Conflict("%v", err)
 	}
+	if err := s.runPre(id, r); err != nil {
+		s.logLine(id, "system", err.Error())
+		revert()
+		return apperr.Conflict("%v", err)
+	}
 	if err := s.initDB(id, r.db, r.env); err != nil {
 		s.logLine(id, "system", err.Error())
 		revert()
@@ -251,6 +276,9 @@ func (s *Supervisor) start(id string, auto *crashState) error {
 	cmd.Env = r.env
 	outW := &lineWriter{emit: func(t string) { s.logLine(id, "stdout", t) }}
 	errW := &lineWriter{emit: func(t string) { s.logLine(id, "stderr", t) }}
+	if svc.Kind == "rust" {
+		errW.emit = s.rustHintEmit(id) // a build that lacks a C compiler gets one line of advice
+	}
 	cmd.Stdout, cmd.Stderr = outW, errW
 	cmd.WaitDelay = 2 * time.Second // do not hang on pipes held by orphaned grandchildren
 	configure(cmd)
@@ -489,6 +517,9 @@ func (s *Supervisor) Remove(id string) error {
 	}
 	_ = os.Remove(s.logPath(id))
 	_ = os.Remove(s.logPath(id) + ".1")
+	if id != "" && !strings.ContainsAny(id, "/\\") && id != "." && id != ".." {
+		_ = os.RemoveAll(kinds.VenvDir(s.home, id)) // a Python service's virtual environment
+	}
 	return nil
 }
 
@@ -496,6 +527,7 @@ func (s *Supervisor) Remove(id string) error {
 func (s *Supervisor) StopAll(ctx context.Context) {
 	s.mu.Lock()
 	s.closing = true
+	s.stopUsageLocked()
 	for id := range s.crash {
 		s.cancelRestartLocked(id) // nothing may start again while the daemon closes
 	}

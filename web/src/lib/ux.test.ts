@@ -38,6 +38,8 @@ const svc = (over: Partial<Service>): Service => ({
   pid: 0,
   startedAt: null,
   lastError: "",
+  cpu: 0,
+  memBytes: 0,
   ...over,
 });
 const rt = (over: Partial<Runtime>): Runtime =>

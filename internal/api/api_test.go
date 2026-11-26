@@ -457,7 +457,7 @@ func TestRuntimesAPI(t *testing.T) {
 	e := newEnv(t)
 	e.errCode("POST", "/api/runtimes/register", map[string]any{"kind": "node", "binary": "relative"}, 400)
 	e.errCode("POST", "/api/runtimes/register", map[string]any{"kind": "node", "binary": filepath.Join(t.TempDir(), "nope")}, 400)
-	e.errCode("POST", "/api/runtimes/register", map[string]any{"kind": "rust", "binary": os.Args[0]}, 400)
+	e.errCode("POST", "/api/runtimes/register", map[string]any{"kind": "ruby", "binary": os.Args[0]}, 400)
 	var rt model.Runtime
 	resp := e.do("POST", "/api/runtimes/register", map[string]any{"kind": "node", "binary": os.Args[0], "version": "9.9.9"}, &rt)
 	if resp.StatusCode != 201 || rt.Source != "registered" || rt.Version != "9.9.9" || rt.Name != "Node.js 9.9.9" || !strings.HasPrefix(rt.ID, "rt_") {

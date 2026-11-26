@@ -175,7 +175,7 @@ Pick a **Database** (also under Advanced) and the service gets its connection as
 | --- | --- | --- |
 | Node.js | Run a **script** or an **npm script** (names from your package.json are suggested); **Restart when a file changes** `--watch` (Node 18.11+); **debugger** `--inspect` [9229]; **NODE_ENV** [development] | npm's download cache: `data\node\npm-cache` |
 | PHP | **Document root**; **Router script**; php.ini **start from** development or production; **Extensions** (tick boxes for everything in that PHP's `ext` folder) [curl, fileinfo, mbstring, openssl, mysqli, pdo_mysql, pdo_sqlite, sqlite3, zip, intl]; **memory_limit** [256M], **upload_max_filesize** / **post_max_size** [64M], **max_execution_time** [60], **display_errors** [on], **date.timezone** [UTC]; **More php.ini lines**; **Xdebug** mode, start and editor port [9003] | The service's own `php.ini`, sessions, uploads and Xdebug output: `data\php\<service id>` |
-| Go | **Package** [.]; **Build tags**; **Keep Go's downloads and build cache in the data folder** [on] | `data\go` (GOPATH, GOCACHE, GOENV) |
+| Go | **Package** [.]; **Build tags**; **Keep Go's downloads and build cache in the data folder** [on] | `data\go` (GOPATH, GOCACHE, GOENV). Tools you install with `go install` (`air`, `dlv`, `gopls`) go to `data\go\path\bin` while that setting is on, and are on `PATH` for Go services, custom services (so `air` works as a command) and **Open terminal**. With the setting off, Go keeps its own default (`%USERPROFILE%\go`, tools in `%USERPROFILE%\go\bin`) and that folder is on `PATH` instead |
 | Java | Run a **JAR** or a **main class** with a class path; **Max memory** `-Xmx`; **Pass the port as server.port** (Spring Boot); **debugger** [5005] | none |
 | MariaDB, MySQL | **Character set** [utf8mb4], **Collation**, **SQL mode** (server default, strict, permissive for old apps), **Max connections** [151], **InnoDB buffer pool** [128M], **Max packet size** [64M], **Log every query**, **Log slow queries** [after 2 s] | The database files: `data\mariadb\<service id>`, `data\mysql\...` |
 | PostgreSQL | **Max connections** [100], **Shared buffers** [128MB], **Log statements** [none], **Log statements slower than** [off], **Time zone** | `data\postgres\<service id>` |
@@ -274,6 +274,178 @@ Mailpit is a pretend mail server. Your app sends its e-mails to it, and you read
 - Two Mailpit services need different ports. If the SMTP port is taken, the start fails with "SMTP port 1025 is already in use".
 
 ---
+
+## Composer, pnpm and Yarn
+
+### Composer
+
+Composer is PHP's package manager. It is a **tool** on the **Runtimes** page (group "Tools"): pick a version and click **Install**. Composer is one file (`composer.phar`) with a small launcher next to it, and it runs with PHP, so install a PHP version too.
+
+- **Which PHP runs it:** the PHP of the service you run it for. In your own terminal, the `composer` command always uses your **default PHP**, whatever other PHP is on your PATH. Make a version the default on the Runtimes page.
+- **Where it keeps its files:** Composer's home (settings, `auth.json`, global packages) is `data\composer`, and its download cache is `data\composer\cache`. This applies to every PHP service, to **Open terminal** on a PHP service and to the `composer` command of the command line, so nothing is written to your user profile.
+- **On a new PC or after an import:** the home is created when Composer first needs it. **Import from this PC** can copy your old Composer home into the data folder.
+- If a task needs Composer and it is not installed, Zero2Dev says "Composer is not installed: install it on the Runtimes page".
+
+### pnpm and Yarn for a Node service
+
+A Node service has a **Package manager** setting under **Run**: **npm** (the default), **pnpm** or **Yarn**.
+
+1. Edit the service, set **Package manager** to pnpm or Yarn and save.
+2. Start the service. The first time, the log shows "Installing Corepack" and "Making the pnpm and yarn commands". This needs an internet connection once: Zero2Dev installs Corepack with npm into `data\node\corepack`, because Node 26 no longer comes with it. The first run of pnpm or Yarn then downloads that package manager through Corepack.
+3. After that nothing is downloaded again. An npm script runs as `pnpm run dev` or `yarn run dev`, and the install tasks of the service use the same package manager.
+
+Where things are kept (all in the data folder, so they move with it):
+
+| What | Folder |
+| --- | --- |
+| Corepack and the `pnpm` and `yarn` commands | `data\node\corepack` (the commands in its `bin` folder, first on the PATH of the service and of Open terminal) |
+| The pnpm and Yarn versions Corepack downloads | `data\node\corepack-home` |
+| pnpm's package store | `data\node\pnpm-store` |
+| Yarn's download cache | `data\node\yarn-cache` |
+
+If a project says which package manager it wants (the `packageManager` field of `package.json`), Corepack uses that version. With the setting on **npm** none of this is set up.
+
+
+## Python services
+
+Zero2Dev downloads Python for you and runs your script or web app in a virtual environment of its own, so the packages of one project never mix with another's.
+
+1. On **Runtimes**, install **Python** from the **Languages** group (3.13 and 3.12 are listed; **Check for new versions** adds the newest patch of each recent line).
+2. Add a service of type **Python**, choose the **Project folder** and what to **Run**:
+   - **A script** runs `python main.py` (the **Script** field).
+   - **A module** runs `python -m name` (the **Module** field).
+   - **Uvicorn (FastAPI)** runs `python -m uvicorn --host <host> --port <port> main:app`. The **Application** is the module and the app object, like `main:app`.
+   - **Flask** runs `python -m flask run --host <host> --port <port>`. **Flask application** is optional (Flask looks for `app.py` or `wsgi.py`) and is set as `FLASK_APP`.
+   - **Django (runserver)** runs `python manage.py runserver <host>:<port>`.
+3. The **command preview** shows the exact line. The program is the `python.exe` of the service's virtual environment. Put more options in **Arguments for your app** (for example `--reload` for Uvicorn).
+4. Start it. The first start makes the virtual environment, which takes a few seconds, and the log says so. Every start after that skips this.
+
+- **Virtual environment.** It lives in `data\python\venvs\<service id>`, not in your project, so there is nothing to put in `.gitignore`. The service runs with `VIRTUAL_ENV` set and the environment's `Scripts` folder first on `PATH`, so `pip`, `python` and the tools your packages install (`uvicorn`, `flask`, `django-admin`) all come from it. **Open terminal** on the service gives the same.
+- **Install your packages** with the **Install requirements** task (`pip install -r requirements.txt`, offered when the project has a `requirements.txt`). **List packages** shows what is installed. Django projects also get **migrate** and **collectstatic**. Tasks are described under Run a task.
+- **Another Python version.** Switch the service's runtime in its settings. At the next start Zero2Dev notices that the environment was made from another Python, logs a warning and makes it again, so run **Install requirements** once more.
+- **Deleting the service** deletes its virtual environment. **Snapshots** never copy it: after a restore or a clone, the first start makes an empty one and **Install requirements** fills it.
+- **`print()` shows up at once.** Zero2Dev sets `PYTHONUNBUFFERED=1`, so output reaches the log without waiting for a buffer to fill.
+- **Host.** The web app modes listen on `127.0.0.1`, which only this PC can reach. Set **Host** to `0.0.0.0` to let your phone or another PC connect. Your own script or module gets the host as `HOST` and the port as `PORT`.
+- **In your own terminal.** `python` and `pip` are in the command line shims (see Command line) and use the default Python runtime; a project's own packages are in the service's environment, not there.
+
+## Run a task
+
+Some jobs run once and end: installing packages, building, running tests, migrating a database. A service's page has a **Run a task** section for them, under the snapshots and above **Live output**. It is there for Node, PHP, Go and Python services.
+
+1. Open the service's page and find **Run a task**. It lists the ready-made tasks of the service's type, each with a short explanation and the exact command it runs (for example `npm install`, `composer install`, `go mod tidy`, `pip install -r requirements.txt`). A task is only listed when the file it needs is in the project folder: **Composer install** needs `composer.json`, **Install requirements** needs `requirements.txt`.
+2. For a Node service the section also lists the **Scripts in package.json** (`dev`, `lint`, ...). They run with the service's package manager (the **Package manager** setting, npm unless you changed it), so `lint` runs `pnpm run lint` for a pnpm service.
+3. Press **Run**. A progress row shows what is running, and the other **Run** buttons are off until it ends. The command's output appears line by line under **Live output** (the lines start with `$ program arguments` and have a mark on the left), even while the service itself runs.
+4. When it ends, the result stays under the heading until you run the next task: **finished**, or the error with the last lines the program wrote, for example `npm exited with code 1` and the `npm ERR!` lines. The full output is in **Live output**.
+
+- **Tasks that change data ask first.** **Composer update**, **Run migrations** (Laravel) and **Django: migrate** open a question before they start. **Cancel** starts nothing.
+- **Same environment as the service.** A task runs in the project folder with what the service gets: the runtime on `PATH`, the `.env` file, the database variables, and for Python the virtual environment. Nothing is stopped: a service that is running keeps running.
+- **One at a time per service.** While a task runs there is no second one for that service. If you open the page while one runs (it was started from another window), the page shows it.
+- **No Cancel.** A task ends when the program does, or after 10 minutes (some tasks have their own limit): then the whole program tree is stopped and the result says it timed out.
+- **Composer needs Composer.** Without Composer installed, **Composer install** says so and has an **Open Runtimes** button; install **Composer** from the **Tools** group there and run the task again.
+
+### Run your own command
+
+Open **Run your own command** to run any program once: type the **Program** (a name such as `npm`, `php` or `git`, without a folder) and its **Arguments**.
+
+- Arguments are split on spaces. Put a value that has spaces in quotes: `run build -- --mode "my mode"` is `run`, `build`, `--`, `--mode`, `my mode`. A backslash is just a character, so `C:\my folder\file.txt` in quotes works.
+- **There is no shell.** `|`, `&&`, `>` and `%VARIABLES%` do not work: they are passed to the program as plain text. To chain two commands, run them one after the other, or use a script.
+- The program is looked for on the service's `PATH` (its runtime first). A name that is not found fails the task with a message in the result.
+
+## Detect the project type
+
+When you add a service, **What do you want to run?** starts with **Already have a project? Choose its folder**. Browse to the folder (or paste its path) and Zero2Dev looks inside it, without changing anything:
+
+- `composer.json`, `artisan`, `wp-config.php` for PHP (Laravel, Symfony, WordPress);
+- `package.json` for Node (Next.js, NestJS, Astro, Vite, Express) and its scripts;
+- `go.mod` for Go (Gin, Fiber), `pom.xml` or `build.gradle` for Java (Spring Boot);
+- `manage.py`, `requirements.txt` or `pyproject.toml` for Python (Django, FastAPI, Flask).
+
+It then chooses the type and fills in the fields that are still empty: the name, the usual port, the run mode (for example Django's `manage.py` or Uvicorn's `main:app`), the document root and the `.env` file. A note under the folder says what it found and what it filled in, for example *Looks like a Laravel project (composer.json, artisan). Filled in: type PHP, name, document root, port 8000, .env.* **Undo** puts the form back as it was, and the **x** closes the note.
+
+- **Your own entries win.** Detection never replaces something you typed or changed. If you already chose a type, a folder of another type changes nothing.
+- **Only when adding.** Editing an existing service does not look at the folder.
+- **It is a suggestion.** Check the fields before **Save**. A folder that says nothing (an empty one, or a plain `index.html`) changes nothing, and a folder that cannot be read says nothing either.
+
+
+## Create a project from a framework
+
+Start a new Laravel, WordPress, Next.js, Vite, Django, FastAPI, Go, Spring Boot or plain HTML project without installing anything first. Open **Projects** and press **New project from a framework** (or use the link on the Dashboard).
+
+1. **Language and framework.** Pick the language, then the framework. Each card says what it needs, for example *PHP 8.2 or newer, Composer, optional database*.
+2. **Name and folder.** The name is required; under it you see the short name (letters, digits, `-` and `_`, in lower case) that is used for the folder, the database and the domain. **Folder** is the parent folder: the project goes in `<folder>\<short name>`. Zero2Dev remembers the last folder.
+3. **Settings.** *Database*: the kinds the framework offers (and *None* when it is optional), with the framework's usual one chosen. *Domain*: `<short name>.localhost` unless you change it. *Port*: empty means the framework's usual port or the next free one. *Open in my editor* opens the finished folder in the first editor Zero2Dev has.
+4. **Read the plan.** *What will happen* on the right is checked again a moment after every change. It lists what is installed first (a runtime, Composer or a database server, each with the reason), the steps in order, and what is created: the services, the site, the project and the `.env` file. A **problem** (the folder already exists and is not empty, the parent folder is missing, the domain or port is taken, no runtime version fits) stops **Create project** and says what to change. A **warning** does not.
+5. **Create project.** The page switches to a progress list. Zero2Dev installs what is missing, starts the database and makes a database and a user for this project only (the password goes only in the project's `.env`), runs the framework's own generator, writes the `.env` and creates the services, the site and the project. Nothing outside the project folder and the Zero2Dev data folder is touched. You can leave the page; a message tells you when it is ready.
+
+When it is done, the result lists what was made with links to the service, the site and the project. **Start the project** runs its services and switches the site on; **Create another** returns to the form.
+
+If a step fails, the page shows the error, removes what Zero2Dev had created (services, site, project, database and user) and keeps the generated folder, whose path is in the message, so you can look at it or delete it. Runtimes that were installed stay installed. **Back to the form** keeps your choices; change the name or delete the folder and try again.
+
+`#/create?framework=laravel&name=Shop` opens the form with a framework and a name filled in (`parent`, `db`, `domain` and `port` work too).
+
+## Rust services
+
+Run a Rust program or web server (Axum, Actix, Rocket ...) with Cargo, without installing Rust yourself.
+
+1. **Install Rust.** On the **Runtimes** page open the Rust card and press **Install**. Zero2Dev downloads rustup (`rustup-init.exe`, checked against the checksum rust-lang publishes) and runs it for you, with the **GNU** toolchain (`x86_64-pc-windows-gnu`). That needs no administrator install and no Visual Studio Build Tools, and nothing outside the Zero2Dev folder is changed (your `PATH` and the registry stay as they are). The first install downloads a few hundred MB and can take several minutes; the card shows what rustup is doing. The version shown on the card is the stable release of the day Zero2Dev was built; rustup installs the current `stable`.
+2. **Create the service.** **New service**, type **Rust**, your project folder (it holds `Cargo.toml`). Choosing the folder fills in the name and, for Axum, port 3000.
+3. **Choose how it runs.** *Run*: `cargo run` (debug build) or `cargo run --release` (optimised, slower to build). *Package* is for a workspace (`-p name`), *Binary* for a package with more than one (`--bin name`), *Features* is a comma list (`--features a,b`). *Arguments for your app* are added after `--`.
+4. **The first start compiles** the project and all its crates, which can take minutes (watch the log). The build output goes to `data\rust\target\<service>`, not into your project, and every service has its own folder. Your program gets the port as the `PORT` variable, so read it, as the Axum starter does.
+
+Zero2Dev sets `RUSTUP_HOME` and `CARGO_HOME` (inside the Rust folder) and puts `cargo\bin` on `PATH`. **Tasks** on the service page run `cargo build`, `cargo test`, `cargo fetch` and `cargo clippy`. The installed toolchain is the *minimal* profile, so run **Add Clippy** once before Clippy. `cargo`, `rustc` and `rustup` also work in your own terminal after **Environment** has them switched on.
+
+**A crate that needs a C compiler** (many `*-sys` crates) cannot be built with the GNU toolchain alone: install MinGW-w64 (or MSYS2) and put its `bin` folder on `PATH`. When a build fails because the linker or compiler is missing, the service log says so in one line.
+
+**New project from a framework** has an **Axum** starter (language Rust): it installs Rust when it is missing, writes `src/main.rs`, runs `cargo init` and `cargo add axum` and `tokio`, and creates the service and a site that proxies to it.
+
+### Try an API with Bruno or Hoppscotch
+
+When a service offers an API, an API client sends requests to it and shows the answers. **Runtimes**, group **API clients**, has two:
+
+- **Bruno** keeps each collection as plain files (`.bru` or `.yml`) in a folder you choose, for example inside your project. They go into Git with the code, so the team shares them. Pick Bruno when the requests belong to the project.
+- **Hoppscotch** is lighter and its collections stay in the app, or in a Hoppscotch account if you sign in. They are not in your project. Pick it for quick tries. It needs WebView2, which Windows 11 has built in (on Windows 10 install the WebView2 Runtime from Microsoft first).
+
+Choose a version, **Install**, then **Open**. Neither program can be told to open a project folder, so there is no *Open in* button on a service page: open the program and point it at the service's address (for example `http://127.0.0.1:8000`).
+
+Where the data is: Bruno's preferences and workspaces are in `data\bruno`; your collections are wherever you saved them. Hoppscotch's data and its collections are in `data\hoppscotch`. Only Hoppscotch's window size stays in `%APPDATA%\io.hoppscotch.desktop`. A copy of the `data` folder therefore carries both programs' settings. A Bruno or Hoppscotch you added by path keeps its own usual places.
+
+### Vite+ projects
+
+[Vite+](https://viteplus.dev) is a toolchain whose command is `vp` (`vp dev`, `vp build`, `vp test`, `vp run`). To run one as a service, choose the type **Node.js** and the run mode **Vite+ (vp ...)**; picking a folder that has `vite-plus` in its `package.json` does both for you. The command is `<project>\node_modules\.bin\vp.cmd dev --port <port>`, and the port is 5173 unless you change it.
+
+- **`vp` must be installed in the project.** Run **Install packages** on the service page (or `npm install`) first. Without it, Start answers "vp is not installed in this project: run npm install (or a task) first".
+- **Which Node runs it.** The setting **Node from** says it plainly: **Zero2Dev's Node** (the default) is the runtime chosen for the service, which Zero2Dev downloaded and checked. **Vite+'s Node** runs the service through the Vite+ program, which picks the version the project pins (`.node-version` and the others below) and downloads it when needed, so the first start can take a while. For that, install **Vite+** on the **Runtimes** page first (Tools group): **Install** downloads Vite+'s launcher and sets it up in `data\vite-plus` (its own Node and pnpm, about 270 MB). Zero2Dev starts that setup so that it does not change your PATH and does not touch a Vite+ you already have; the two copies are separate, and `vp` in your own terminal still means yours. Without it, Start says "Vite+ is not installed". The service page repeats the choice under "Node from".
+- **Pinned Node versions.** If the folder pins a Node (`.node-version`, `devEngines.runtime` in `package.json`, `engines.node` or `.nvmrc`) that the service's Node does not satisfy, the command preview shows one warning, and so does the start log. It names an installed Node that does satisfy it (select it as the service's runtime on the form), or tells you to install one on the Runtimes page. The warning does not stop the start.
+
+### CPU and memory
+
+The Services page has a **CPU** and a **Memory** column, each Dashboard card shows both next to its uptime, and the service page lists them under Process and Started. They are refreshed every 2 seconds while the service runs, and show "-" while it is stopped.
+
+- **CPU** is the share of the **whole machine**, not of one core: a program that keeps one of eight cores fully busy shows `12.5 %`. It is the CPU time of the **whole process tree** (the service and everything it started, such as the workers of a dev server), also of children that have already exited. The first number appears after the second sample, about 4 seconds after the start.
+- **Memory** is the **working set** of the whole process tree: the memory the processes hold in RAM right now. It is the number Task Manager calls "Memory" per process, summed. Memory that processes share is counted once per process, so a tree of many workers can show more than it really uses.
+- The numbers are for orientation: they carry no warnings and no colours. Zero2Dev's own use is not included.
+## Share a project: zero2dev.json
+
+A project can be written to one small file, `zero2dev.json`, that you keep in the project's repository. Whoever clones the repository can set the project up on their own PC with one button.
+
+**What the file holds:** the project's name, its services (name, type, port, settings, start order, the database they use), its sites (domain, type, folder), and the runtimes it needs as a type and a version range, such as "PHP 8.2 or newer". Folders are written relative to the folder of the file, so the file works wherever the repository is cloned.
+
+**What it never holds:**
+
+- No passwords, and no variable whose name looks like a secret (a name with PASSWORD, SECRET, TOKEN, KEY, CREDENTIAL, AUTH, PRIVATE, SIGNATURE, COOKIE or SESSION in it). The export lists each one it left out.
+- No absolute paths, so nothing from your PC's folders. A service whose folder is outside the file's folder is left out, and the export says so.
+- No contents of `.env`, no database data, no runtime programs and no Zero2Dev ids.
+
+**Export.** On the **Projects** page press **Export** on the project's row. The Save as dialog suggests `zero2dev.json` in the project's folder: keep it there, next to the code. The result lists what was left out. If the file already exists, Zero2Dev says so and only replaces it when you press **Overwrite**.
+
+**Import a cloned repository.** On the **Projects** page press **Import project**, choose the `zero2dev.json` or the folder of the clone, and press **Check**. Nothing is changed yet: you see the services and sites that would be created, the runtimes that would be installed, what differs from the file, and any warnings. A **problem** (a file from a newer format, an unknown type, a service that names one that is not there) stops the import and is listed in words; **Import** stays off until there is none. Then press **Import**. A progress view follows, and the result links to the project, its services and its sites, with a **Start the project** button.
+
+**What Zero2Dev installs and changes.** It installs the missing runtimes the same way **Create a project** does, then creates the services, the sites and the project together: if something fails, nothing is left half done (installed runtimes stay). It writes no file in the project's folder.
+
+**Ports and domains may change.** The file's port is used when it is free; otherwise the next free one is taken, and a domain that is already used gets a number. The plan lists every such change under "Different from the file". A runtime is matched by type and version range, so a service may use a newer version than on the PC that exported it.
+
+**Secrets must be set again.** Because the file never holds a secret, open the imported project's services afterwards and set the passwords and keys (for example in `.env` or the service's variables) yourself.
+
 
 ## Snapshots: undo for a whole project
 
@@ -400,7 +572,7 @@ You are told when something crashes, whether or not it restarts:
 
 The programs Zero2Dev installs are not on your Windows `PATH`, so `node` in a new terminal is not the Node you installed there. Zero2Dev keeps a folder of small shims, `data\shims\`, to fix that when you want to:
 
-- It holds a `.cmd` for every command of the **default** version of each runtime: `node`, `npm`, `npx`, `php`, `java`, `javac`, `jar`, `go` and `gofmt`, and the client tools of the databases that have them (`mysql`, `mysqldump`, `psql`, `pg_dump`, `redis-cli` ...). Java and Go shims set `JAVA_HOME` and `GOROOT` for their own run.
+- It holds a `.cmd` for every command of the **default** version of each runtime: `node`, `npm`, `npx`, `php`, `java`, `javac`, `jar`, `go` and `gofmt`, and the client tools of the databases that have them (`mysql`, `mysqldump`, `psql`, `pg_dump`, `redis-cli` ...). Java and Go shims set `JAVA_HOME` and `GOROOT` for their own run, and the Go shims also set `GOPATH` to `data\go\path`, so `go install` puts `air`, `dlv` or `gopls` in `data\go\path\bin` from any terminal. Every program in that folder, and in Go's default `%USERPROFILE%\go\bin`, gets a shim of its own (`air.cmd` ...; Zero2Dev's folder wins a name), written the next time Zero2Dev starts, a runtime changes or you press **Apply** on the Environment page.
 - It also holds `activate.cmd`, `activate.ps1` and `activate.sh`.
 - Zero2Dev rewrites the folder whenever a runtime changes: installed, removed, registered, or **Make default**. Anything you put there yourself is left alone.
 
@@ -409,7 +581,7 @@ The programs Zero2Dev installs are not on your Windows `PATH`, so `node` in a ne
 - PowerShell: `. 'D:\zero2dev\data\shims\activate.ps1'`
 - Git Bash: `. /d/zero2dev/data/shims/activate.sh`
 
-The default runtimes are then first on `PATH` in that terminal, and `JAVA_HOME` and `GOROOT` are set there. Nothing else changes. (If PowerShell says running scripts is disabled, run `Set-ExecutionPolicy -Scope Process Bypass` in that window first.) For the version a particular service uses, use **Open terminal** on its page instead.
+The default runtimes are then first on `PATH` in that terminal, and `JAVA_HOME`, `GOROOT` and `GOPATH` are set there. The Go tools folders (`data\go\path\bin`, and Go's default `%USERPROFILE%\go\bin` when it exists) are on `PATH` too, so a tool you install later works at once. Nothing else changes. (If PowerShell says running scripts is disabled, run `Set-ExecutionPolicy -Scope Process Bypass` in that window first.) For the version a particular service uses, use **Open terminal** on its page instead.
 
 **In every terminal (optional): the Environment page.** Open **Environment** in the sidebar. The top line says what Zero2Dev adds to your Windows environment right now. Below it, every folder and variable has its own switch. **Nothing is on by default**, and nothing changes until you apply.
 
